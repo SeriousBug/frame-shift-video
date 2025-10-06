@@ -9,6 +9,7 @@ Frame Shift Video provides a simple web interface for converting and compressing
 ## Features
 
 ### Core Functionality
+
 - **File Management**: Upload files or select from server-local files
 - **Video Conversion**: Convert between various video formats
 - **Compression**: Optimize video files with customizable settings
@@ -17,17 +18,20 @@ Frame Shift Video provides a simple web interface for converting and compressing
 - **Persistent Queue**: Jobs survive server restarts and resume automatically
 
 ### User Interface
+
 - **Single Page Application**: Clean, intuitive interface
 - **Real-time Progress**: Live updates on conversion status
 - **Drag & Drop Reordering**: Using React DnD Kit (except for active jobs)
 - **Responsive Design**: Works on desktop and mobile devices
 
 ### Notifications
+
 - **Pushover Integration**: Mobile push notifications for job completion
 - **Discord Webhooks**: Channel notifications for team workflows
 - **Configurable Alerts**: Customize notification preferences
 
 ### Data Persistence
+
 - **SQLite Database**: Tracks all conversions and job history
 - **Job Recovery**: Automatically resumes incomplete jobs on restart
 - **History Tracking**: Complete audit trail of all conversions
@@ -35,18 +39,21 @@ Frame Shift Video provides a simple web interface for converting and compressing
 ## Technical Architecture
 
 ### Frontend
+
 - **Next.js 15**: React framework with App Router
 - **TypeScript**: Type-safe development
 - **Tailwind CSS**: Utility-first styling
 - **React DnD Kit**: Drag-and-drop functionality
 
 ### Backend
+
 - **Next.js API Routes**: RESTful API endpoints
 - **SQLite**: Lightweight database for job tracking
 - **FFmpeg**: Video processing engine
 - **Node.js**: Server-side JavaScript runtime
 
 ### Development Tools
+
 - **ESLint**: Code linting
 - **Prettier**: Code formatting
 - **Husky**: Git hooks for code quality
@@ -81,6 +88,7 @@ CREATE TABLE settings (
 ## API Endpoints
 
 ### Jobs Management
+
 - `GET /api/jobs` - List all jobs
 - `POST /api/jobs` - Create new conversion job
 - `PUT /api/jobs/:id` - Update job (reorder, cancel)
@@ -88,22 +96,26 @@ CREATE TABLE settings (
 - `POST /api/jobs/:id/restart` - Restart failed job
 
 ### File Management
+
 - `GET /api/files` - List server files
 - `POST /api/upload` - Upload new file
 - `GET /api/download/:id` - Download converted file
 
 ### System
+
 - `GET /api/status` - System status and current job
 - `POST /api/settings` - Update notification settings
 
 ## Installation & Setup
 
 ### Prerequisites
-- Node.js 18+ 
+
+- Node.js 18+
 - FFmpeg installed on system
 - Git
 
 ### Quick Start
+
 ```bash
 # Clone repository
 git clone <repository-url>
@@ -124,6 +136,7 @@ npm run dev
 ```
 
 ### Environment Variables
+
 ```env
 # Pushover API
 PUSHOVER_APP_TOKEN=your_app_token
@@ -153,27 +166,32 @@ DATABASE_URL=./data/jobs.db
 ## Development Roadmap
 
 ### Phase 1: Core Setup ✅
+
 - [x] Next.js project initialization
 - [x] TypeScript configuration
 - [x] Tailwind CSS setup
 - [x] ESLint, Prettier, Husky setup
 
 ### Phase 2: Basic Infrastructure
+
 - [ ] SQLite database setup and schema
 - [ ] File upload and management system
 - [ ] Basic UI layout and components
 
 ### Phase 3: Video Processing
+
 - [ ] FFmpeg integration
 - [ ] Job queue system
 - [ ] Progress tracking and UI updates
 
 ### Phase 4: Advanced Features
+
 - [ ] Drag-and-drop reordering with React DnD Kit
 - [ ] Job persistence and restart logic
 - [ ] Notification integrations (Pushover, Discord)
 
 ### Phase 5: Polish
+
 - [ ] Error handling and validation
 - [ ] Performance optimizations
 - [ ] Documentation and deployment guides
@@ -183,6 +201,7 @@ DATABASE_URL=./data/jobs.db
 ⚠️ **Important**: This application is designed for self-hosted, personal use only. It allows direct FFmpeg command execution, which could be dangerous in multi-user or public environments.
 
 ### Safety Measures for Self-Hosting
+
 - Run behind a firewall or VPN
 - Use strong authentication if exposed to network
 - Regular backups of conversion jobs and settings
