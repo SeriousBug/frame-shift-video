@@ -44,14 +44,16 @@ frame-shift-video/
 - Tailwind CSS configuration
 - ESLint, Prettier, Husky setup
 - Comprehensive project planning and documentation
+- SQLite database schema with migration system
+- Database service layer with template SQL support
+- Vitest testing framework setup
 
 🔄 **Next Steps:**
 
-1. Set up SQLite database schema
-2. Create main UI components
-3. Implement FFmpeg integration
-4. Add drag-and-drop functionality
-5. Build notification systems
+1. Create main UI components
+2. Implement FFmpeg integration
+3. Add drag-and-drop functionality
+4. Build notification systems
 
 ## Important Notes
 
@@ -65,6 +67,9 @@ frame-shift-video/
 ```bash
 npm run dev          # Start development server
 npm run build        # Build for production
+npm run test         # Run tests in watch mode
+npm run test:run     # Run tests once
+npm run test:ui      # Run tests with UI dashboard
 npm run lint         # Run ESLint
 npm run format       # Format code with Prettier
 ```
