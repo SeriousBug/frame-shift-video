@@ -3,9 +3,12 @@ import path from 'path';
 import fs from 'fs';
 import { SQL } from './sql';
 
-const DB_PATH = process.env.NODE_ENV === 'test' 
-  ? path.join(process.cwd(), 'data', 'test-database.sqlite')
-  : path.join(process.cwd(), 'data', 'database.sqlite');
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+const DB_PATH =
+  process.env.NODE_ENV === 'test'
+    ? path.join(process.cwd(), 'data', 'test-database.sqlite')
+    : path.join(process.cwd(), 'data', 'database.sqlite');
 const CURRENT_DB_VERSION = 1;
 
 // Ensure data directory exists
@@ -28,7 +31,10 @@ export function getDatabase(): Database.Database {
 /**
  * Execute a SQL template query
  */
-export function query<T = any>(sqlTemplate: { query: string; params: any[] }): T[] {
+export function query<T = any>(sqlTemplate: {
+  query: string;
+  params: any[];
+}): T[] {
   const database = getDatabase();
   const stmt = database.prepare(sqlTemplate.query);
   return stmt.all(...sqlTemplate.params) as T[];
@@ -37,7 +43,10 @@ export function query<T = any>(sqlTemplate: { query: string; params: any[] }): T
 /**
  * Execute a SQL template query and return first result
  */
-export function queryOne<T = any>(sqlTemplate: { query: string; params: any[] }): T | undefined {
+export function queryOne<T = any>(sqlTemplate: {
+  query: string;
+  params: any[];
+}): T | undefined {
   const results = query<T>(sqlTemplate);
   return results[0];
 }
@@ -45,7 +54,10 @@ export function queryOne<T = any>(sqlTemplate: { query: string; params: any[] })
 /**
  * Execute a SQL template query for modifications (INSERT, UPDATE, DELETE)
  */
-export function execute(sqlTemplate: { query: string; params: any[] }): Database.RunResult {
+export function execute(sqlTemplate: {
+  query: string;
+  params: any[];
+}): Database.RunResult {
   const database = getDatabase();
   const stmt = database.prepare(sqlTemplate.query);
   return stmt.run(...sqlTemplate.params);
@@ -65,7 +77,7 @@ export function transaction(callback: () => void): void {
  */
 function initializeDatabase(): void {
   const database = getDatabase();
-  
+
   // Always create meta table if it doesn't exist
   database.exec(`
     CREATE TABLE IF NOT EXISTS meta (
@@ -73,11 +85,13 @@ function initializeDatabase(): void {
       value TEXT NOT NULL
     )
   `);
-  
+
   // Check current database version
-  const versionResult = queryOne<{ value: string }>(SQL`SELECT value FROM meta WHERE key = ${'version'}`);
+  const versionResult = queryOne<{ value: string }>(
+    SQL`SELECT value FROM meta WHERE key = ${'version'}`,
+  );
   const currentVersion = versionResult ? parseInt(versionResult.value, 10) : 0;
-  
+
   // Run migrations if needed
   if (currentVersion < CURRENT_DB_VERSION) {
     runMigrations(currentVersion);
@@ -117,28 +131,28 @@ const MIGRATIONS = [
  */
 function runMigrations(fromVersion: number): void {
   const database = getDatabase();
-  
+
   transaction(() => {
     for (let i = fromVersion; i < MIGRATIONS.length; i++) {
       const migration = MIGRATIONS[i];
       const newVersion = i + 1;
-      
+
       console.log(`Running migration ${newVersion}...`);
-      
+
       // Execute migration
       database.exec(migration);
-      
+
       // Update version in meta table
       const updateVersion = SQL`
         INSERT OR REPLACE INTO meta (key, value) 
         VALUES (${'version'}, ${newVersion.toString()})
       `;
       execute(updateVersion);
-      
+
       console.log(`Migration ${newVersion} completed`);
     }
   });
-  
+
   console.log(`Database migrated to version ${CURRENT_DB_VERSION}`);
 }
 

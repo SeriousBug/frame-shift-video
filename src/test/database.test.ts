@@ -44,11 +44,11 @@ describe('Database', () => {
       MetaService.set('key1', 'value1');
       MetaService.set('key2', 'value2');
       const all = MetaService.getAll();
-      
-      const testKeys = all.filter(record => record.key.startsWith('key'));
+
+      const testKeys = all.filter((record) => record.key.startsWith('key'));
       expect(testKeys).toHaveLength(2);
-      expect(testKeys.find(r => r.key === 'key1')?.value).toBe('value1');
-      expect(testKeys.find(r => r.key === 'key2')?.value).toBe('value2');
+      expect(testKeys.find((r) => r.key === 'key1')?.value).toBe('value1');
+      expect(testKeys.find((r) => r.key === 'key2')?.value).toBe('value2');
     });
   });
 
@@ -57,7 +57,7 @@ describe('Database', () => {
       const jobId = JobService.create({
         name: 'Test Job',
         input_file: '/test/input.mp4',
-        ffmpeg_command: 'ffmpeg -i input.mp4 output.mp4'
+        ffmpeg_command: 'ffmpeg -i input.mp4 output.mp4',
       });
 
       expect(jobId).toBeTypeOf('number');
@@ -74,7 +74,7 @@ describe('Database', () => {
     it('should update job progress', () => {
       const jobId = JobService.create({
         name: 'Progress Test Job',
-        input_file: '/test/input.mp4'
+        input_file: '/test/input.mp4',
       });
 
       JobService.updateProgress(jobId, 75);
@@ -85,7 +85,7 @@ describe('Database', () => {
     it('should complete jobs', () => {
       const jobId = JobService.create({
         name: 'Completion Test Job',
-        input_file: '/test/input.mp4'
+        input_file: '/test/input.mp4',
       });
 
       JobService.complete(jobId, '/test/output.mp4');
@@ -98,7 +98,7 @@ describe('Database', () => {
     it('should set job errors', () => {
       const jobId = JobService.create({
         name: 'Error Test Job',
-        input_file: '/test/input.mp4'
+        input_file: '/test/input.mp4',
       });
 
       JobService.setError(jobId, 'FFmpeg failed');
@@ -110,12 +110,12 @@ describe('Database', () => {
     it('should filter jobs by status', () => {
       const pendingId = JobService.create({
         name: 'Pending Job',
-        input_file: '/test/pending.mp4'
+        input_file: '/test/pending.mp4',
       });
 
       const processingId = JobService.create({
         name: 'Processing Job',
-        input_file: '/test/processing.mp4'
+        input_file: '/test/processing.mp4',
       });
 
       JobService.update(processingId, { status: 'processing' });
@@ -133,13 +133,13 @@ describe('Database', () => {
       const job1Id = JobService.create({
         name: 'Queue Job 1',
         input_file: '/test/queue1.mp4',
-        queue_position: 2
+        queue_position: 2,
       });
 
       const job2Id = JobService.create({
         name: 'Queue Job 2',
         input_file: '/test/queue2.mp4',
-        queue_position: 1
+        queue_position: 1,
       });
 
       const queue = JobService.getQueue();
@@ -150,16 +150,16 @@ describe('Database', () => {
     });
 
     it('should get next pending job', () => {
-      const job1Id = JobService.create({
+      JobService.create({
         name: 'Second Job',
         input_file: '/test/second.mp4',
-        queue_position: 2
+        queue_position: 2,
       });
 
       const job2Id = JobService.create({
         name: 'First Job',
         input_file: '/test/first.mp4',
-        queue_position: 1
+        queue_position: 1,
       });
 
       const nextJob = JobService.getNextPendingJob();
@@ -171,19 +171,19 @@ describe('Database', () => {
       const job1Id = JobService.create({
         name: 'Job 1',
         input_file: '/test/1.mp4',
-        queue_position: 0
+        queue_position: 0,
       });
 
       const job2Id = JobService.create({
         name: 'Job 2',
         input_file: '/test/2.mp4',
-        queue_position: 1
+        queue_position: 1,
       });
 
       const job3Id = JobService.create({
         name: 'Job 3',
         input_file: '/test/3.mp4',
-        queue_position: 2
+        queue_position: 2,
       });
 
       // Reorder: job3, job1, job2
@@ -201,7 +201,7 @@ describe('Database', () => {
     it('should delete jobs', () => {
       const jobId = JobService.create({
         name: 'Delete Test Job',
-        input_file: '/test/delete.mp4'
+        input_file: '/test/delete.mp4',
       });
 
       JobService.delete(jobId);
@@ -212,12 +212,12 @@ describe('Database', () => {
     it('should get all jobs ordered by creation date', () => {
       const job1Id = JobService.create({
         name: 'Job 1',
-        input_file: '/test/1.mp4'
+        input_file: '/test/1.mp4',
       });
 
       const job2Id = JobService.create({
         name: 'Job 2',
-        input_file: '/test/2.mp4'
+        input_file: '/test/2.mp4',
       });
 
       const allJobs = JobService.getAll();

@@ -4,19 +4,30 @@
 
 import { query, queryOne, execute, transaction } from './database';
 import { SQL } from './sql';
-import { Job, CreateJobInput, UpdateJobInput, MetaRecord } from '../types/database';
+import {
+  Job,
+  CreateJobInput,
+  UpdateJobInput,
+  MetaRecord,
+} from '../types/database';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
  * Meta table operations (key-value store)
  */
 export const MetaService = {
   get(key: string): string | undefined {
-    const result = queryOne<MetaRecord>(SQL`SELECT value FROM meta WHERE key = ${key}`);
+    const result = queryOne<MetaRecord>(
+      SQL`SELECT value FROM meta WHERE key = ${key}`,
+    );
     return result?.value;
   },
 
   set(key: string, value: string): void {
-    execute(SQL`INSERT OR REPLACE INTO meta (key, value) VALUES (${key}, ${value})`);
+    execute(
+      SQL`INSERT OR REPLACE INTO meta (key, value) VALUES (${key}, ${value})`,
+    );
   },
 
   delete(key: string): void {
@@ -25,7 +36,7 @@ export const MetaService = {
 
   getAll(): MetaRecord[] {
     return query<MetaRecord>(SQL`SELECT key, value FROM meta ORDER BY key`);
-  }
+  },
 };
 
 /**
@@ -49,7 +60,9 @@ export const JobService = {
   },
 
   getByStatus(status: Job['status']): Job[] {
-    return query<Job>(SQL`SELECT * FROM jobs WHERE status = ${status} ORDER BY queue_position ASC, created_at ASC`);
+    return query<Job>(
+      SQL`SELECT * FROM jobs WHERE status = ${status} ORDER BY queue_position ASC, created_at ASC`,
+    );
   },
 
   getQueue(): Job[] {
@@ -145,5 +158,5 @@ export const JobService = {
       ORDER BY queue_position ASC, created_at ASC 
       LIMIT 1
     `);
-  }
+  },
 };

@@ -61,6 +61,7 @@ frame-shift-video/
 - **Dependencies**: Requires FFmpeg installed on host system
 - **Database**: SQLite for simplicity and portability
 - **Notifications**: Pushover API and Discord webhooks
+- **Real-time Updates**: WebSockets for live progress updates during video conversion
 
 ## Development Commands
 
