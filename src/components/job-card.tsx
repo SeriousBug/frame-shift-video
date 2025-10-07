@@ -7,9 +7,11 @@ interface JobCardProps {
 }
 
 const statusColors = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  pending:
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  completed:
+    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
@@ -40,7 +42,9 @@ export function JobCard({ job }: JobCardProps) {
             {job.name}
           </h3>
           <div className="flex items-center gap-2 mb-2">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[job.status]}`}>
+            <span
+              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[job.status]}`}
+            >
               <span className="mr-1">{statusIcons[job.status]}</span>
               {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
             </span>
@@ -55,7 +59,9 @@ export function JobCard({ job }: JobCardProps) {
 
       <div className="space-y-3">
         <div>
-          <label className="text-sm font-medium text-gray-600 dark:text-gray-300">Input File:</label>
+          <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
+            Input File:
+          </label>
           <p className="text-gray-900 dark:text-white font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded">
             {job.input_file}
           </p>
@@ -63,7 +69,9 @@ export function JobCard({ job }: JobCardProps) {
 
         {job.output_file && (
           <div>
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">Output File:</label>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
+              Output File:
+            </label>
             <p className="text-gray-900 dark:text-white font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded">
               {job.output_file}
             </p>
@@ -72,7 +80,9 @@ export function JobCard({ job }: JobCardProps) {
 
         {job.ffmpeg_command && (
           <div>
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">FFmpeg Command:</label>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
+              FFmpeg Command:
+            </label>
             <p className="text-gray-900 dark:text-white font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded">
               {job.ffmpeg_command}
             </p>
@@ -81,7 +91,9 @@ export function JobCard({ job }: JobCardProps) {
 
         {(job.status === 'processing' || job.status === 'completed') && (
           <div>
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">Progress:</label>
+            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
+              Progress:
+            </label>
             <div className="mt-1">
               <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div
@@ -98,7 +110,9 @@ export function JobCard({ job }: JobCardProps) {
 
         {job.error_message && (
           <div>
-            <label className="text-sm font-medium text-red-600 dark:text-red-400">Error:</label>
+            <label className="text-sm font-medium text-red-600 dark:text-red-400">
+              Error:
+            </label>
             <p className="text-red-700 dark:text-red-300 text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded">
               {job.error_message}
             </p>

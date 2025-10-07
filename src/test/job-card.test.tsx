@@ -27,7 +27,7 @@ describe('JobCard', () => {
 
   it('should render basic job information', () => {
     render(<JobCard job={baseJob} />);
-    
+
     expect(screen.getByText('Test Job')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.getByText('/uploads/test.mp4')).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe('JobCard', () => {
   it('should render pending job with queue position', () => {
     const pendingJob: Job = { ...baseJob, queue_position: 3 };
     render(<JobCard job={pendingJob} />);
-    
+
     expect(screen.getByText('Queue position: 3')).toBeInTheDocument();
   });
 
@@ -49,7 +49,7 @@ describe('JobCard', () => {
       progress: 65.5,
     };
     render(<JobCard job={processingJob} />);
-    
+
     expect(screen.getByText('Processing')).toBeInTheDocument();
     expect(screen.getByText('65.5%')).toBeInTheDocument();
     expect(screen.getByText('Progress:')).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('JobCard', () => {
       output_file: '/outputs/completed.mp4',
     };
     render(<JobCard job={completedJob} />);
-    
+
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('/outputs/completed.mp4')).toBeInTheDocument();
     expect(screen.getByText('100.0%')).toBeInTheDocument();
@@ -77,16 +77,18 @@ describe('JobCard', () => {
       error_message: 'FFmpeg encoding failed with error code 1',
     };
     render(<JobCard job={failedJob} />);
-    
+
     expect(screen.getByText('Failed')).toBeInTheDocument();
-    expect(screen.getByText('FFmpeg encoding failed with error code 1')).toBeInTheDocument();
+    expect(
+      screen.getByText('FFmpeg encoding failed with error code 1'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Error:')).toBeInTheDocument();
   });
 
   it('should render cancelled job', () => {
     const cancelledJob: Job = { ...baseJob, status: 'cancelled' };
     render(<JobCard job={cancelledJob} />);
-    
+
     expect(screen.getByText('Cancelled')).toBeInTheDocument();
   });
 
@@ -96,33 +98,35 @@ describe('JobCard', () => {
       ffmpeg_command: 'ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4',
     };
     render(<JobCard job={jobWithCommand} />);
-    
-    expect(screen.getByText('ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4')).toBeInTheDocument();
+
+    expect(
+      screen.getByText('ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4'),
+    ).toBeInTheDocument();
     expect(screen.getByText('FFmpeg Command:')).toBeInTheDocument();
   });
 
   it('should apply correct status styling', () => {
     const { rerender } = render(<JobCard job={baseJob} />);
-    
+
     // Test pending status
     let statusBadge = screen.getByText('Pending').closest('span');
     expect(statusBadge).toHaveClass('bg-yellow-100', 'text-yellow-800');
-    
+
     // Test processing status
     rerender(<JobCard job={{ ...baseJob, status: 'processing' }} />);
     statusBadge = screen.getByText('Processing').closest('span');
     expect(statusBadge).toHaveClass('bg-blue-100', 'text-blue-800');
-    
+
     // Test completed status
     rerender(<JobCard job={{ ...baseJob, status: 'completed' }} />);
     statusBadge = screen.getByText('Completed').closest('span');
     expect(statusBadge).toHaveClass('bg-green-100', 'text-green-800');
-    
+
     // Test failed status
     rerender(<JobCard job={{ ...baseJob, status: 'failed' }} />);
     statusBadge = screen.getByText('Failed').closest('span');
     expect(statusBadge).toHaveClass('bg-red-100', 'text-red-800');
-    
+
     // Test cancelled status
     rerender(<JobCard job={{ ...baseJob, status: 'cancelled' }} />);
     statusBadge = screen.getByText('Cancelled').closest('span');
@@ -131,26 +135,26 @@ describe('JobCard', () => {
 
   it('should render status icons correctly', () => {
     const { rerender } = render(<JobCard job={baseJob} />);
-    
+
     // Check that status icons are present (emojis)
     expect(screen.getByText('⏳')).toBeInTheDocument(); // pending
-    
+
     rerender(<JobCard job={{ ...baseJob, status: 'processing' }} />);
     expect(screen.getByText('⚡')).toBeInTheDocument(); // processing
-    
+
     rerender(<JobCard job={{ ...baseJob, status: 'completed' }} />);
     expect(screen.getByText('✅')).toBeInTheDocument(); // completed
-    
+
     rerender(<JobCard job={{ ...baseJob, status: 'failed' }} />);
     expect(screen.getByText('❌')).toBeInTheDocument(); // failed
-    
+
     rerender(<JobCard job={{ ...baseJob, status: 'cancelled' }} />);
     expect(screen.getByText('⏹️')).toBeInTheDocument(); // cancelled
   });
 
   it('should not render optional fields when they are not present', () => {
     render(<JobCard job={baseJob} />);
-    
+
     expect(screen.queryByText('Output File:')).not.toBeInTheDocument();
     expect(screen.queryByText('FFmpeg Command:')).not.toBeInTheDocument();
     expect(screen.queryByText('Progress:')).not.toBeInTheDocument();
@@ -165,8 +169,10 @@ describe('JobCard', () => {
       progress: 75.5,
     };
     render(<JobCard job={processingJob} />);
-    
-    const progressBar = screen.getByText('75.5%').previousElementSibling?.querySelector('div');
+
+    const progressBar = screen
+      .getByText('75.5%')
+      .previousElementSibling?.querySelector('div');
     expect(progressBar).toHaveStyle({ width: '75.5%' });
   });
 });
