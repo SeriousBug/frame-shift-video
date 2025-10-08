@@ -4,14 +4,16 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { spawn } from 'child_process';
 import {
   FFmpegExecutor,
   executeFFmpegCommand,
   executeFFmpegCommands,
   type FFmpegExecutionOptions,
 } from '@/lib/ffmpeg-executor';
-import { generateFFmpegCommand, type FFmpegJobConfig } from '@/lib/ffmpeg-command';
+import {
+  generateFFmpegCommand,
+  type FFmpegJobConfig,
+} from '@/lib/ffmpeg-command';
 import { DEFAULT_CONVERSION_OPTIONS } from '@/types/conversion';
 
 // Simple mocks that always succeed
@@ -26,20 +28,21 @@ vi.mock('fs/promises', () => {
 
 vi.mock('child_process', () => ({
   spawn: vi.fn(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockProcess = new EventEmitter() as any;
     mockProcess.stdout = new EventEmitter();
     mockProcess.stderr = new EventEmitter();
     mockProcess.kill = vi.fn();
     mockProcess.killed = false;
-    
+
     // Immediately emit close with success
     process.nextTick(() => {
       mockProcess.emit('close', 0);
     });
-    
+
     return mockProcess;
   }),
-  ChildProcess: class {} // Mock the ChildProcess class
+  ChildProcess: class {}, // Mock the ChildProcess class
 }));
 
 describe('FFmpegExecutor', () => {
@@ -129,7 +132,7 @@ describe('FFmpegExecutor', () => {
     it('should emit start and complete events', async () => {
       const startSpy = vi.fn();
       const completeSpy = vi.fn();
-      
+
       executor.on('start', startSpy);
       executor.on('complete', completeSpy);
 
@@ -181,13 +184,19 @@ describe('executeFFmpegCommands', () => {
       generateFFmpegCommand({
         inputFile: 'test1.mp4',
         outputFile: 'output1.mp4',
-        options: { ...DEFAULT_CONVERSION_OPTIONS, selectedFiles: ['test1.mp4'] },
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          selectedFiles: ['test1.mp4'],
+        },
         jobName: 'Test 1',
       }),
       generateFFmpegCommand({
         inputFile: 'test2.mp4',
         outputFile: 'output2.mp4',
-        options: { ...DEFAULT_CONVERSION_OPTIONS, selectedFiles: ['test2.mp4'] },
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          selectedFiles: ['test2.mp4'],
+        },
         jobName: 'Test 2',
       }),
     ];
@@ -207,17 +216,18 @@ describe('executeFFmpegCommands', () => {
     // Mock spawn to return failing process for first command
     vi.doMock('child_process', () => ({
       spawn: vi.fn(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mockProcess = new EventEmitter() as any;
         mockProcess.stdout = new EventEmitter();
         mockProcess.stderr = new EventEmitter();
         mockProcess.kill = vi.fn();
         mockProcess.killed = false;
-        
+
         // Fail the first command
         setTimeout(() => {
           mockProcess.emit('close', 1);
         }, 10);
-        
+
         return mockProcess;
       }),
     }));
@@ -226,13 +236,19 @@ describe('executeFFmpegCommands', () => {
       generateFFmpegCommand({
         inputFile: 'test1.mp4',
         outputFile: 'output1.mp4',
-        options: { ...DEFAULT_CONVERSION_OPTIONS, selectedFiles: ['test1.mp4'] },
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          selectedFiles: ['test1.mp4'],
+        },
         jobName: 'Test 1',
       }),
       generateFFmpegCommand({
         inputFile: 'test2.mp4',
         outputFile: 'output2.mp4',
-        options: { ...DEFAULT_CONVERSION_OPTIONS, selectedFiles: ['test2.mp4'] },
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          selectedFiles: ['test2.mp4'],
+        },
         jobName: 'Test 2',
       }),
     ];

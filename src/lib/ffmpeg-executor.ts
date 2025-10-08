@@ -233,7 +233,7 @@ export class FFmpegExecutor extends EventEmitter {
     if (this.process && !this.killed) {
       this.killed = true;
       this.process.kill('SIGTERM');
-      
+
       // Force kill after 5 seconds if still running
       setTimeout(() => {
         if (this.process && !this.process.killed) {
@@ -295,10 +295,14 @@ export class FFmpegExecutor extends EventEmitter {
     }
 
     // Only return progress if we have essential fields
-    if (progressData.frame !== undefined && progressData.time && progressData.time !== 'N/A') {
+    if (
+      progressData.frame !== undefined &&
+      progressData.time &&
+      progressData.time !== 'N/A'
+    ) {
       // Calculate rough progress percentage (this would need duration info for accuracy)
-      const progress = Math.min(progressData.frame / 1000 * 100, 100);
-      
+      const progress = Math.min((progressData.frame / 1000) * 100, 100);
+
       return {
         frame: progressData.frame,
         fps: progressData.fps || 0,

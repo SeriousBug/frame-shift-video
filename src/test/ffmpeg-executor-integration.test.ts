@@ -13,7 +13,10 @@ import {
   executeFFmpegCommands,
   type FFmpegExecutionOptions,
 } from '@/lib/ffmpeg-executor';
-import { generateFFmpegCommand, type FFmpegJobConfig } from '@/lib/ffmpeg-command';
+import {
+  generateFFmpegCommand,
+  type FFmpegJobConfig,
+} from '@/lib/ffmpeg-command';
 import { DEFAULT_CONVERSION_OPTIONS } from '@/types/conversion';
 
 describe('FFmpeg Executor Integration Tests', () => {
@@ -29,13 +32,16 @@ describe('FFmpeg Executor Integration Tests', () => {
     tempDir = await mkdtemp(path.join(tmpdir(), 'ffmpeg-test-'));
     uploadsDir = path.join(tempDir, 'uploads');
     outputsDir = path.join(tempDir, 'outputs');
-    
+
     await mkdir(uploadsDir, { recursive: true });
     await mkdir(outputsDir, { recursive: true });
 
     // Create a dummy input file
     testInputFile = 'test-video.mp4';
-    await writeFile(path.join(uploadsDir, testInputFile), 'dummy video content');
+    await writeFile(
+      path.join(uploadsDir, testInputFile),
+      'dummy video content',
+    );
 
     // Set up test options
     options = {
@@ -54,7 +60,7 @@ describe('FFmpeg Executor Integration Tests', () => {
   afterEach(async () => {
     // Restore original PATH
     process.env.PATH = originalPath;
-    
+
     // Clean up temporary directory
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true });
@@ -114,6 +120,7 @@ describe('FFmpeg Executor Integration Tests', () => {
     });
 
     it('should track progress during execution', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const progressEvents: any[] = [];
 
       executor.on('progress', (progress) => {
@@ -128,7 +135,7 @@ describe('FFmpeg Executor Integration Tests', () => {
       });
 
       const result = await executor.execute(testCommand);
-      
+
       expect(result.success).toBe(true);
       expect(result.exitCode).toBe(0);
       expect(progressEvents.length).toBeGreaterThan(0);
@@ -223,7 +230,10 @@ describe('FFmpeg Executor Integration Tests', () => {
       // Create multiple input files
       const inputFiles = ['input1.mp4', 'input2.mp4', 'input3.mp4'];
       for (const file of inputFiles) {
-        await writeFile(path.join(uploadsDir, file), `dummy content for ${file}`);
+        await writeFile(
+          path.join(uploadsDir, file),
+          `dummy content for ${file}`,
+        );
       }
 
       const commands = inputFiles.map((inputFile, index) =>
@@ -235,24 +245,27 @@ describe('FFmpeg Executor Integration Tests', () => {
             selectedFiles: [inputFile],
           },
           jobName: `Batch test ${index + 1}`,
-        })
+        }),
       );
 
-      const progressUpdates: Array<{ commandIndex: number; frame: number }> = [];
+      const progressUpdates: Array<{ commandIndex: number; frame: number }> =
+        [];
       const results = await executeFFmpegCommands(
         commands,
         options,
         (commandIndex, progress) => {
           progressUpdates.push({ commandIndex, frame: progress.frame });
-        }
+        },
       );
 
       expect(results).toHaveLength(3);
-      expect(results.every(r => r.success)).toBe(true);
+      expect(results.every((r) => r.success)).toBe(true);
       expect(progressUpdates.length).toBeGreaterThan(0);
-      
+
       // Check that we got progress for different commands
-      const commandIndices = [...new Set(progressUpdates.map(p => p.commandIndex))];
+      const commandIndices = [
+        ...new Set(progressUpdates.map((p) => p.commandIndex)),
+      ];
       expect(commandIndices.length).toBeGreaterThan(0);
     });
 
@@ -263,13 +276,19 @@ describe('FFmpeg Executor Integration Tests', () => {
         generateFFmpegCommand({
           inputFile: testInputFile,
           outputFile: 'output1.mp4',
-          options: { ...DEFAULT_CONVERSION_OPTIONS, selectedFiles: [testInputFile] },
+          options: {
+            ...DEFAULT_CONVERSION_OPTIONS,
+            selectedFiles: [testInputFile],
+          },
           jobName: 'Test 1',
         }),
         generateFFmpegCommand({
           inputFile: testInputFile,
           outputFile: 'output2.mp4',
-          options: { ...DEFAULT_CONVERSION_OPTIONS, selectedFiles: [testInputFile] },
+          options: {
+            ...DEFAULT_CONVERSION_OPTIONS,
+            selectedFiles: [testInputFile],
+          },
           jobName: 'Test 2',
         }),
       ];
@@ -281,7 +300,7 @@ describe('FFmpeg Executor Integration Tests', () => {
 
       expect(results).toHaveLength(2);
       // With our mock ffmpeg that always succeeds, both should succeed
-      expect(results.every(r => r.success)).toBe(true);
+      expect(results.every((r) => r.success)).toBe(true);
     });
   });
 
@@ -315,6 +334,7 @@ describe('FFmpeg Executor Integration Tests', () => {
 
     it('should verify progress parsing works with mock output', async () => {
       const executor = new FFmpegExecutor(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const progressData: any[] = [];
 
       executor.on('progress', (progress) => {
@@ -332,10 +352,10 @@ describe('FFmpeg Executor Integration Tests', () => {
       };
       const command = generateFFmpegCommand(jobConfig);
 
-      const result = await executor.execute(command);
+      await executor.execute(command);
 
       expect(progressData.length).toBeGreaterThan(2); // Should have multiple progress updates
-      
+
       const lastProgress = progressData[progressData.length - 1];
       expect(lastProgress).toMatchObject({
         frame: expect.any(Number),
@@ -344,16 +364,18 @@ describe('FFmpeg Executor Integration Tests', () => {
         speed: expect.any(String),
         size: expect.any(Number),
       });
-      
+
       // Should have frames from our mock (61, 127, 192, 228)
-      const frames = progressData.map(p => p.frame);
+      const frames = progressData.map((p) => p.frame);
       expect(frames).toContain(61);
       expect(frames).toContain(127);
       expect(frames).toContain(228);
-      
+
       // Verify progress is increasing
       for (let i = 1; i < progressData.length; i++) {
-        expect(progressData[i].frame).toBeGreaterThan(progressData[i-1].frame);
+        expect(progressData[i].frame).toBeGreaterThan(
+          progressData[i - 1].frame,
+        );
       }
     });
   });

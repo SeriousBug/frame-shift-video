@@ -8,6 +8,9 @@ import fs from 'fs';
 import path from 'path';
 import '@testing-library/jest-dom';
 
+// Suppress React 18 act warnings for async updates
+global.IS_REACT_ACT_ENVIRONMENT = true;
+
 const TEST_DB_PATH = path.join(process.cwd(), 'data', 'test-database.sqlite');
 
 beforeAll(() => {

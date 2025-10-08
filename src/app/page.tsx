@@ -21,11 +21,14 @@ export default function Home() {
   const jobs: unknown[] = [];
 
   const handleStartConversion = (options: ConversionOptions) => {
-    console.log('Starting conversion with options:', JSON.stringify(options, null, 2));
-    
+    console.log(
+      'Starting conversion with options:',
+      JSON.stringify(options, null, 2),
+    );
+
     // TODO: In the future, this will create job entries in the database
     // and start the actual conversion process
-    
+
     // For now, close the modal after logging
     closeModal();
   };

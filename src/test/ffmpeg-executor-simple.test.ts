@@ -3,11 +3,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { FFmpegExecutor } from '@/lib/ffmpeg-executor';
 import {
-  FFmpegExecutor,
-  type FFmpegExecutionOptions,
-} from '@/lib/ffmpeg-executor';
-import { generateFFmpegCommand, type FFmpegJobConfig } from '@/lib/ffmpeg-command';
+  generateFFmpegCommand,
+  type FFmpegJobConfig,
+} from '@/lib/ffmpeg-command';
 import { DEFAULT_CONVERSION_OPTIONS } from '@/types/conversion';
 
 describe('FFmpegExecutor Basic Tests', () => {
@@ -79,7 +79,7 @@ describe('FFmpegExecutor Basic Tests', () => {
         },
         jobName: 'Test conversion',
       };
-      
+
       const validCommand = generateFFmpegCommand(jobConfig);
       expect(validCommand.args[0]).toBe('ffmpeg');
       expect(validCommand.displayCommand).toContain('ffmpeg');
@@ -99,10 +99,12 @@ describe('FFmpegExecutor Basic Tests', () => {
 
     it('should parse progress data correctly', () => {
       // Access the private method for testing
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const parseProgress = (executor as any).parseProgress.bind(executor);
-      
+
       // Test with line-separated output like FFmpeg actually produces
-      const progressOutput = 'frame=   100\nfps= 25\nq=28.0\nsize=    1024kB\ntime=00:00:04.00\nbitrate=2097.2kbits/s\nspeed=   1x';
+      const progressOutput =
+        'frame=   100\nfps= 25\nq=28.0\nsize=    1024kB\ntime=00:00:04.00\nbitrate=2097.2kbits/s\nspeed=   1x';
       const progress = parseProgress(progressOutput);
 
       expect(progress).toEqual(
@@ -120,8 +122,9 @@ describe('FFmpegExecutor Basic Tests', () => {
     });
 
     it('should return null for incomplete progress data', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const parseProgress = (executor as any).parseProgress.bind(executor);
-      
+
       // Only frame info, no time
       const incompleteOutput = 'frame=   50';
       const progress = parseProgress(incompleteOutput);
@@ -130,8 +133,9 @@ describe('FFmpegExecutor Basic Tests', () => {
     });
 
     it('should handle multiple progress lines', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const parseProgress = (executor as any).parseProgress.bind(executor);
-      
+
       const progressLines = [
         'frame=   150',
         'fps= 30.5',
@@ -141,7 +145,7 @@ describe('FFmpegExecutor Basic Tests', () => {
         'bitrate=3051.6kbits/s',
         'speed= 1.2x',
       ];
-      
+
       const output = progressLines.join('\n');
       const progress = parseProgress(output);
 
@@ -206,7 +210,7 @@ describe('FFmpegExecutor Basic Tests', () => {
       };
 
       const command = generateFFmpegCommand(jobConfig);
-      
+
       expect(command.args).toContain('ffmpeg');
       expect(command.args).toContain('-i');
       expect(command.args).toContain('-progress');

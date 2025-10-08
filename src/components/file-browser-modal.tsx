@@ -399,8 +399,8 @@ export function FileBrowserModal({
           <div className="p-6 border-t border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedFilesSet.size} file{selectedFilesSet.size !== 1 ? 's' : ''}{' '}
-                selected
+                {selectedFilesSet.size} file
+                {selectedFilesSet.size !== 1 ? 's' : ''} selected
               </div>
               <div className="flex gap-3">
                 <button
@@ -428,8 +428,8 @@ export function FileBrowserModal({
           <div className="p-6 border-t border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}{' '}
-                selected for conversion
+                {selectedFiles.length} file
+                {selectedFiles.length !== 1 ? 's' : ''} selected for conversion
               </div>
               <div className="flex gap-3">
                 <button

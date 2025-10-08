@@ -5,7 +5,7 @@
 /**
  * Video codec options for FFmpeg -c:v flag
  */
-export type VideoCodec = 
+export type VideoCodec =
   /** H.265/HEVC - Best compression, recommended for archival (maps to -c:v libx265) */
   | 'libx265'
   /** H.264/AVC - More compatible, larger files (maps to -c:v libx264) */
@@ -18,24 +18,28 @@ export type VideoCodec =
 /**
  * Encoding speed/efficiency presets for FFmpeg -preset flag
  */
-export type EncodingPreset = 
+export type EncodingPreset =
   /** Fast but poor compression */
-  | 'ultrafast' | 'superfast' | 'veryfast'
+  | 'ultrafast'
+  | 'superfast'
+  | 'veryfast'
   /** Reasonable speed, decent compression */
-  | 'faster' | 'fast'
+  | 'faster'
+  | 'fast'
   /** Default, balanced (maps to -preset medium) */
   | 'medium'
   /** Recommended for archival - better compression, worth the time (maps to -preset slow) */
   | 'slow'
   /** Best compression, very slow */
-  | 'slower' | 'veryslow'
+  | 'slower'
+  | 'veryslow'
   /** Negligible improvement over veryslow, not recommended */
   | 'placebo';
 
 /**
  * Audio codec options for FFmpeg -c:a flag
  */
-export type AudioCodec = 
+export type AudioCodec =
   /** Best quality/size ratio, supported by Plex (maps to -c:a libopus) */
   | 'libopus'
   /** AAC using native encoder (maps to -c:a aac) */
@@ -52,7 +56,7 @@ export type AudioCodec =
 /**
  * Bitrate control mode for video encoding
  */
-export type BitrateMode = 
+export type BitrateMode =
   /** Constant Rate Factor - preferred for quality-based encoding (maps to -crf) */
   | 'crf'
   /** Constant bitrate (maps to -b:v) */
@@ -63,12 +67,7 @@ export type BitrateMode =
 /**
  * Common video output formats
  */
-export type OutputFormat = 
-  | 'mp4'
-  | 'mkv'
-  | 'webm'
-  | 'avi'
-  | 'mov';
+export type OutputFormat = 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov';
 
 /**
  * Basic conversion options for simple UI
@@ -76,16 +75,16 @@ export type OutputFormat =
 export interface BasicConversionOptions {
   /** Video codec preset (maps to -c:v flag) */
   videoCodec: VideoCodec;
-  
-  /** 
+
+  /**
    * Quality setting using CRF (Constant Rate Factor)
    * For libx265: 0-51, default 28, recommended 18-22 for archival
-   * For libx264: 0-51, default 23, recommended 18-22 for archival  
+   * For libx264: 0-51, default 23, recommended 18-22 for archival
    * For libsvtav1: 20-30 (different scale)
    * Lower = better quality, higher file size (maps to -crf flag)
    */
   quality: number;
-  
+
   /** Output container format */
   outputFormat: OutputFormat;
 }
@@ -96,7 +95,7 @@ export interface BasicConversionOptions {
 export interface AdvancedConversionOptions {
   /** Encoding speed/efficiency preset (maps to -preset flag) */
   preset: EncodingPreset;
-  
+
   /** Bitrate control configuration */
   bitrate: {
     /** Bitrate control mode */
@@ -108,7 +107,7 @@ export interface AdvancedConversionOptions {
     /** Buffer size for rate control in kbps (maps to -bufsize flag) */
     bufferSize?: number;
   };
-  
+
   /** Video resolution settings */
   resolution: {
     /** Custom width in pixels (maps to -vf scale=W:H) */
@@ -118,7 +117,7 @@ export interface AdvancedConversionOptions {
     /** Keep aspect ratio when scaling */
     maintainAspectRatio: boolean;
   };
-  
+
   /** Frame rate settings */
   frameRate: {
     /** Target frame rate in fps (maps to -r flag) */
@@ -126,12 +125,12 @@ export interface AdvancedConversionOptions {
     /** Copy original frame rate */
     copyOriginal: boolean;
   };
-  
+
   /** Audio encoding settings */
   audio: {
     /** Audio codec (maps to -c:a flag) */
     codec: AudioCodec;
-    /** 
+    /**
      * Audio bitrate in kbps (maps to -b:a flag)
      * Opus: 96k (stereo), 128k (stereo high), 256k (5.1)
      * AAC: 128k (stereo), 192k (stereo high), 384k (5.1)
@@ -151,13 +150,13 @@ export interface AdvancedConversionOptions {
 export interface ConversionOptions {
   /** Selected input files with their relative paths */
   selectedFiles: string[];
-  
+
   /** Basic conversion settings */
   basic: BasicConversionOptions;
-  
+
   /** Advanced conversion settings */
   advanced: AdvancedConversionOptions;
-  
+
   /** Custom FFmpeg command (overrides all other options if provided) */
   customCommand?: string;
 }
