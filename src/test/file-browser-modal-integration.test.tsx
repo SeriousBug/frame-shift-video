@@ -4,8 +4,23 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from '@testing-library/react';
 import { FileBrowserModal } from '../components/file-browser-modal';
+
+// Helper function to render with act
+const renderWithAct = async (component: React.ReactElement) => {
+  let renderResult: ReturnType<typeof render>;
+  await act(async () => {
+    renderResult = render(component);
+  });
+  return renderResult;
+};
 
 // Mock fetch for API calls
 global.fetch = vi.fn();
@@ -74,7 +89,9 @@ describe('FileBrowserModal Integration', () => {
 
   describe('Select Step', () => {
     it('should render file selection interface', async () => {
-      render(<FileBrowserModal {...defaultProps} />);
+      await act(async () => {
+        render(<FileBrowserModal {...defaultProps} />);
+      });
 
       expect(
         screen.getByText('Select Files for Conversion'),
@@ -84,8 +101,10 @@ describe('FileBrowserModal Integration', () => {
       expect(screen.getByText('Cancel')).toBeInTheDocument();
     });
 
-    it('should show step indicator correctly for select step', () => {
-      render(<FileBrowserModal {...defaultProps} />);
+    it('should show step indicator correctly for select step', async () => {
+      await act(async () => {
+        render(<FileBrowserModal {...defaultProps} />);
+      });
 
       // First step should be active (blue)
       const step1 = screen.getByText('1').closest('div');
@@ -96,11 +115,14 @@ describe('FileBrowserModal Integration', () => {
       expect(step2).toHaveClass('bg-gray-300');
     });
 
-    it('should call onContinue when continue button is clicked', () => {
+    it('should call onContinue when continue button is clicked', async () => {
       render(<FileBrowserModal {...defaultProps} />);
 
       const continueButton = screen.getByText('Continue');
-      fireEvent.click(continueButton);
+
+      await act(async () => {
+        fireEvent.click(continueButton);
+      });
 
       expect(mockOnContinue).toHaveBeenCalledWith([
         '/test/video1.mp4',
@@ -108,8 +130,10 @@ describe('FileBrowserModal Integration', () => {
       ]);
     });
 
-    it('should disable continue button when no files selected', () => {
-      render(<FileBrowserModal {...defaultProps} selectedFiles={[]} />);
+    it('should disable continue button when no files selected', async () => {
+      await renderWithAct(
+        <FileBrowserModal {...defaultProps} selectedFiles={[]} />,
+      );
 
       const continueButton = screen.getByText('Continue');
       expect(continueButton).toBeDisabled();
@@ -156,11 +180,14 @@ describe('FileBrowserModal Integration', () => {
       expect(screen.getByText('Start Conversion')).toBeInTheDocument();
     });
 
-    it('should call onGoBack when back button is clicked', () => {
+    it('should call onGoBack when back button is clicked', async () => {
       render(<FileBrowserModal {...configureProps} />);
 
       const backButton = screen.getByText('Back');
-      fireEvent.click(backButton);
+
+      await act(async () => {
+        fireEvent.click(backButton);
+      });
 
       expect(mockOnGoBack).toHaveBeenCalled();
     });
@@ -171,7 +198,10 @@ describe('FileBrowserModal Integration', () => {
       render(<FileBrowserModal {...configureProps} />);
 
       const startButton = screen.getByText('Start Conversion');
-      fireEvent.click(startButton);
+
+      await act(async () => {
+        fireEvent.click(startButton);
+      });
 
       await waitFor(() => {
         expect(mockOnStartConversion).toHaveBeenCalled();
@@ -216,7 +246,10 @@ describe('FileBrowserModal Integration', () => {
       render(<FileBrowserModal {...configureProps} />);
 
       const videoCodecSelect = screen.getByLabelText('Video Codec');
-      fireEvent.change(videoCodecSelect, { target: { value: 'libx264' } });
+
+      await act(async () => {
+        fireEvent.change(videoCodecSelect, { target: { value: 'libx264' } });
+      });
 
       await waitFor(() => {
         expect(localStorageMock.setItem).toHaveBeenCalledWith(
@@ -228,31 +261,40 @@ describe('FileBrowserModal Integration', () => {
   });
 
   describe('Modal Controls', () => {
-    it('should call onClose when cancel button is clicked in select step', () => {
+    it('should call onClose when cancel button is clicked in select step', async () => {
       render(<FileBrowserModal {...defaultProps} />);
 
       const cancelButton = screen.getByText('Cancel');
-      fireEvent.click(cancelButton);
+
+      await act(async () => {
+        fireEvent.click(cancelButton);
+      });
 
       expect(mockOnClose).toHaveBeenCalled();
     });
 
-    it('should call onClose when cancel button is clicked in configure step', () => {
+    it('should call onClose when cancel button is clicked in configure step', async () => {
       render(
         <FileBrowserModal {...{ ...defaultProps, currentStep: 'configure' }} />,
       );
 
       const cancelButton = screen.getByText('Cancel');
-      fireEvent.click(cancelButton);
+
+      await act(async () => {
+        fireEvent.click(cancelButton);
+      });
 
       expect(mockOnClose).toHaveBeenCalled();
     });
 
-    it('should call onClose when X button is clicked', () => {
+    it('should call onClose when X button is clicked', async () => {
       render(<FileBrowserModal {...defaultProps} />);
 
       const closeButton = screen.getByText('×');
-      fireEvent.click(closeButton);
+
+      await act(async () => {
+        fireEvent.click(closeButton);
+      });
 
       expect(mockOnClose).toHaveBeenCalled();
     });
@@ -260,7 +302,11 @@ describe('FileBrowserModal Integration', () => {
 
   describe('Step Transitions', () => {
     it('should transition from select to configure step', async () => {
-      const { rerender } = render(<FileBrowserModal {...defaultProps} />);
+      let rerender: ReturnType<typeof render>['rerender'];
+      await act(async () => {
+        const result = render(<FileBrowserModal {...defaultProps} />);
+        rerender = result.rerender;
+      });
 
       // Should be in select mode initially
       expect(
@@ -268,20 +314,32 @@ describe('FileBrowserModal Integration', () => {
       ).toBeInTheDocument();
 
       // Simulate step change
-      rerender(<FileBrowserModal {...defaultProps} currentStep="configure" />);
+      await act(async () => {
+        rerender(
+          <FileBrowserModal {...defaultProps} currentStep="configure" />,
+        );
+      });
 
       // Should now be in configure mode
       expect(screen.getByText('Configure Conversion')).toBeInTheDocument();
       expect(screen.getByText('Basic Options')).toBeInTheDocument();
     });
 
-    it('should maintain selected files across step transitions', () => {
-      const { rerender } = render(<FileBrowserModal {...defaultProps} />);
+    it('should maintain selected files across step transitions', async () => {
+      let rerender: ReturnType<typeof render>['rerender'];
+      await act(async () => {
+        const result = render(<FileBrowserModal {...defaultProps} />);
+        rerender = result.rerender;
+      });
 
       expect(screen.getByText('2 files selected')).toBeInTheDocument();
 
       // Transition to configure step
-      rerender(<FileBrowserModal {...defaultProps} currentStep="configure" />);
+      await act(async () => {
+        rerender(
+          <FileBrowserModal {...defaultProps} currentStep="configure" />,
+        );
+      });
 
       expect(
         screen.getByText('2 files selected for conversion'),
@@ -326,8 +384,8 @@ describe('FileBrowserModal Integration', () => {
   });
 
   describe('Accessibility', () => {
-    it('should have proper aria labels and roles', () => {
-      render(<FileBrowserModal {...defaultProps} />);
+    it('should have proper aria labels and roles', async () => {
+      await renderWithAct(<FileBrowserModal {...defaultProps} />);
 
       // Buttons should have proper labels
       expect(
@@ -338,8 +396,8 @@ describe('FileBrowserModal Integration', () => {
       ).toBeInTheDocument();
     });
 
-    it('should handle keyboard navigation', () => {
-      render(<FileBrowserModal {...defaultProps} />);
+    it('should handle keyboard navigation', async () => {
+      await renderWithAct(<FileBrowserModal {...defaultProps} />);
 
       const continueButton = screen.getByText('Continue');
       const cancelButton = screen.getByText('Cancel');
