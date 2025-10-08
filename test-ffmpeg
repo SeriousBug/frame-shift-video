@@ -1,0 +1,201 @@
+#!/bin/bash
+
+# Mock ffmpeg script for testing
+# This script simulates ffmpeg behavior for tests
+
+# Check if help was requested
+if [[ "$*" == *"-h"* ]] || [[ "$*" == *"--help"* ]] || [[ "$*" == *"-help"* ]]; then
+    echo "Mock FFmpeg for testing"
+    echo "frame-shift-video test version"
+    exit 0
+fi
+
+# Check if version was requested
+if [[ "$*" == *"-version"* ]]; then
+    echo "ffmpeg version mock-test-1.0"
+    echo "Mock FFmpeg for frame-shift-video tests"
+    exit 0
+fi
+
+# Simulate progress output if -progress pipe:1 is specified
+if [[ "$*" == *"-progress pipe:1"* ]]; then
+    # Send progress updates in real FFmpeg format
+    
+    # First progress update (based on real FFmpeg output)
+    echo "frame=61"
+    echo "fps=0.00"
+    echo "stream_0_0_q=34.2"
+    echo "bitrate=  30.0kbits/s"
+    echo "total_size=7377"
+    echo "out_time_us=1968633"
+    echo "out_time_ms=1968633"
+    echo "out_time=00:00:01.968633"
+    echo "dup_frames=0"
+    echo "drop_frames=0"
+    echo "speed= 3.9x"
+    echo "progress=continue"
+    sleep 0.05
+    
+    # Second progress update
+    echo "frame=127"
+    echo "fps=125.73"
+    echo "stream_0_0_q=36.0"
+    echo "bitrate= 502.8kbits/s"
+    echo "total_size=262144"
+    echo "out_time_us=4170833"
+    echo "out_time_ms=4170833"
+    echo "out_time=00:00:04.170833"
+    echo "dup_frames=0"
+    echo "drop_frames=0"
+    echo "speed=4.13x"
+    echo "progress=continue"
+    sleep 0.05
+    
+    # Third progress update  
+    echo "frame=192"
+    echo "fps=127.12"
+    echo "stream_0_0_q=32.4"
+    echo "bitrate=N/A"
+    echo "total_size=262144"
+    echo "out_time_us=N/A"
+    echo "out_time_ms=N/A"
+    echo "out_time=N/A"
+    echo "dup_frames=0"
+    echo "drop_frames=0"
+    echo "speed=N/A"
+    echo "progress=continue"
+    sleep 0.05
+    
+    # Final progress update
+    echo "frame=228"
+    echo "fps=129.93"
+    echo "stream_0_0_q=31.3"
+    echo "bitrate= 812.5kbits/s"
+    echo "total_size=765835"
+    echo "out_time_us=7540867"
+    echo "out_time_ms=7540867"
+    echo "out_time=00:00:07.540867"
+    echo "dup_frames=0"
+    echo "drop_frames=0"
+    echo "speed= 4.3x"
+    echo "progress=end"
+fi
+
+# Send realistic stderr output like real ffmpeg
+echo "ffmpeg version mock-test-1.0 Copyright (c) 2000-2025 the FFmpeg developers" >&2
+echo "  built with Mock Test Configuration" >&2
+echo "  configuration: --enable-mock-testing" >&2
+echo "  libavutil      60.  8.100 / 60.  8.100" >&2
+echo "  libavcodec     62. 11.100 / 62. 11.100" >&2
+echo "  libavformat    62.  3.100 / 62.  3.100" >&2
+echo "  libavdevice    62.  1.100 / 62.  1.100" >&2
+echo "  libavfilter    11.  4.100 / 11.  4.100" >&2
+echo "  libswscale      9.  1.100 /  9.  1.100" >&2
+echo "  libswresample   6.  1.100 /  6.  1.100" >&2
+
+# Extract input and output files from arguments
+INPUT_FILE=$(echo "$*" | grep -o '\-i [^ ]*' | cut -d' ' -f2)
+OUTPUT_FILE=$(echo "$*" | awk '{print $NF}')
+
+echo "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '$INPUT_FILE':" >&2
+echo "  Metadata:" >&2
+echo "    major_brand     : isom" >&2
+echo "    minor_version   : 512" >&2
+echo "    compatible_brands: isomiso2avc1mp41" >&2
+echo "    encoder         : Lavf62.3.100" >&2
+echo "  Duration: 00:00:07.66, start: 0.000000, bitrate: 1366 kb/s" >&2
+echo "  Stream #0:0[0x1](und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1280x720 [SAR 1:1 DAR 16:9], 1240 kb/s, 29.97 fps, 29.97 tbr, 90k tbn (default)" >&2
+echo "    Metadata:" >&2
+echo "      handler_name    : VideoHandler" >&2
+echo "      vendor_id       : [0][0][0][0]" >&2
+echo "  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 125 kb/s (default)" >&2
+echo "    Metadata:" >&2
+echo "      handler_name    : SoundHandler" >&2
+echo "      vendor_id       : [0][0][0][0]" >&2
+echo "Stream mapping:" >&2
+
+# Check if x265 is requested
+if [[ "$*" == *"libx265"* ]]; then
+    echo "  Stream #0:0 -> #0:0 (h264 (native) -> hevc (libx265))" >&2
+    echo "  Stream #0:1 -> #0:1 (aac (native) -> vorbis (libvorbis))" >&2
+    echo "Press [q] to stop, [?] for help" >&2
+    echo "x265 [info]: HEVC encoder version 4.1+1-1d117be" >&2
+    echo "x265 [info]: build info [Mock Test][mock clang 16.0.0][64 bit] 8bit+10bit+12bit" >&2
+    echo "x265 [info]: using cpu capabilities: Mock CPU Features" >&2
+    echo "x265 [info]: Main profile, Level-3.1 (Main tier)" >&2
+    echo "x265 [info]: Thread pool created using 14 threads" >&2
+    echo "x265 [info]: Slices                              : 1" >&2
+    echo "x265 [info]: frame threads / pool features       : 3 / wpp(12 rows)" >&2
+    echo "x265 [info]: Coding QT: max CU size, min CU size : 64 / 8" >&2
+    echo "x265 [info]: Residual QT: max TU size, max depth : 32 / 1 inter / 1 intra" >&2
+    echo "x265 [info]: ME / range / subpel / merge         : hex / 57 / 2 / 3" >&2
+    echo "x265 [info]: Keyframe min / max / scenecut / bias  : 25 / 250 / 40 / 5.00" >&2
+    echo "x265 [info]: Lookahead / bframes / badapt        : 20 / 4 / 2" >&2
+    echo "x265 [info]: b-pyramid / weightp / weightb       : 1 / 1 / 0" >&2
+    echo "x265 [info]: References / ref-limit  cu / depth  : 3 / off / on" >&2
+    echo "x265 [info]: AQ: mode / str / qg-size / cu-tree  : 2 / 1.0 / 32 / 1" >&2
+    echo "x265 [info]: Rate Control / qCompress            : CRF-28.0 / 0.60" >&2
+    echo "x265 [info]: tools: rd=3 psy-rd=2.00 early-skip rskip mode=1 signhide tmvp" >&2
+    echo "x265 [info]: tools: b-intra strong-intra-smoothing lslices=4 deblock sao" >&2
+else
+    echo "  Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))" >&2
+    echo "  Stream #0:1 -> #0:1 (aac (native) -> aac (aac))" >&2
+fi
+
+echo "Output #0, matroska, to '$OUTPUT_FILE':" >&2
+echo "  Metadata:" >&2
+echo "    major_brand     : isom" >&2
+echo "    minor_version   : 512" >&2
+echo "    compatible_brands: isomiso2avc1mp41" >&2
+echo "    encoder         : Lavf62.3.100" >&2
+
+if [[ "$*" == *"libx265"* ]]; then
+    echo "  Stream #0:0(und): Video: hevc, yuv420p(tv, bt709, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 29.97 fps, 1k tbn (default)" >&2
+    echo "    Metadata:" >&2
+    echo "      encoder         : Lavc62.11.100 libx265" >&2
+else
+    echo "  Stream #0:0(und): Video: h264, yuv420p(tv, bt709, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 29.97 fps, 1k tbn (default)" >&2
+    echo "    Metadata:" >&2
+    echo "      encoder         : Lavc62.11.100 libx264" >&2
+fi
+
+echo "      handler_name    : VideoHandler" >&2
+echo "      vendor_id       : [0][0][0][0]" >&2
+echo "    Side data:" >&2
+echo "      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A" >&2
+echo "  Stream #0:1(und): Audio: vorbis (oV[0][0] / 0x566F), 44100 Hz, stereo, fltp (default)" >&2
+echo "    Metadata:" >&2
+echo "      encoder         : Lavc62.11.100 libvorbis" >&2
+echo "      handler_name    : SoundHandler" >&2
+echo "      vendor_id       : [0][0][0][0]" >&2
+
+# Simulate the inline progress output in stderr (this appears as real ffmpeg runs)
+echo -n "frame=   61 fps=0.0 q=34.2 size=       7KiB time=00:00:01.96 bitrate=  30.0kbits/s speed= 3.9x    " >&2
+
+# Small delay to simulate processing
+sleep 0.1
+
+echo -ne "\rframe=  127 fps=126 q=36.0 size=     256KiB time=00:00:04.17 bitrate= 502.8kbits/s speed=4.13x    " >&2
+sleep 0.1
+
+echo -ne "\rframe=  192 fps=127 q=32.4 size=     256KiB time=N/A bitrate=N/A speed=N/A    " >&2
+sleep 0.1
+
+# Final progress line and completion
+echo -ne "\rframe=  228 fps=130 q=31.3 Lsize=     748KiB time=00:00:07.54 bitrate= 812.5kbits/s speed= 4.3x    " >&2
+echo "" >&2
+
+# Final statistics
+echo "[out#0/matroska @ 0x765034e40] video:648KiB audio:89KiB subtitle:0KiB other streams:0KiB global headers:6KiB muxing overhead: 1.508508%" >&2
+
+if [[ "$*" == *"libx265"* ]]; then
+    echo "x265 [info]: frame I:      2, Avg QP:27.18  kb/s: 3592.33" >&2
+    echo "x265 [info]: frame P:    118, Avg QP:29.64  kb/s: 1071.02" >&2
+    echo "x265 [info]: frame B:    108, Avg QP:34.19  kb/s: 234.87" >&2
+    echo "x265 [info]: Weighted P-Frames: Y:1.7% UV:1.7%" >&2
+    echo "" >&2
+    echo "encoded 228 frames in 1.75s (130.65 fps), 697.07 kb/s, Avg QP:31.77" >&2
+fi
+
+# Always exit successfully for tests
+exit 0
