@@ -4,6 +4,7 @@ import React from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { FileBrowserModal } from '@/components/file-browser-modal';
 import { useUrlState } from '@/hooks/use-url-state';
+import { ConversionOptions } from '@/types/conversion';
 
 export default function Home() {
   const {
@@ -18,6 +19,16 @@ export default function Home() {
   // For now, we'll use empty jobs array since we can't use async in client component
   // In real app, you'd fetch this data differently (useEffect, SWR, etc.)
   const jobs: unknown[] = [];
+
+  const handleStartConversion = (options: ConversionOptions) => {
+    console.log('Starting conversion with options:', JSON.stringify(options, null, 2));
+    
+    // TODO: In the future, this will create job entries in the database
+    // and start the actual conversion process
+    
+    // For now, close the modal after logging
+    closeModal();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
@@ -83,6 +94,7 @@ export default function Home() {
           }
         }}
         onGoBack={goToPreviousStep}
+        onStartConversion={handleStartConversion}
       />
     </div>
   );

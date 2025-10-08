@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileSystemItem } from '@/app/api/files/route';
+import { ConversionConfig } from './conversion-config';
+import { ConversionOptions } from '@/types/conversion';
 
 interface FileBrowserModalProps {
   isOpen: boolean;
@@ -10,6 +12,7 @@ interface FileBrowserModalProps {
   onClose: () => void;
   onContinue: (selectedFiles: string[]) => void;
   onGoBack: () => void;
+  onStartConversion?: (options: ConversionOptions) => void;
 }
 
 interface TreeNode extends FileSystemItem {
@@ -89,6 +92,7 @@ export function FileBrowserModal({
   onClose,
   onContinue,
   onGoBack,
+  onStartConversion,
 }: FileBrowserModalProps) {
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [selectedFilesSet, setSelectedFilesSet] = useState<Set<string>>(
@@ -179,8 +183,6 @@ export function FileBrowserModal({
             allFilesInFolder.forEach((file) => newSelected.add(file));
           }
 
-          // Defer parent component update to avoid state update during render
-          setTimeout(() => onContinue(Array.from(newSelected)), 0);
           return newSelected;
         });
       } else {
@@ -193,13 +195,11 @@ export function FileBrowserModal({
             newSelected.add(filePath);
           }
 
-          // Defer parent component update to avoid state update during render
-          setTimeout(() => onContinue(Array.from(newSelected)), 0);
           return newSelected;
         });
       }
     },
-    [treeData, onContinue],
+    [treeData],
   );
 
   const getAllFilesInFolder = (
@@ -381,70 +381,74 @@ export function FileBrowserModal({
               )}
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="text-center py-16">
-                <div className="text-6xl mb-6">⚙️</div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                  Conversion Configuration
-                </h3>
-                <p className="text-gray-600 dark:text-gray-300 mb-6">
-                  Configuration options will be available here in the next
-                  implementation phase.
-                </p>
-                <div className="text-left max-w-md mx-auto bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">
-                    Selected Files:
-                  </h4>
-                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                    {selectedFiles.map((file) => (
-                      <li key={file} className="font-mono">
-                        {file}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+            <div className="flex-1 overflow-y-auto">
+              <ConversionConfig
+                selectedFiles={selectedFiles}
+                onOptionsChange={() => {
+                  // Options are automatically saved in the component
+                }}
+                onStartConversion={(options) => {
+                  onStartConversion?.(options);
+                }}
+              />
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-200 dark:border-gray-600">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}{' '}
-              selected
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              >
-                Cancel
-              </button>
+        {currentStep === 'select' && (
+          <div className="p-6 border-t border-gray-200 dark:border-gray-600">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {selectedFilesSet.size} file{selectedFilesSet.size !== 1 ? 's' : ''}{' '}
+                selected
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                >
+                  Cancel
+                </button>
 
-              {currentStep === 'configure' && (
+                <button
+                  onClick={() => {
+                    onContinue(Array.from(selectedFilesSet));
+                  }}
+                  disabled={selectedFilesSet.size === 0}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 'configure' && (
+          <div className="p-6 border-t border-gray-200 dark:border-gray-600">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}{' '}
+                selected for conversion
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                >
+                  Cancel
+                </button>
+
                 <button
                   onClick={onGoBack}
                   className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                 >
                   Back
                 </button>
-              )}
-
-              <button
-                onClick={
-                  currentStep === 'select'
-                    ? () => onContinue(selectedFiles)
-                    : () => console.log('Start conversion with:', selectedFiles)
-                }
-                disabled={selectedFiles.length === 0}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {currentStep === 'select' ? 'Continue' : 'Start Conversion'}
-              </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
