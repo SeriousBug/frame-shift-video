@@ -17,7 +17,7 @@ const defaultState: FileBrowserState = {
 export function useUrlState() {
   const [state, setState] = useState<FileBrowserState>(defaultState);
 
-  // Parse hash fragment to state
+  // Parse hash fragment to state (files are stored in localStorage, not URL)
   const parseHashToState = useCallback((hash: string): FileBrowserState => {
     if (!hash || hash === '#') {
       return defaultState;
@@ -29,15 +29,13 @@ export function useUrlState() {
       const params = new URLSearchParams(hashContent);
 
       const isOpen = params.get('modal') === 'file-browser';
-      const selectedFiles = params.get('files')
-        ? JSON.parse(decodeURIComponent(params.get('files')!))
-        : [];
       const currentStep =
         (params.get('step') as 'select' | 'configure') || 'select';
 
+      // Files are not stored in URL, will be loaded from localStorage separately
       return {
         isOpen,
-        selectedFiles,
+        selectedFiles: [],
         currentStep,
       };
     } catch (error) {
@@ -46,7 +44,7 @@ export function useUrlState() {
     }
   }, []);
 
-  // Convert state to hash fragment
+  // Convert state to hash fragment (files are stored in localStorage, not URL)
   const stateToHash = useCallback((state: FileBrowserState): string => {
     if (!state.isOpen) {
       return '';
@@ -54,13 +52,6 @@ export function useUrlState() {
 
     const params = new URLSearchParams();
     params.set('modal', 'file-browser');
-
-    if (state.selectedFiles.length > 0) {
-      params.set(
-        'files',
-        encodeURIComponent(JSON.stringify(state.selectedFiles)),
-      );
-    }
 
     if (state.currentStep !== 'select') {
       params.set('step', state.currentStep);
@@ -84,16 +75,50 @@ export function useUrlState() {
     [stateToHash],
   );
 
-  // Initialize state from URL on mount
+  // Initialize state from URL on mount, and restore files from localStorage
   useEffect(() => {
-    const initialState = parseHashToState(window.location.hash);
+    let initialState = parseHashToState(window.location.hash);
+
+    // Always restore files from localStorage when modal is open
+    if (initialState.isOpen) {
+      try {
+        const savedFiles = localStorage.getItem('frame-shift-selected-files');
+        if (savedFiles) {
+          const files = JSON.parse(savedFiles);
+          initialState = { ...initialState, selectedFiles: files };
+        }
+      } catch (error) {
+        console.error(
+          'Failed to restore selected files from localStorage:',
+          error,
+        );
+      }
+    }
+
     setState(initialState);
   }, [parseHashToState]);
 
   // Listen for hash changes (back/forward navigation)
   useEffect(() => {
     const handleHashChange = () => {
-      const newState = parseHashToState(window.location.hash);
+      let newState = parseHashToState(window.location.hash);
+
+      // Restore files from localStorage when navigating back/forward
+      if (newState.isOpen) {
+        try {
+          const savedFiles = localStorage.getItem('frame-shift-selected-files');
+          if (savedFiles) {
+            const files = JSON.parse(savedFiles);
+            newState = { ...newState, selectedFiles: files };
+          }
+        } catch (error) {
+          console.error(
+            'Failed to restore selected files from localStorage:',
+            error,
+          );
+        }
+      }
+
       setState(newState);
     };
 
@@ -119,33 +144,53 @@ export function useUrlState() {
 
   const setSelectedFiles = useCallback(
     (files: string[]) => {
-      const newState = { ...state, selectedFiles: files };
-      setState(newState);
-      updateUrl(newState);
+      setState((prevState) => {
+        const newState = { ...prevState, selectedFiles: files };
+        updateUrl(newState);
+        // Persist to localStorage
+        try {
+          localStorage.setItem(
+            'frame-shift-selected-files',
+            JSON.stringify(files),
+          );
+        } catch (error) {
+          console.error(
+            'Failed to save selected files to localStorage:',
+            error,
+          );
+        }
+        return newState;
+      });
     },
-    [state, updateUrl],
+    [updateUrl],
   );
 
   const setCurrentStep = useCallback(
     (step: 'select' | 'configure') => {
-      const newState = { ...state, currentStep: step };
-      setState(newState);
-      updateUrl(newState);
+      setState((prevState) => {
+        const newState = { ...prevState, currentStep: step };
+        updateUrl(newState);
+        return newState;
+      });
     },
-    [state, updateUrl],
+    [updateUrl],
   );
 
   const goToNextStep = useCallback(() => {
-    if (state.currentStep === 'select') {
-      setCurrentStep('configure');
-    }
-  }, [state.currentStep, setCurrentStep]);
+    setState((prevState) => {
+      if (prevState.currentStep === 'select') {
+        const newState = { ...prevState, currentStep: 'configure' as const };
+        updateUrl(newState);
+        return newState;
+      }
+      return prevState;
+    });
+  }, [updateUrl]);
 
   const goToPreviousStep = useCallback(() => {
-    if (state.currentStep === 'configure') {
-      setCurrentStep('select');
-    }
-  }, [state.currentStep, setCurrentStep]);
+    // Use browser's back button instead of manually changing state
+    window.history.back();
+  }, []);
 
   return {
     state,
