@@ -98,6 +98,7 @@ export default function Home() {
         }}
         onGoBack={goToPreviousStep}
         onStartConversion={handleStartConversion}
+        onFilesChange={setSelectedFiles}
       />
     </div>
   );

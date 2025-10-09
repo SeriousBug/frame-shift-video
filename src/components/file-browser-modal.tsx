@@ -13,6 +13,7 @@ interface FileBrowserModalProps {
   onContinue: (selectedFiles: string[]) => void;
   onGoBack: () => void;
   onStartConversion?: (options: ConversionOptions) => void;
+  onFilesChange?: (files: string[]) => void;
 }
 
 interface TreeNode extends FileSystemItem {
@@ -93,6 +94,7 @@ export function FileBrowserModal({
   onContinue,
   onGoBack,
   onStartConversion,
+  onFilesChange,
 }: FileBrowserModalProps) {
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [selectedFilesSet, setSelectedFilesSet] = useState<Set<string>>(
@@ -287,9 +289,8 @@ export function FileBrowserModal({
             <input
               type="checkbox"
               checked={isSelected}
-              onChange={() => {}}
-              className="mr-3"
-              onClick={(e) => e.stopPropagation()}
+              readOnly
+              className="mr-3 pointer-events-none"
             />
 
             <span className="mr-2">{node.isDirectory ? '📁' : '📄'}</span>
@@ -389,6 +390,9 @@ export function FileBrowserModal({
                 }}
                 onStartConversion={(options) => {
                   onStartConversion?.(options);
+                }}
+                onFilesChange={(files) => {
+                  onFilesChange?.(files);
                 }}
               />
             </div>

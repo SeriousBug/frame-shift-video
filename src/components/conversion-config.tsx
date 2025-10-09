@@ -18,12 +18,15 @@ interface ConversionConfigProps {
   onOptionsChange: (options: ConversionOptions) => void;
   /** Callback when user wants to start conversion */
   onStartConversion: (options: ConversionOptions) => void;
+  /** Callback when files are removed */
+  onFilesChange?: (files: string[]) => void;
 }
 
 export function ConversionConfig({
   selectedFiles,
   onOptionsChange,
   onStartConversion,
+  onFilesChange,
 }: ConversionConfigProps) {
   const [options, setOptions] = useState<ConversionOptions>({
     ...DEFAULT_CONVERSION_OPTIONS,
@@ -31,6 +34,8 @@ export function ConversionConfig({
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCustomOptions, setShowCustomOptions] = useState(false);
+  const [removedHistory, setRemovedHistory] = useState<string[]>([]);
+  const MAX_UNDO_HISTORY = 10;
 
   // Load saved options from localStorage
   useEffect(() => {
@@ -95,6 +100,24 @@ export function ConversionConfig({
     onStartConversion(options);
   };
 
+  const handleRemoveFile = (fileToRemove: string) => {
+    const newFiles = selectedFiles.filter((f) => f !== fileToRemove);
+    // Add to history, keeping only the last MAX_UNDO_HISTORY items
+    setRemovedHistory((prev) =>
+      [fileToRemove, ...prev].slice(0, MAX_UNDO_HISTORY),
+    );
+    onFilesChange?.(newFiles);
+  };
+
+  const handleUndo = () => {
+    if (removedHistory.length > 0) {
+      const fileToRestore = removedHistory[0];
+      const newFiles = [...selectedFiles, fileToRestore];
+      setRemovedHistory((prev) => prev.slice(1));
+      onFilesChange?.(newFiles);
+    }
+  };
+
   // Get quality range based on codec
   const getQualityRange = (codec: VideoCodec) => {
     switch (codec) {
@@ -135,16 +158,41 @@ export function ConversionConfig({
     <div className="p-6 space-y-6">
       {/* Selected Files Display */}
       <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-        <h3 className="font-medium text-gray-900 dark:text-white mb-3">
-          Selected Files ({selectedFiles.length})
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-medium text-gray-900 dark:text-white">
+            Selected Files ({selectedFiles.length})
+          </h3>
+          {removedHistory.length > 0 && (
+            <button
+              onClick={handleUndo}
+              className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              title={`Undo (${removedHistory.length} action${removedHistory.length !== 1 ? 's' : ''} available)`}
+            >
+              <span>↶</span>
+              <span>Undo</span>
+              {removedHistory.length > 1 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-blue-500 rounded text-xs">
+                  {removedHistory.length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
         <div className="max-h-32 overflow-y-auto space-y-1">
           {selectedFiles.map((file, index) => (
             <div
               key={index}
-              className="text-sm font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1"
+              className="flex items-center justify-between text-sm font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1 group"
             >
-              {file}
+              <span className="truncate flex-1 mr-2">{file}</span>
+              <button
+                onClick={() => handleRemoveFile(file)}
+                className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={`Remove ${file}`}
+                title="Remove file"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
