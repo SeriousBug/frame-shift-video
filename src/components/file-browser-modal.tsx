@@ -102,6 +102,9 @@ export function FileBrowserModal({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [loadingFolderPath, setLoadingFolderPath] = useState<string | null>(
+    null,
+  );
 
   // Sync selectedFiles prop with internal state
   useEffect(() => {
@@ -150,6 +153,114 @@ export function FileBrowserModal({
     }
   }, [isOpen, currentStep, loadDirectory]);
 
+  // Eagerly load folders containing pre-selected files
+  useEffect(() => {
+    if (!isOpen || currentStep !== 'select' || selectedFiles.length === 0) {
+      return;
+    }
+
+    // Extract unique parent directories from selected files
+    const parentDirs = new Set<string>();
+    selectedFiles.forEach((file) => {
+      const parts = file.split('/');
+      // Build all parent paths
+      for (let i = 1; i < parts.length; i++) {
+        const parentPath = parts.slice(0, i).join('/');
+        if (parentPath) {
+          parentDirs.add(parentPath);
+        }
+      }
+    });
+
+    // Load and expand each parent directory
+    const loadParents = async () => {
+      for (const dir of Array.from(parentDirs).sort()) {
+        await loadDirectory(dir);
+        setTreeData((prev) => {
+          // Find and expand the directory
+          const expandNode = (nodes: TreeNode[]): TreeNode[] => {
+            return nodes.map((node) => {
+              if (node.path === dir) {
+                return { ...node, isExpanded: true };
+              }
+              if (node.children) {
+                return { ...node, children: expandNode(node.children) };
+              }
+              return node;
+            });
+          };
+          return expandNode(prev);
+        });
+      }
+    };
+
+    loadParents();
+  }, [isOpen, currentStep, selectedFiles, loadDirectory]);
+
+  const findNode = useCallback(
+    (tree: TreeNode[], targetPath: string): TreeNode | null => {
+      for (const node of tree) {
+        if (node.path === targetPath) {
+          return node;
+        }
+        if (node.children) {
+          const found = findNode(node.children, targetPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    },
+    [],
+  );
+
+  const recursivelyLoadFolder = useCallback(
+    async (
+      folderPath: string,
+    ): Promise<{ files: string[]; tree: TreeNode[] }> => {
+      const files: string[] = [];
+
+      try {
+        const response = await fetch(
+          `/api/files?path=${encodeURIComponent(folderPath)}`,
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to load directory');
+        }
+
+        const data = await response.json();
+        const treeNodes: TreeNode[] = [];
+
+        for (const item of data.items) {
+          if (item.isDirectory) {
+            // Recursively load subdirectory
+            const subResult = await recursivelyLoadFolder(item.path);
+            files.push(...subResult.files);
+            treeNodes.push({
+              ...item,
+              isExpanded: true,
+              isLoading: false,
+              children: subResult.tree,
+            });
+          } else {
+            files.push(item.path);
+            treeNodes.push({
+              ...item,
+              isExpanded: false,
+              isLoading: false,
+            });
+          }
+        }
+
+        return { files, tree: treeNodes };
+      } catch (err) {
+        console.error('Error loading folder:', err);
+        return { files: [], tree: [] };
+      }
+    },
+    [],
+  );
+
   const toggleDirectory = useCallback(
     async (node: TreeNode) => {
       if (!node.isDirectory) return;
@@ -167,21 +278,58 @@ export function FileBrowserModal({
   );
 
   const handleFileSelect = useCallback(
-    (filePath: string, isDirectory: boolean) => {
+    async (filePath: string, isDirectory: boolean) => {
       if (isDirectory) {
-        // Handle folder selection - select all files in folder
-        const allFilesInFolder = getAllFilesInFolder(treeData, filePath);
+        // Handle folder selection
+        let allFilesInFolder = getAllFilesInFolder(treeData, filePath);
+
+        // If folder has no children loaded or is not expanded, recursively fetch all files
+        const node = findNode(treeData, filePath);
+        if (node && (!node.children || node.children.length === 0)) {
+          setLoadingFolderPath(filePath);
+          const result = await recursivelyLoadFolder(filePath);
+          allFilesInFolder = result.files;
+
+          // Update tree with loaded children and mark as expanded
+          setTreeData((prev) => {
+            const updateNode = (nodes: TreeNode[]): TreeNode[] => {
+              return nodes.map((n) => {
+                if (n.path === filePath) {
+                  return {
+                    ...n,
+                    children: result.tree,
+                    isExpanded: true,
+                    isLoading: false,
+                  };
+                }
+                if (n.children) {
+                  return { ...n, children: updateNode(n.children) };
+                }
+                return n;
+              });
+            };
+            return updateNode(prev);
+          });
+
+          setLoadingFolderPath(null);
+        }
+
         setSelectedFilesSet((prev) => {
           const newSelected = new Set(prev);
-          const folderSelected = allFilesInFolder.every((file) =>
-            newSelected.has(file),
-          );
 
-          if (folderSelected) {
-            // Deselect all files in folder
+          // Calculate folder state
+          const selectedCount = allFilesInFolder.filter((file) =>
+            prev.has(file),
+          ).length;
+          const allSelected =
+            allFilesInFolder.length > 0 &&
+            selectedCount === allFilesInFolder.length;
+
+          if (allSelected) {
+            // All files selected - deselect all
             allFilesInFolder.forEach((file) => newSelected.delete(file));
           } else {
-            // Select all files in folder
+            // None or some files selected - select all
             allFilesInFolder.forEach((file) => newSelected.add(file));
           }
 
@@ -201,7 +349,7 @@ export function FileBrowserModal({
         });
       }
     },
-    [treeData],
+    [treeData, findNode, recursivelyLoadFolder],
   );
 
   const getAllFilesInFolder = (
@@ -238,12 +386,23 @@ export function FileBrowserModal({
 
   const isFileSelected = (filePath: string) => selectedFilesSet.has(filePath);
 
-  const isFolderSelected = (folderPath: string) => {
+  const getFolderSelectionState = (
+    folderPath: string,
+  ): 'none' | 'some' | 'all' => {
     const filesInFolder = getAllFilesInFolder(treeData, folderPath);
-    return (
-      filesInFolder.length > 0 &&
-      filesInFolder.every((file) => selectedFilesSet.has(file))
-    );
+    if (filesInFolder.length === 0) return 'none';
+
+    const selectedCount = filesInFolder.filter((file) =>
+      selectedFilesSet.has(file),
+    ).length;
+
+    if (selectedCount === 0) return 'none';
+    if (selectedCount === filesInFolder.length) return 'all';
+    return 'some';
+  };
+
+  const isFolderSelected = (folderPath: string) => {
+    return getFolderSelectionState(folderPath) === 'all';
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -257,15 +416,19 @@ export function FileBrowserModal({
     const isSelected = node.isDirectory
       ? isFolderSelected(node.path)
       : isFileSelected(node.path);
+    const folderState = node.isDirectory
+      ? getFolderSelectionState(node.path)
+      : null;
+    const isIndeterminate = folderState === 'some';
+    const isTopLevelFolder = node.isDirectory && depth === 0;
 
     return (
       <div key={node.path}>
         <div
-          className={`flex items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer ${
+          className={`flex items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 ${
             isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
           }`}
           style={{ paddingLeft: `${depth * 20 + 12}px` }}
-          onClick={() => handleFileSelect(node.path, node.isDirectory)}
         >
           <div className="flex items-center flex-1 min-w-0">
             {node.isDirectory && (
@@ -289,21 +452,38 @@ export function FileBrowserModal({
             <input
               type="checkbox"
               checked={isSelected}
-              readOnly
-              className="mr-3 pointer-events-none"
+              disabled={isTopLevelFolder}
+              ref={(el) => {
+                if (el) {
+                  el.indeterminate = isIndeterminate;
+                }
+              }}
+              onChange={() => handleFileSelect(node.path, node.isDirectory)}
+              className={`mr-3 ${isTopLevelFolder ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
             />
 
-            <span className="mr-2">{node.isDirectory ? '📁' : '📄'}</span>
+            <div
+              className="flex items-center flex-1 min-w-0 cursor-pointer"
+              onClick={() => {
+                if (node.isDirectory) {
+                  toggleDirectory(node);
+                } else {
+                  handleFileSelect(node.path, false);
+                }
+              }}
+            >
+              <span className="mr-2">{node.isDirectory ? '📁' : '📄'}</span>
 
-            <span className="text-gray-900 dark:text-white truncate">
-              {node.name}
-            </span>
-
-            {!node.isDirectory && node.size && (
-              <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
-                {formatFileSize(node.size)}
+              <span className="text-gray-900 dark:text-white truncate">
+                {node.name}
               </span>
-            )}
+
+              {!node.isDirectory && node.size && (
+                <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
+                  {formatFileSize(node.size)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -365,6 +545,13 @@ export function FileBrowserModal({
           {error && (
             <div className="m-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
+            </div>
+          )}
+
+          {loadingFolderPath && (
+            <div className="mx-4 mt-4 mb-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded flex items-center">
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3" />
+              <span>Loading all files in folder...</span>
             </div>
           )}
 
