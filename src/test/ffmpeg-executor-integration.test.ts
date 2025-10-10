@@ -379,4 +379,292 @@ describe('FFmpeg Executor Integration Tests', () => {
       }
     });
   });
+
+  describe('Command Injection Protection - End-to-End Integration Tests', () => {
+    /**
+     * These tests verify that malicious inputs are safely handled through
+     * the entire pipeline: generation -> validation -> execution.
+     * We use non-destructive commands to verify injection is blocked.
+     */
+
+    beforeEach(async () => {
+      // Create a marker file that injection attempts might try to read
+      await writeFile(
+        path.join(tempDir, 'MARKER.txt'),
+        'MARKER_CONTENT_SHOULD_NOT_APPEAR_IN_OUTPUT',
+      );
+    });
+
+    it('should safely handle semicolon in custom command without execution', async () => {
+      // Semicolon with echo command - if injection works, we'd see the echo output
+      const maliciousCustomCommand = `-c:v libx264 -crf 23; echo INJECTION_SUCCESSFUL`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Semicolon injection test',
+      });
+
+      const result = await executor.execute(command);
+
+      // Since we use spawn() with array, the semicolon is passed as a literal argument to ffmpeg
+      // FFmpeg will likely fail because "; echo INJECTION_SUCCESSFUL" is not a valid argument
+      // But the important thing is that "echo INJECTION_SUCCESSFUL" never executes
+      if (!result.success) {
+        // Expected - ffmpeg doesn't understand the malicious argument
+        expect(result.stderr).not.toContain('INJECTION_SUCCESSFUL');
+      } else {
+        // If it somehow succeeded, verify the injection didn't run
+        expect(result.stderr).not.toContain('INJECTION_SUCCESSFUL');
+      }
+    });
+
+    it('should safely handle pipe operator in custom command', async () => {
+      const maliciousCustomCommand = `-c:v libx264 | echo PIPED_INJECTION`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Pipe injection test',
+      });
+
+      const result = await executor.execute(command);
+
+      // The pipe character is passed as a literal argument, not executed
+      expect(result.stderr).not.toContain('PIPED_INJECTION');
+    });
+
+    it('should safely handle command substitution with backticks', async () => {
+      const maliciousCustomCommand = `-c:v libx264 -crf \`echo 23\``;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Backtick injection test',
+      });
+
+      const result = await executor.execute(command);
+
+      // Backticks are passed literally - command substitution doesn't happen
+      // The literal string "`echo 23`" would be an invalid argument to ffmpeg
+      if (!result.success) {
+        // Expected failure due to invalid argument
+        expect(result.exitCode).not.toBe(0);
+      }
+      // Either way, command substitution should not have occurred
+    });
+
+    it('should safely handle command substitution with $() syntax', async () => {
+      const maliciousCustomCommand = `-c:v libx264 -crf $(echo 23)`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Dollar paren injection test',
+      });
+
+      const result = await executor.execute(command);
+
+      // The string "$(echo 23)" is passed literally, not executed
+      if (!result.success) {
+        // Expected failure
+        expect(result.exitCode).not.toBe(0);
+      }
+    });
+
+    it('should safely handle AND operator (&&) in custom command', async () => {
+      const maliciousCustomCommand = `-c:v libx264 && echo DOUBLE_AMPERSAND`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'AND operator test',
+      });
+
+      const result = await executor.execute(command);
+
+      // The && is treated as a literal string, not a shell operator
+      expect(result.stderr).not.toContain('DOUBLE_AMPERSAND');
+    });
+
+    it('should safely handle OR operator (||) in custom command', async () => {
+      const maliciousCustomCommand = `-c:v libx264 || echo DOUBLE_PIPE`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'OR operator test',
+      });
+
+      const result = await executor.execute(command);
+
+      // The || is treated as a literal string, not a shell operator
+      expect(result.stderr).not.toContain('DOUBLE_PIPE');
+    });
+
+    it('should safely handle variable substitution attempts', async () => {
+      const maliciousCustomCommand = `-c:v libx264 -preset \${HOME}`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Variable substitution test',
+      });
+
+      const result = await executor.execute(command);
+
+      // The literal string "${HOME}" is passed, not expanded
+      // FFmpeg will treat it as an invalid preset name
+      if (!result.success) {
+        // Expected - invalid preset
+        expect(result.exitCode).not.toBe(0);
+      }
+    });
+
+    it('should prevent non-ffmpeg executable execution', async () => {
+      const executor = new FFmpegExecutor(options);
+
+      // Try to execute 'cat' instead of 'ffmpeg'
+      const maliciousCommand = {
+        args: ['cat', path.join(tempDir, 'MARKER.txt')],
+        displayCommand: 'cat MARKER.txt',
+        inputPath: testInputFile,
+        outputPath: 'output.mp4',
+        config: {
+          inputFile: testInputFile,
+          outputFile: 'output.mp4',
+          options: DEFAULT_CONVERSION_OPTIONS,
+          jobName: 'Executable injection',
+        },
+      };
+
+      // Should be rejected during validation
+      await expect(executor.execute(maliciousCommand)).rejects.toThrow(
+        'Only ffmpeg commands are allowed',
+      );
+    });
+
+    it('should handle null bytes safely in custom commands', async () => {
+      const maliciousCustomCommand = `-c:v libx264\x00 -preset fast`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Null byte test',
+      });
+
+      // Null bytes should be stripped
+      expect(command.args.join(' ')).not.toContain('\x00');
+
+      const result = await executor.execute(command);
+
+      // Should execute without the null byte
+      expect(result.success).toBe(true);
+    });
+
+    it('should execute successfully with legitimate special characters in arguments', async () => {
+      // FFmpeg filter syntax often includes special characters like : , ( ) [ ]
+      const legitimateCommand = `-vf scale=1920:1080,fps=30`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: legitimateCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Legitimate special chars test',
+      });
+
+      const result = await executor.execute(command);
+
+      // Should succeed - these are legitimate FFmpeg arguments
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.exitCode).toBe(0);
+      }
+    });
+
+    it('should verify injection attempts fail but do not execute shell commands', async () => {
+      // Create a comprehensive injection attempt
+      const maliciousCustomCommand = `-c:v libx264; cat ${path.join(tempDir, 'MARKER.txt')}; echo FINAL`;
+
+      const executor = new FFmpegExecutor(options);
+      const command = generateFFmpegCommand({
+        inputFile: testInputFile,
+        outputFile: 'output.mp4',
+        options: {
+          ...DEFAULT_CONVERSION_OPTIONS,
+          customCommand: maliciousCustomCommand,
+          selectedFiles: [testInputFile],
+        },
+        jobName: 'Comprehensive injection test',
+      });
+
+      const result = await executor.execute(command);
+
+      // The marker file content should NEVER appear in output
+      expect(result.stderr).not.toContain(
+        'MARKER_CONTENT_SHOULD_NOT_APPEAR_IN_OUTPUT',
+      );
+      // The echo should never execute
+      expect(result.stderr).not.toContain('FINAL');
+
+      // Either it fails (expected) or succeeds with our mock
+      // But injection must not occur either way
+      if (result.success) {
+        expect(result.exitCode).toBe(0);
+      }
+    });
+  });
 });

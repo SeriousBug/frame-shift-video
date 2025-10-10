@@ -250,7 +250,9 @@ describe('FFmpeg Command Generation', () => {
       );
     });
 
-    it('should reject command injection in custom commands', () => {
+    it('should handle shell metacharacters in custom commands safely', () => {
+      // Since we use spawn() with arrays, shell metacharacters are passed literally
+      // and don't execute. This test verifies the command is generated without throwing.
       const jobConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -261,9 +263,14 @@ describe('FFmpeg Command Generation', () => {
         jobName: 'Test Job',
       };
 
-      expect(() => generateFFmpegCommand(jobConfig)).toThrow(
-        'Invalid argument contains dangerous characters',
-      );
+      // Should not throw - spawn() with array args is safe
+      const command = generateFFmpegCommand(jobConfig);
+
+      // The custom command is split on whitespace, so "film;" and "rm" become separate args
+      // This demonstrates that shell metacharacters are treated as literal text
+      expect(command.args).toContain('film;');
+      expect(command.args).toContain('rm');
+      expect(command.args).toContain('-rf');
     });
 
     it('should allow legitimate file names with spaces and special characters', () => {

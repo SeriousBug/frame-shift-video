@@ -77,34 +77,15 @@ function escapeFilePath(filePath: string): string {
 
 /**
  * Validate and escape a generic FFmpeg argument
+ *
+ * Note: Since we use spawn() with an array of arguments (not shell execution),
+ * shell metacharacters are inherently safe. We only sanitize null bytes.
  */
 function escapeArgument(arg: string | number): string {
   const str = String(arg);
 
-  // Remove null bytes
+  // Remove null bytes (the only real threat in array-based spawn)
   const cleaned = str.replace(/\0/g, '');
-
-  // For numeric values, just return as string
-  if (typeof arg === 'number' || /^\d+(\.\d+)?$/.test(cleaned)) {
-    return cleaned;
-  }
-
-  // Check for shell injection attempts in arguments
-  const dangerousPatterns = [
-    /[;&|`$]/, // Core shell metacharacters (removed () as they're used in FFmpeg args)
-    /\s*;/, // Command separators
-    /\|\s*\w/, // Pipe attempts
-    /&&|\|\|/, // Logic operators
-    /`.*`/, // Command substitution
-    /\$\(/, // Command substitution
-    /\${/, // Variable substitution
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(cleaned)) {
-      throw new Error(`Invalid argument contains dangerous characters: ${arg}`);
-    }
-  }
 
   return cleaned;
 }
@@ -290,6 +271,10 @@ export function generateAllFFmpegCommands(
 
 /**
  * Validate FFmpeg command for security before execution
+ *
+ * Since we use spawn() with an array of arguments (not shell=true),
+ * shell metacharacters in arguments are automatically safe.
+ * We only need to ensure the executable is ffmpeg.
  */
 export function validateFFmpegCommand(command: FFmpegCommand): void {
   // Ensure ffmpeg is the only executable
@@ -297,23 +282,5 @@ export function validateFFmpegCommand(command: FFmpegCommand): void {
     throw new Error('Only ffmpeg commands are allowed');
   }
 
-  // Check for suspicious argument patterns
-  for (const arg of command.args) {
-    if (typeof arg === 'string') {
-      // Look for potential shell injection
-      if (
-        arg.includes('&&') ||
-        arg.includes('||') ||
-        arg.includes(';') ||
-        arg.includes('|')
-      ) {
-        throw new Error(`Suspicious argument detected: ${arg}`);
-      }
-
-      // Check for executable calls
-      if (arg.startsWith('$(') || arg.includes('`')) {
-        throw new Error(`Command substitution not allowed: ${arg}`);
-      }
-    }
-  }
+  // No need to validate individual arguments - spawn() with array is safe from injection
 }
