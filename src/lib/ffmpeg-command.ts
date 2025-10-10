@@ -68,10 +68,7 @@ function escapeFilePath(filePath: string): string {
     throw new Error(`Path traversal not allowed: ${filePath}`);
   }
 
-  if (cleaned.startsWith('/')) {
-    throw new Error(`Absolute paths not allowed: ${filePath}`);
-  }
-
+  // Allow absolute paths (needed for server-local files)
   return cleaned;
 }
 

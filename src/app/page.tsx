@@ -3,6 +3,7 @@
 import React from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { FileBrowserModal } from '@/components/file-browser-modal';
+import { JobList } from '@/components/job-list';
 import { useUrlState } from '@/hooks/use-url-state';
 import { ConversionOptions } from '@/types/conversion';
 
@@ -15,10 +16,6 @@ export default function Home() {
     goToNextStep,
     goToPreviousStep,
   } = useUrlState();
-
-  // For now, we'll use empty jobs array since we can't use async in client component
-  // In real app, you'd fetch this data differently (useEffect, SWR, etc.)
-  const jobs: unknown[] = [];
 
   const handleStartConversion = async (options: ConversionOptions) => {
     try {
@@ -83,22 +80,9 @@ export default function Home() {
             </div>
           </div>
 
-          {jobs.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                  Video Jobs
-                </h2>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} total
-                </div>
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-                {/* Jobs will be displayed here when available */}
-              </div>
-            </div>
-          )}
+          <div className="mt-16">
+            <JobList />
+          </div>
         </main>
       </div>
 

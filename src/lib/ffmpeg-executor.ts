@@ -110,7 +110,12 @@ export class FFmpegExecutor extends EventEmitter {
 
     // Prepare command arguments
     const args = [...command.args.slice(1)]; // Remove 'ffmpeg' from start
-    const inputPath = path.join(this.options.uploadsDir, command.inputPath);
+
+    // Resolve input path - use absolute path if provided, otherwise relative to uploadsDir
+    const inputPath = path.isAbsolute(command.inputPath)
+      ? command.inputPath
+      : path.join(this.options.uploadsDir, command.inputPath);
+
     const outputPath = path.join(this.options.outputsDir, command.outputPath);
 
     // Replace relative paths with absolute paths in args

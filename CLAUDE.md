@@ -20,22 +20,6 @@ Self-hosted video conversion web service using FFmpeg, built with Next.js, TypeS
 - **Backend**: Next.js API routes, SQLite, FFmpeg
 - **Development**: ESLint, Prettier, Husky git hooks
 
-## Project Structure
-
-```
-frame-shift-video/
-├── src/
-│   ├── app/                 # Next.js App Router pages
-│   ├── components/          # React components
-│   ├── lib/                 # Utilities and database
-│   └── types/               # TypeScript type definitions
-├── public/                  # Static assets
-├── data/                    # SQLite database
-├── uploads/                 # Uploaded video files
-├── outputs/                 # Converted video files
-└── README.md               # Detailed project documentation
-```
-
 ## Current Status
 
 ✅ **Completed:**

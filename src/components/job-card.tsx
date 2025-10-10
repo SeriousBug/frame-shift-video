@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Job } from '@/types/database';
 import { formatDistanceToNow } from 'date-fns';
 
 interface JobCardProps {
   job: Job;
+  onRetry?: (jobId: number) => void;
 }
 
 const statusColors = {
@@ -24,13 +25,25 @@ const statusIcons = {
   cancelled: '⏹️',
 };
 
-export function JobCard({ job }: JobCardProps) {
+export function JobCard({ job, onRetry }: JobCardProps) {
+  const [retrying, setRetrying] = useState(false);
+
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
       return formatDistanceToNow(date, { addSuffix: true });
     } catch {
       return 'Unknown time';
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!onRetry) return;
+    setRetrying(true);
+    try {
+      await onRetry(job.id);
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -52,6 +65,15 @@ export function JobCard({ job }: JobCardProps) {
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 Queue position: {job.queue_position}
               </span>
+            )}
+            {job.status === 'failed' && onRetry && (
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+              >
+                {retrying ? 'Retrying...' : 'Retry'}
+              </button>
             )}
           </div>
         </div>
