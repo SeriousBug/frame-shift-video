@@ -20,17 +20,34 @@ export default function Home() {
   // In real app, you'd fetch this data differently (useEffect, SWR, etc.)
   const jobs: unknown[] = [];
 
-  const handleStartConversion = (options: ConversionOptions) => {
-    console.log(
-      'Starting conversion with options:',
-      JSON.stringify(options, null, 2),
-    );
+  const handleStartConversion = async (options: ConversionOptions) => {
+    try {
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(options),
+      });
 
-    // TODO: In the future, this will create job entries in the database
-    // and start the actual conversion process
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Failed to create jobs:', error);
+        alert(
+          `Failed to create conversion jobs: ${error.error || 'Unknown error'}`,
+        );
+        return;
+      }
 
-    // For now, close the modal after logging
-    closeModal();
+      const result = await response.json();
+      console.log('Jobs created successfully:', result);
+
+      // Close modal on success
+      closeModal();
+    } catch (error) {
+      console.error('Error starting conversion:', error);
+      alert('Failed to start conversion. Please try again.');
+    }
   };
 
   return (
