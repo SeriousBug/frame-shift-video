@@ -422,13 +422,16 @@ export function FileBrowserModal({
     const isIndeterminate = folderState === 'some';
     const isTopLevelFolder = node.isDirectory && depth === 0;
 
+    // Add extra indentation for files (non-directories)
+    const extraFileIndent = node.isDirectory ? 0 : 20;
+
     return (
       <div key={node.path}>
         <div
           className={`flex items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 ${
             isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
           }`}
-          style={{ paddingLeft: `${depth * 20 + 12}px` }}
+          style={{ paddingLeft: `${depth * 20 + 12 + extraFileIndent}px` }}
         >
           <div className="flex items-center flex-1 min-w-0">
             {node.isDirectory && (
