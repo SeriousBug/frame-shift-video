@@ -86,6 +86,7 @@ export class FFmpegExecutor extends EventEmitter {
   private process: ChildProcess | null = null;
   private killed = false;
   private options: FFmpegExecutionOptions;
+  private inputDuration: number | null = null; // Duration in seconds
 
   constructor(options: FFmpegExecutionOptions) {
     super();
@@ -108,14 +109,16 @@ export class FFmpegExecutor extends EventEmitter {
     );
     await fs.mkdir(outputDir, { recursive: true });
 
-    // Prepare command arguments
-    const args = [...command.args.slice(1)]; // Remove 'ffmpeg' from start
-
-    // Resolve input path - use absolute path if provided, otherwise relative to uploadsDir
+    // Get input video duration for accurate progress calculation
     const inputPath = path.isAbsolute(command.inputPath)
       ? command.inputPath
       : path.join(this.options.uploadsDir, command.inputPath);
+    this.inputDuration = await this.getVideoDuration(inputPath);
 
+    // Prepare command arguments
+    const args = [...command.args.slice(1)]; // Remove 'ffmpeg' from start
+
+    // Resolve output path
     const outputPath = path.join(this.options.outputsDir, command.outputPath);
 
     // Replace relative paths with absolute paths in args
@@ -249,6 +252,62 @@ export class FFmpegExecutor extends EventEmitter {
   }
 
   /**
+   * Get video duration in seconds using ffprobe
+   */
+  private async getVideoDuration(inputPath: string): Promise<number | null> {
+    return new Promise((resolve) => {
+      const ffprobe = spawn('ffprobe', [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
+        inputPath,
+      ]);
+
+      let output = '';
+      ffprobe.stdout?.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          const duration = parseFloat(output.trim());
+          resolve(isNaN(duration) ? null : duration);
+        } else {
+          resolve(null);
+        }
+      });
+
+      ffprobe.on('error', () => resolve(null));
+    });
+  }
+
+  /**
+   * Convert time string (HH:MM:SS.ms or MM:SS.ms) to seconds
+   */
+  private timeToSeconds(timeStr: string): number {
+    const parts = timeStr.split(':');
+    if (parts.length === 3) {
+      // HH:MM:SS.ms
+      const [hours, minutes, seconds] = parts;
+      return (
+        parseInt(hours, 10) * 3600 +
+        parseInt(minutes, 10) * 60 +
+        parseFloat(seconds)
+      );
+    } else if (parts.length === 2) {
+      // MM:SS.ms
+      const [minutes, seconds] = parts;
+      return parseInt(minutes, 10) * 60 + parseFloat(seconds);
+    } else {
+      // Just seconds
+      return parseFloat(timeStr);
+    }
+  }
+
+  /**
    * Parse progress information from FFmpeg output
    * Handles both stderr format (time=, size=, q=) and progress pipe format (out_time=, total_size=, stream_0_0_q=)
    */
@@ -305,8 +364,13 @@ export class FFmpegExecutor extends EventEmitter {
       progressData.time &&
       progressData.time !== 'N/A'
     ) {
-      // Calculate rough progress percentage (this would need duration info for accuracy)
-      const progress = Math.min((progressData.frame / 1000) * 100, 100);
+      // Calculate accurate progress percentage using duration
+      let progress = -1; // Indicate unknown progress if duration unavailable
+      if (this.inputDuration && this.inputDuration > 0) {
+        const currentSeconds = this.timeToSeconds(progressData.time);
+        progress = Math.min((currentSeconds / this.inputDuration) * 100, 100);
+        progress = Math.round(progress * 10) / 10; // Round to 1 decimal place
+      }
 
       return {
         frame: progressData.frame,

@@ -105,17 +105,23 @@ export function JobCard({ job, onRetry }: JobCardProps) {
             <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
               Progress:
             </label>
-            <div className="mt-1">
-              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                <div
-                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${job.progress}%` }}
-                />
+            {job.progress < 0 ? (
+              <div className="mt-1 text-sm text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
+                Unable to calculate progress (video duration unavailable)
               </div>
-              <span className="text-sm text-gray-600 dark:text-gray-400 mt-1 block">
-                {job.progress.toFixed(1)}%
-              </span>
-            </div>
+            ) : (
+              <div className="mt-1">
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${job.progress}%` }}
+                  />
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-400 mt-1 block">
+                  {job.progress.toFixed(1)}%
+                </span>
+              </div>
+            )}
           </div>
         )}
 
