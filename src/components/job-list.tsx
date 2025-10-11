@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Job } from '@/types/database';
 import { JobCard } from './job-card';
 
@@ -8,6 +6,10 @@ export function JobList() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
   const fetchJobs = async () => {
     try {
@@ -26,14 +28,121 @@ export function JobList() {
     }
   };
 
+  const connectWebSocket = useCallback(() => {
+    // Clear any existing reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+
+    console.log('[WebSocket] Connecting to', wsUrl);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('[WebSocket] Connected');
+      setWsConnected(true);
+      setError(null);
+      // Reset reconnect attempts on successful connection
+      reconnectAttemptsRef.current = 0;
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('[WebSocket] Received message:', message);
+
+        if (message.type === 'job:updated' || message.type === 'job:created') {
+          // Update the specific job in the list
+          const job = message.data;
+          setJobs((prevJobs) => {
+            const jobIndex = prevJobs.findIndex((j) => j.id === job.id);
+            if (jobIndex >= 0) {
+              // Update existing job
+              const newJobs = [...prevJobs];
+              newJobs[jobIndex] = job;
+              return newJobs;
+            } else {
+              // New job, add it to the list
+              return [job, ...prevJobs];
+            }
+          });
+        } else if (message.type === 'job:progress') {
+          // Update job progress
+          const { jobId, progress } = message.data;
+          setJobs((prevJobs) => {
+            const jobIndex = prevJobs.findIndex((j) => j.id === jobId);
+            if (jobIndex >= 0) {
+              const newJobs = [...prevJobs];
+              newJobs[jobIndex] = { ...newJobs[jobIndex], progress };
+              return newJobs;
+            }
+            return prevJobs;
+          });
+        }
+      } catch (err) {
+        console.error('[WebSocket] Error parsing message:', err);
+      }
+    };
+
+    ws.onerror = (event) => {
+      console.error('[WebSocket] Error:', event);
+      setWsConnected(false);
+    };
+
+    ws.onclose = () => {
+      console.log('[WebSocket] Disconnected');
+      setWsConnected(false);
+      wsRef.current = null;
+
+      // Calculate exponential backoff delay: 1s, 2s, 4s, 8s, 16s, 32s, 60s, 60s...
+      // Max out at 60 seconds (1 minute)
+      reconnectAttemptsRef.current += 1;
+      const baseDelay = 1000; // 1 second
+      const maxDelay = 60000; // 1 minute
+      const delay = Math.min(
+        baseDelay * Math.pow(2, reconnectAttemptsRef.current - 1),
+        maxDelay,
+      );
+
+      console.log(
+        `[WebSocket] Will attempt to reconnect in ${delay / 1000}s (attempt ${reconnectAttemptsRef.current})`,
+      );
+
+      // Attempt to reconnect with exponential backoff
+      reconnectTimeoutRef.current = setTimeout(() => {
+        console.log('[WebSocket] Attempting to reconnect...');
+        connectWebSocket();
+      }, delay);
+    };
+
+    wsRef.current = ws;
+  }, []);
+
   useEffect(() => {
+    // Initial fetch
     fetchJobs();
 
-    // Poll for job updates every 5 seconds
-    const interval = setInterval(fetchJobs, 5000);
+    // Connect WebSocket
+    connectWebSocket();
 
-    return () => clearInterval(interval);
-  }, []);
+    // Cleanup on unmount
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connectWebSocket]);
 
   const handleRetry = async (jobId: number) => {
     try {
@@ -50,8 +159,7 @@ export function JobList() {
         throw new Error(error.error || 'Failed to retry job');
       }
 
-      // Refresh jobs list immediately
-      fetchJobs();
+      // No need to fetch jobs - WebSocket will update the UI automatically
     } catch (err) {
       console.error('Error retrying job:', err);
       alert(err instanceof Error ? err.message : 'Failed to retry job');
@@ -100,8 +208,25 @@ export function JobList() {
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           Video Jobs
         </h2>
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} total
+        <div className="flex items-center gap-4">
+          <div
+            className="flex items-center gap-2 text-sm"
+            title={
+              wsConnected
+                ? 'Connected - live updates enabled'
+                : 'Disconnected - attempting to reconnect'
+            }
+          >
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}
+            ></span>
+            <span className="text-gray-600 dark:text-gray-400">
+              {wsConnected ? 'Live' : 'Connecting...'}
+            </span>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} total
+          </div>
         </div>
       </div>
 

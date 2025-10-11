@@ -5,15 +5,15 @@
 
 import { EventEmitter } from 'events';
 import path from 'path';
-import { JobService } from './db-service';
-import { Job } from '../types/database';
+import { Job } from '../src/types/database';
 import {
   FFmpegExecutor,
   FFmpegProgress,
   FFmpegResult,
-} from './ffmpeg-executor';
-import { FFmpegCommand } from './ffmpeg-command';
-import { DEFAULT_CONVERSION_OPTIONS } from '../types/conversion';
+} from '../src/lib/ffmpeg-executor';
+import { FFmpegCommand } from '../src/lib/ffmpeg-command';
+import { DEFAULT_CONVERSION_OPTIONS } from '../src/types/conversion';
+import { JobService } from './db-service';
 
 /**
  * Job processor configuration
@@ -209,7 +209,10 @@ export class JobProcessor extends EventEmitter {
       console.log(
         `[JobProcessor] Started processing job ${job.id}: ${job.name}`,
       );
-      this.emit('job:start', job);
+      const updatedJob = JobService.getById(job.id);
+      if (updatedJob) {
+        this.emit('job:start', updatedJob);
+      }
 
       // Parse FFmpeg command from job
       const command = this.parseJobCommand(job);
@@ -222,9 +225,11 @@ export class JobProcessor extends EventEmitter {
 
       // Set up progress tracking
       this.executor.on('progress', (progress: FFmpegProgress) => {
-        const updatedJob = { ...job, progress: progress.progress };
         JobService.updateProgress(job.id, progress.progress);
-        this.emit('job:progress', updatedJob, progress);
+        const updatedJob = JobService.getById(job.id);
+        if (updatedJob) {
+          this.emit('job:progress', updatedJob, progress);
+        }
       });
 
       // Execute the command
@@ -234,20 +239,18 @@ export class JobProcessor extends EventEmitter {
       if (result.success) {
         JobService.complete(job.id, result.outputPath);
         console.log(`[JobProcessor] Job ${job.id} completed successfully`);
-        this.emit('job:complete', {
-          ...job,
-          status: 'completed',
-          output_file: result.outputPath,
-        });
+        const completedJob = JobService.getById(job.id);
+        if (completedJob) {
+          this.emit('job:complete', completedJob);
+        }
       } else {
         const errorMessage = this.formatErrorMessage(result);
         JobService.setError(job.id, errorMessage);
         console.error(`[JobProcessor] Job ${job.id} failed: ${result.error}`);
-        this.emit(
-          'job:fail',
-          { ...job, status: 'failed', error_message: errorMessage },
-          result.error,
-        );
+        const failedJob = JobService.getById(job.id);
+        if (failedJob) {
+          this.emit('job:fail', failedJob, result.error);
+        }
       }
     } catch (error) {
       const errorMessage =
@@ -257,11 +260,10 @@ export class JobProcessor extends EventEmitter {
         `[JobProcessor] Job ${job.id} failed with exception:`,
         error,
       );
-      this.emit(
-        'job:fail',
-        { ...job, status: 'failed', error_message: errorMessage },
-        errorMessage,
-      );
+      const failedJob = JobService.getById(job.id);
+      if (failedJob) {
+        this.emit('job:fail', failedJob, errorMessage);
+      }
     } finally {
       // Clean up
       this.executor = null;

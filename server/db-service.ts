@@ -3,15 +3,12 @@
  */
 
 import { query, queryOne, execute, transaction } from './database';
-import { SQL } from './sql';
 import {
   Job,
   CreateJobInput,
   UpdateJobInput,
   MetaRecord,
-} from '../types/database';
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+} from '../src/types/database';
 
 /**
  * Meta table operations (key-value store)
@@ -19,23 +16,25 @@ import {
 export const MetaService = {
   get(key: string): string | undefined {
     const result = queryOne<MetaRecord>(
-      SQL`SELECT value FROM meta WHERE key = ${key}`,
+      'SELECT value FROM meta WHERE key = ?',
+      [key],
     );
     return result?.value;
   },
 
   set(key: string, value: string): void {
-    execute(
-      SQL`INSERT OR REPLACE INTO meta (key, value) VALUES (${key}, ${value})`,
-    );
+    execute('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [
+      key,
+      value,
+    ]);
   },
 
   delete(key: string): void {
-    execute(SQL`DELETE FROM meta WHERE key = ${key}`);
+    execute('DELETE FROM meta WHERE key = ?', [key]);
   },
 
   getAll(): MetaRecord[] {
-    return query<MetaRecord>(SQL`SELECT key, value FROM meta ORDER BY key`);
+    return query<MetaRecord>('SELECT key, value FROM meta ORDER BY key');
   },
 };
 
@@ -44,33 +43,41 @@ export const MetaService = {
  */
 export const JobService = {
   create(input: CreateJobInput): number {
-    const result = execute(SQL`
-      INSERT INTO jobs (name, input_file, output_file, ffmpeg_command, queue_position)
-      VALUES (${input.name}, ${input.input_file}, ${input.output_file || null}, ${input.ffmpeg_command || null}, ${input.queue_position || null})
-    `);
-    return result.lastInsertRowid as number;
+    const result = execute(
+      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command, queue_position) VALUES (?, ?, ?, ?, ?)',
+      [
+        input.name,
+        input.input_file,
+        input.output_file || null,
+        input.ffmpeg_command || null,
+        input.queue_position || null,
+      ],
+    );
+    return Number(result.lastInsertRowid);
   },
 
   getById(id: number): Job | undefined {
-    return queryOne<Job>(SQL`SELECT * FROM jobs WHERE id = ${id}`);
+    const result = queryOne<Job>('SELECT * FROM jobs WHERE id = ?', [id]);
+    return result || undefined;
   },
 
   getAll(): Job[] {
-    return query<Job>(SQL`SELECT * FROM jobs ORDER BY created_at DESC`);
+    return query<Job>('SELECT * FROM jobs ORDER BY created_at DESC');
   },
 
   getByStatus(status: Job['status']): Job[] {
     return query<Job>(
-      SQL`SELECT * FROM jobs WHERE status = ${status} ORDER BY queue_position ASC, created_at ASC`,
+      'SELECT * FROM jobs WHERE status = ? ORDER BY queue_position ASC, created_at ASC',
+      [status],
     );
   },
 
   getQueue(): Job[] {
-    return query<Job>(SQL`
-      SELECT * FROM jobs 
-      WHERE status IN ('pending', 'processing') 
-      ORDER BY queue_position ASC, created_at ASC
-    `);
+    return query<Job>(
+      `SELECT * FROM jobs
+       WHERE status IN ('pending', 'processing')
+       ORDER BY queue_position ASC, created_at ASC`,
+    );
   },
 
   update(id: number, input: UpdateJobInput): void {
@@ -107,56 +114,57 @@ export const JobService = {
     updates.push('updated_at = CURRENT_TIMESTAMP');
     params.push(id);
 
-    const query = `UPDATE jobs SET ${updates.join(', ')} WHERE id = ?`;
-    execute({ query, params });
+    const queryStr = `UPDATE jobs SET ${updates.join(', ')} WHERE id = ?`;
+    execute(queryStr, params);
   },
 
   delete(id: number): void {
-    execute(SQL`DELETE FROM jobs WHERE id = ${id}`);
+    execute('DELETE FROM jobs WHERE id = ?', [id]);
   },
 
   updateProgress(id: number, progress: number): void {
-    execute(SQL`
-      UPDATE jobs 
-      SET progress = ${progress}, updated_at = CURRENT_TIMESTAMP 
-      WHERE id = ${id}
-    `);
+    execute(
+      'UPDATE jobs SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [progress, id],
+    );
   },
 
   setError(id: number, errorMessage: string): void {
-    execute(SQL`
-      UPDATE jobs 
-      SET status = 'failed', error_message = ${errorMessage}, updated_at = CURRENT_TIMESTAMP 
-      WHERE id = ${id}
-    `);
+    execute(
+      `UPDATE jobs
+       SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [errorMessage, id],
+    );
   },
 
   complete(id: number, outputFile: string): void {
-    execute(SQL`
-      UPDATE jobs 
-      SET status = 'completed', output_file = ${outputFile}, progress = 100, updated_at = CURRENT_TIMESTAMP 
-      WHERE id = ${id}
-    `);
+    execute(
+      `UPDATE jobs
+       SET status = 'completed', output_file = ?, progress = 100, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [outputFile, id],
+    );
   },
 
   reorderQueue(jobIds: number[]): void {
     transaction(() => {
       jobIds.forEach((jobId, index) => {
-        execute(SQL`
-          UPDATE jobs 
-          SET queue_position = ${index}, updated_at = CURRENT_TIMESTAMP 
-          WHERE id = ${jobId}
-        `);
+        execute(
+          'UPDATE jobs SET queue_position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [index, jobId],
+        );
       });
     });
   },
 
   getNextPendingJob(): Job | undefined {
-    return queryOne<Job>(SQL`
-      SELECT * FROM jobs 
-      WHERE status = 'pending' 
-      ORDER BY queue_position ASC, created_at ASC 
-      LIMIT 1
-    `);
+    const result = queryOne<Job>(
+      `SELECT * FROM jobs
+       WHERE status = 'pending'
+       ORDER BY queue_position ASC, created_at ASC
+       LIMIT 1`,
+    );
+    return result || undefined;
   },
 };

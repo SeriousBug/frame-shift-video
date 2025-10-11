@@ -1,18 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
+import { FileSystemItem } from '../../src/types/files';
 
-export interface FileSystemItem {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size?: number;
-  modified?: string;
-}
-
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const requestedPath = searchParams.get('path');
+export async function filesHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const url = new URL(req.url);
+  const requestedPath = url.searchParams.get('path');
 
   // Determine the base directory
   const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
@@ -22,7 +17,10 @@ export async function GET(request: NextRequest) {
     // Security check: ensure we're not accessing files outside the base directory
     const resolvedPath = join(targetPath);
     if (!resolvedPath.startsWith(baseDir)) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      return new Response(JSON.stringify({ error: 'Access denied' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
     }
 
     const items = await readdir(resolvedPath);
@@ -57,16 +55,22 @@ export async function GET(request: NextRequest) {
       return a.name.localeCompare(b.name);
     });
 
-    return NextResponse.json({
-      path: requestedPath || '',
-      basePath: baseDir,
-      items: fileSystemItems,
-    });
+    return new Response(
+      JSON.stringify({
+        path: requestedPath || '',
+        basePath: baseDir,
+        items: fileSystemItems,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
   } catch (error) {
     console.error('Error reading directory:', error);
-    return NextResponse.json(
-      { error: 'Could not read directory' },
-      { status: 500 },
-    );
+    return new Response(JSON.stringify({ error: 'Could not read directory' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
   }
 }

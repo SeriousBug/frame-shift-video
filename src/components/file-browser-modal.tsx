@@ -1,7 +1,5 @@
-'use client';
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileSystemItem } from '@/app/api/files/route';
+import { FileSystemItem } from '@/types/files';
 import { ConversionConfig } from './conversion-config';
 import { ConversionOptions } from '@/types/conversion';
 

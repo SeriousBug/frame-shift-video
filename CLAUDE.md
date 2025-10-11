@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Self-hosted video conversion web service using FFmpeg, built with Next.js, TypeScript, and Tailwind CSS. Designed for personal use with a simple drag-and-drop interface for video conversion jobs.
+Self-hosted video conversion web service using FFmpeg, built with Vite + React frontend and Bun backend. Designed for personal use with a simple drag-and-drop interface for video conversion jobs.
 
 ## Key Features
 
@@ -13,45 +13,66 @@ Self-hosted video conversion web service using FFmpeg, built with Next.js, TypeS
 - SQLite database for job persistence and history
 - Pushover and Discord notifications
 - Job queue survives server restarts
+- Real-time updates via WebSocket integration
 
 ## Technical Stack
 
-- **Frontend**: Next.js 15, TypeScript, Tailwind CSS, React DnD Kit
-- **Backend**: Next.js API routes, SQLite, FFmpeg
-- **Development**: ESLint, Prettier, Husky git hooks
+- **Frontend**: Vite, React 19, TypeScript, Tailwind CSS, React DnD Kit
+- **Backend**: Bun runtime with built-in SQLite, WebSocket server, FFmpeg integration
+- **Development**: ESLint, Prettier, Husky git hooks, Vitest
+
+## Architecture
+
+The application uses a **separated frontend-backend architecture**:
+
+- **Vite (port 3000)**: Serves the React UI with hot module reloading
+- **Bun Server (port 3001)**: Handles API routes, WebSocket connections, SQLite database, and job processing
+- **Proxying**: Vite proxies `/api` requests to the Bun server during development
+
+This architecture eliminates state synchronization issues by:
+
+- Running a single stateful backend server (Bun)
+- WebSocket server integrated directly with the HTTP server
+- Job processor running in the same process as the API and WebSocket
 
 ## Current Status
 
 ✅ **Completed:**
 
-- Next.js project setup with TypeScript
+- Vite + React frontend setup with TypeScript
+- Bun backend server with integrated WebSocket
+- SQLite database using Bun's built-in support
+- API routes (files, jobs, job retry)
+- Job processor with automatic queue management
+- Real-time job updates via WebSocket
 - Tailwind CSS configuration
 - ESLint, Prettier, Husky setup
-- Comprehensive project planning and documentation
-- SQLite database schema with migration system
-- Database service layer with template SQL support
+- Database service layer with migrations
 - Vitest testing framework setup
 
 🔄 **Next Steps:**
 
-1. Create main UI components
-2. Implement FFmpeg integration
-3. Add drag-and-drop functionality
-4. Build notification systems
+1. Add drag-and-drop job queue reordering
+2. Build notification systems (Pushover, Discord)
+3. Add file upload functionality
+4. Improve error handling and logging
 
 ## Important Notes
 
 - **Security**: Self-hosted only - allows direct FFmpeg execution
-- **Dependencies**: Requires FFmpeg installed on host system
-- **Database**: SQLite for simplicity and portability
-- **Notifications**: Pushover API and Discord webhooks
-- **Real-time Updates**: WebSockets for live progress updates during video conversion
+- **Dependencies**: Requires FFmpeg and Bun installed on host system
+- **Database**: SQLite with Bun's built-in driver (no external dependencies)
+- **Notifications**: Pushover API and Discord webhooks (planned)
+- **Real-time Updates**: WebSocket integrated with Bun server for live progress updates
 
 ## Development Commands
 
 ```bash
-npm run dev          # Start development server
-npm run build        # Build for production
+npm run dev          # Start both Vite and Bun server (concurrently)
+npm run dev:client   # Start Vite dev server only
+npm run dev:server   # Start Bun server only
+npm run build        # Build Vite frontend for production
+npm run start        # Start production Bun server
 npm run test         # Run tests in watch mode
 npm run test:run     # Run tests once
 npm run test:ui      # Run tests with UI dashboard

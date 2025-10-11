@@ -1,9 +1,6 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import path from 'path';
 import fs from 'fs';
-import { SQL } from './sql';
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const DB_PATH =
   process.env.NODE_ENV === 'test'
@@ -17,50 +14,58 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-let db: Database.Database | null = null;
+let db: Database | null = null;
 
-export function getDatabase(): Database.Database {
+export function getDatabase(): Database {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
+    db = new Database(DB_PATH, { create: true });
+    db.run('PRAGMA journal_mode = WAL');
     initializeDatabase();
   }
   return db;
 }
 
 /**
- * Execute a SQL template query
+ * Execute a SQL query and return all results
  */
-export function query<T = any>(sqlTemplate: {
-  query: string;
-  params: any[];
-}): T[] {
+export function query<T = any>(sqlQuery: string, params: any[] = []): T[] {
   const database = getDatabase();
-  const stmt = database.prepare(sqlTemplate.query);
-  return stmt.all(...sqlTemplate.params) as T[];
+  const stmt = database.query(sqlQuery);
+  return stmt.all(...params) as T[];
 }
 
 /**
- * Execute a SQL template query and return first result
+ * Execute a SQL query and return first result
  */
-export function queryOne<T = any>(sqlTemplate: {
-  query: string;
-  params: any[];
-}): T | undefined {
-  const results = query<T>(sqlTemplate);
-  return results[0];
+export function queryOne<T = any>(
+  sqlQuery: string,
+  params: any[] = [],
+): T | null {
+  const database = getDatabase();
+  const stmt = database.query(sqlQuery);
+  return stmt.get(...params) as T | null;
 }
 
 /**
- * Execute a SQL template query for modifications (INSERT, UPDATE, DELETE)
+ * Execute a SQL query for modifications (INSERT, UPDATE, DELETE)
  */
-export function execute(sqlTemplate: {
-  query: string;
-  params: any[];
-}): Database.RunResult {
+export function execute(
+  sqlQuery: string,
+  params: any[] = [],
+): {
+  changes: number;
+  lastInsertRowid: number | bigint;
+} {
   const database = getDatabase();
-  const stmt = database.prepare(sqlTemplate.query);
-  return stmt.run(...sqlTemplate.params);
+  const stmt = database.query(sqlQuery);
+  stmt.run(...params);
+
+  return {
+    changes: database.query('SELECT changes()').get() as number,
+    lastInsertRowid: database.query('SELECT last_insert_rowid()').get() as
+      | number
+      | bigint,
+  };
 }
 
 /**
@@ -68,8 +73,14 @@ export function execute(sqlTemplate: {
  */
 export function transaction(callback: () => void): void {
   const database = getDatabase();
-  const txn = database.transaction(callback);
-  txn();
+  database.run('BEGIN');
+  try {
+    callback();
+    database.run('COMMIT');
+  } catch (error) {
+    database.run('ROLLBACK');
+    throw error;
+  }
 }
 
 /**
@@ -79,7 +90,7 @@ function initializeDatabase(): void {
   const database = getDatabase();
 
   // Always create meta table if it doesn't exist
-  database.exec(`
+  database.run(`
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -88,7 +99,8 @@ function initializeDatabase(): void {
 
   // Check current database version
   const versionResult = queryOne<{ value: string }>(
-    SQL`SELECT value FROM meta WHERE key = ${'version'}`,
+    'SELECT value FROM meta WHERE key = ?',
+    ['version'],
   );
   const currentVersion = versionResult ? parseInt(versionResult.value, 10) : 0;
 
@@ -119,7 +131,7 @@ const MIGRATIONS = [
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-    
+
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_jobs_queue_position ON jobs(queue_position);
     CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
@@ -140,14 +152,13 @@ function runMigrations(fromVersion: number): void {
       console.log(`Running migration ${newVersion}...`);
 
       // Execute migration
-      database.exec(migration);
+      database.run(migration);
 
       // Update version in meta table
-      const updateVersion = SQL`
-        INSERT OR REPLACE INTO meta (key, value) 
-        VALUES (${'version'}, ${newVersion.toString()})
-      `;
-      execute(updateVersion);
+      execute('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [
+        'version',
+        newVersion.toString(),
+      ]);
 
       console.log(`Migration ${newVersion} completed`);
     }
