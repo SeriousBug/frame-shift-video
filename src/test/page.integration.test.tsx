@@ -110,8 +110,18 @@ describe('Home Page Integration', () => {
       name: 'Test Video Conversion',
       input_file: '/uploads/test-video.mp4',
       output_file: '/outputs/converted-video.mp4',
-      ffmpeg_command:
-        'ffmpeg -i test-video.mp4 -c:v libx264 converted-video.mp4',
+      ffmpeg_command_json: JSON.stringify({
+        args: [
+          'ffmpeg',
+          '-i',
+          'test-video.mp4',
+          '-c:v',
+          'libx264',
+          'converted-video.mp4',
+        ],
+        inputPath: '/uploads/test-video.mp4',
+        outputPath: '/outputs/converted-video.mp4',
+      }),
     });
 
     const job2Id = JobService.create({
@@ -137,11 +147,6 @@ describe('Home Page Integration', () => {
     expect(screen.getByText('/uploads/test-video.mp4')).toBeInTheDocument();
     expect(
       screen.getByText('/outputs/converted-video.mp4'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'ffmpeg -i test-video.mp4 -c:v libx264 converted-video.mp4',
-      ),
     ).toBeInTheDocument();
 
     // Check status badges

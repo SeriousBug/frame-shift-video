@@ -44,12 +44,12 @@ export const MetaService = {
 export const JobService = {
   create(input: CreateJobInput): number {
     const result = execute(
-      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command, queue_position) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command_json, queue_position) VALUES (?, ?, ?, ?, ?)',
       [
         input.name,
         input.input_file,
         input.output_file || null,
-        input.ffmpeg_command || null,
+        input.ffmpeg_command_json || null,
         input.queue_position || null,
       ],
     );
@@ -92,9 +92,9 @@ export const JobService = {
       updates.push('output_file = ?');
       params.push(input.output_file);
     }
-    if (input.ffmpeg_command !== undefined) {
-      updates.push('ffmpeg_command = ?');
-      params.push(input.ffmpeg_command);
+    if (input.ffmpeg_command_json !== undefined) {
+      updates.push('ffmpeg_command_json = ?');
+      params.push(input.ffmpeg_command_json);
     }
     if (input.progress !== undefined) {
       updates.push('progress = ?');

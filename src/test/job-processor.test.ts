@@ -122,8 +122,19 @@ describe('JobProcessor', () => {
         name: 'Test Job',
         input_file: 'test-input.mp4',
         output_file: 'test-output.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y test-output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'test-output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'test-output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -146,8 +157,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'Status Test Job',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -169,8 +191,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'Completion Test Job',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -194,13 +227,37 @@ describe('JobProcessor', () => {
       const job1Id = JobService.create({
         name: 'Job 1',
         input_file: 'input1.mp4',
-        ffmpeg_command: 'ffmpeg -i input1.mp4 -progress pipe:1 -y output1.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'input1.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output1.mp4',
+          ],
+          inputPath: 'input1.mp4',
+          outputPath: 'output1.mp4',
+        }),
       });
 
       const job2Id = JobService.create({
         name: 'Job 2',
         input_file: 'input2.mp4',
-        ffmpeg_command: 'ffmpeg -i input2.mp4 -progress pipe:1 -y output2.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'input2.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output2.mp4',
+          ],
+          inputPath: 'input2.mp4',
+          outputPath: 'output2.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -239,8 +296,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'Triggered Job',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const completePromise = new Promise((resolve) => {
@@ -278,8 +346,19 @@ describe('JobProcessor', () => {
       JobService.create({
         name: 'State Test Job',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -308,8 +387,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'Current Job Test',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -335,8 +425,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'Progress Test Job',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -360,8 +461,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'DB Progress Test',
         input_file: 'test-input.mp4',
-        ffmpeg_command:
-          'ffmpeg -i test-input.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'test-input.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'test-input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());
@@ -386,8 +498,19 @@ describe('JobProcessor', () => {
       const jobId = JobService.create({
         name: 'Missing File Job',
         input_file: 'nonexistent.mp4',
-        ffmpeg_command:
-          'ffmpeg -i nonexistent.mp4 -progress pipe:1 -y output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: [
+            'ffmpeg',
+            '-i',
+            'nonexistent.mp4',
+            '-progress',
+            'pipe:1',
+            '-y',
+            'output.mp4',
+          ],
+          inputPath: 'nonexistent.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       const processor = JobProcessor.getInstance(testConfig());

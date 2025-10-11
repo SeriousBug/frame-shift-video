@@ -124,7 +124,7 @@ const MIGRATIONS = [
       status TEXT NOT NULL DEFAULT 'pending',
       input_file TEXT NOT NULL,
       output_file TEXT,
-      ffmpeg_command TEXT,
+      ffmpeg_command_json TEXT,
       progress REAL DEFAULT 0,
       error_message TEXT,
       queue_position INTEGER,

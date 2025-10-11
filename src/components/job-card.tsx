@@ -100,17 +100,6 @@ export function JobCard({ job, onRetry }: JobCardProps) {
           </div>
         )}
 
-        {job.ffmpeg_command && (
-          <div>
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              FFmpeg Command:
-            </label>
-            <p className="text-gray-900 dark:text-white font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded">
-              {job.ffmpeg_command}
-            </p>
-          </div>
-        )}
-
         {(job.status === 'processing' || job.status === 'completed') && (
           <div>
             <label className="text-sm font-medium text-gray-600 dark:text-gray-300">

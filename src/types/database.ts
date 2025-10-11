@@ -13,7 +13,7 @@ export interface Job {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   input_file: string;
   output_file?: string;
-  ffmpeg_command?: string;
+  ffmpeg_command_json?: string;
   progress: number;
   error_message?: string;
   queue_position?: number;
@@ -25,14 +25,14 @@ export interface CreateJobInput {
   name: string;
   input_file: string;
   output_file?: string;
-  ffmpeg_command?: string;
+  ffmpeg_command_json?: string;
   queue_position?: number;
 }
 
 export interface UpdateJobInput {
   status?: Job['status'];
   output_file?: string;
-  ffmpeg_command?: string;
+  ffmpeg_command_json?: string;
   progress?: number;
   error_message?: string;
   queue_position?: number;

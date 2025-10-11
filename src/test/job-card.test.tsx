@@ -92,19 +92,6 @@ describe('JobCard', () => {
     expect(screen.getByText('Cancelled')).toBeInTheDocument();
   });
 
-  it('should render job with FFmpeg command', () => {
-    const jobWithCommand: Job = {
-      ...baseJob,
-      ffmpeg_command: 'ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4',
-    };
-    render(<JobCard job={jobWithCommand} />);
-
-    expect(
-      screen.getByText('ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('FFmpeg Command:')).toBeInTheDocument();
-  });
-
   it('should apply correct status styling', () => {
     const { rerender } = render(<JobCard job={baseJob} />);
 

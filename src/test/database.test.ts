@@ -57,7 +57,11 @@ describe('Database', () => {
       const jobId = JobService.create({
         name: 'Test Job',
         input_file: '/test/input.mp4',
-        ffmpeg_command: 'ffmpeg -i input.mp4 output.mp4',
+        ffmpeg_command_json: JSON.stringify({
+          args: ['ffmpeg', '-i', 'input.mp4', 'output.mp4'],
+          inputPath: '/test/input.mp4',
+          outputPath: 'output.mp4',
+        }),
       });
 
       expect(jobId).toBeTypeOf('number');

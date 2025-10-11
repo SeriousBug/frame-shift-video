@@ -282,14 +282,14 @@ export class JobProcessor extends EventEmitter {
    * Parse FFmpeg command from job record
    */
   private parseJobCommand(job: Job): FFmpegCommand {
-    // If job has a stored ffmpeg_command, parse it
-    if (job.ffmpeg_command) {
-      const args = job.ffmpeg_command.trim().split(/\s+/);
+    // Parse JSON-encoded command
+    if (job.ffmpeg_command_json) {
+      const commandData = JSON.parse(job.ffmpeg_command_json);
       return {
-        args,
-        displayCommand: job.ffmpeg_command,
-        inputPath: job.input_file,
-        outputPath: job.output_file || this.generateOutputPath(job.input_file),
+        args: commandData.args,
+        displayCommand: commandData.args.join(' '),
+        inputPath: commandData.inputPath,
+        outputPath: commandData.outputPath,
         config: {
           inputFile: job.input_file,
           outputFile:

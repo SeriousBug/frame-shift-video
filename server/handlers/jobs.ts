@@ -97,12 +97,16 @@ export async function jobsHandler(
         // Generate FFmpeg command for storage
         const ffmpegCommand = generateFFmpegCommand(config);
 
-        // Create job in database
+        // Create job in database with JSON-encoded command
         const jobId = JobService.create({
           name: config.jobName,
           input_file: config.inputFile,
           output_file: config.outputFile,
-          ffmpeg_command: ffmpegCommand.displayCommand,
+          ffmpeg_command_json: JSON.stringify({
+            args: ffmpegCommand.args,
+            inputPath: ffmpegCommand.inputPath,
+            outputPath: ffmpegCommand.outputPath,
+          }),
           queue_position: null, // Auto-assigned by database
         });
 
