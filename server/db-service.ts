@@ -8,7 +8,9 @@ import {
   CreateJobInput,
   UpdateJobInput,
   MetaRecord,
+  FileSelection,
 } from '../src/types/database';
+import crypto from 'crypto';
 
 /**
  * Meta table operations (key-value store)
@@ -166,5 +168,62 @@ export const JobService = {
        LIMIT 1`,
     );
     return result || undefined;
+  },
+};
+
+/**
+ * File selection table operations
+ */
+export const FileSelectionService = {
+  /**
+   * Generate a SHA1 hash of the data and encode as base64url
+   */
+  generateKey(data: string[]): string {
+    const json = JSON.stringify(data);
+    const hash = crypto.createHash('sha1').update(json).digest('base64url');
+    return hash;
+  },
+
+  /**
+   * Save file selections and return the key
+   */
+  save(files: string[]): string {
+    const json = JSON.stringify(files);
+    const key = this.generateKey(files);
+
+    execute('INSERT OR REPLACE INTO file_selections (id, data) VALUES (?, ?)', [
+      key,
+      json,
+    ]);
+
+    return key;
+  },
+
+  /**
+   * Get file selections by key
+   */
+  get(key: string): string[] | undefined {
+    const result = queryOne<FileSelection>(
+      'SELECT data FROM file_selections WHERE id = ?',
+      [key],
+    );
+
+    if (!result) return undefined;
+
+    try {
+      return JSON.parse(result.data);
+    } catch (error) {
+      console.error('Failed to parse file selections data:', error);
+      return undefined;
+    }
+  },
+
+  /**
+   * Delete old file selections (older than 30 days)
+   */
+  cleanup(): void {
+    execute(
+      "DELETE FROM file_selections WHERE created_at < datetime('now', '-30 days')",
+    );
   },
 };

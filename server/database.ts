@@ -6,7 +6,7 @@ const DB_PATH =
   process.env.NODE_ENV === 'test'
     ? path.join(process.cwd(), 'data', 'test-database.sqlite')
     : path.join(process.cwd(), 'data', 'database.sqlite');
-const CURRENT_DB_VERSION = 1;
+const CURRENT_DB_VERSION = 2;
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);
@@ -135,6 +135,16 @@ const MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_jobs_queue_position ON jobs(queue_position);
     CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
+  `,
+  // Migration 2: File selections table
+  `
+    CREATE TABLE IF NOT EXISTS file_selections (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_file_selections_created_at ON file_selections(created_at);
   `,
 ];
 

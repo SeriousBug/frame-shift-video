@@ -1,5 +1,9 @@
 import { filesHandler } from './handlers/files';
 import { jobsHandler, jobByIdHandler } from './handlers/jobs';
+import {
+  fileSelectionsHandler,
+  fileSelectionByKeyHandler,
+} from './handlers/file-selections';
 
 export async function setupRoutes(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -37,6 +41,18 @@ export async function setupRoutes(req: Request): Promise<Response> {
     if (jobIdMatch && req.method === 'PATCH') {
       const jobId = parseInt(jobIdMatch[1], 10);
       return await jobByIdHandler(req, jobId, corsHeaders);
+    }
+
+    // Route: POST /api/file-selections
+    if (pathname === '/api/file-selections' && req.method === 'POST') {
+      return await fileSelectionsHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/file-selections/:key
+    const fileSelectionMatch = pathname.match(/^\/api\/file-selections\/(.+)$/);
+    if (fileSelectionMatch && req.method === 'GET') {
+      const key = fileSelectionMatch[1];
+      return await fileSelectionByKeyHandler(req, key, corsHeaders);
     }
 
     // 404 Not Found

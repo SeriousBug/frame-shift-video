@@ -37,3 +37,9 @@ export interface UpdateJobInput {
   error_message?: string;
   queue_position?: number;
 }
+
+export interface FileSelection {
+  id: string;
+  data: string;
+  created_at: string;
+}
