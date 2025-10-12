@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { FileSystemItem } from '@/types/files';
+import { useFileSelections, useSaveFileSelections } from '@/lib/api-hooks';
+import { fetchFiles } from '@/lib/api';
 
 export const Route = createFileRoute('/convert/')({
   component: ConvertPage,
@@ -94,21 +96,18 @@ function ConvertPage() {
     null,
   );
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [isLoadingSelections, setIsLoadingSelections] = useState(!!urlKey);
+
+  // Load file selections using TanStack Query
+  const { data: fileSelectionsData, isLoading: isLoadingSelections } =
+    useFileSelections(urlKey);
+
+  const saveFileSelectionsMutation = useSaveFileSelections();
 
   const loadDirectory = useCallback(async (path: string) => {
     try {
       setIsLoading(true);
       setError('');
-      const response = await fetch(
-        `/api/files?path=${encodeURIComponent(path)}`,
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to load directory');
-      }
-
-      const data = await response.json();
+      const data = await fetchFiles(path);
 
       if (path === '') {
         setTreeData(
@@ -129,34 +128,12 @@ function ConvertPage() {
     }
   }, []);
 
-  // Load file selections from key on mount
+  // Sync file selections from query to local state
   useEffect(() => {
-    const loadSelections = async () => {
-      if (!urlKey) {
-        setIsLoadingSelections(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/file-selections/${urlKey}`);
-
-        if (!response.ok) {
-          console.error('Failed to load file selections');
-          setIsLoadingSelections(false);
-          return;
-        }
-
-        const data = await response.json();
-        setSelectedFilesSet(new Set(data.files));
-        setIsLoadingSelections(false);
-      } catch (error) {
-        console.error('Error loading file selections:', error);
-        setIsLoadingSelections(false);
-      }
-    };
-
-    loadSelections();
-  }, [urlKey]);
+    if (fileSelectionsData?.files) {
+      setSelectedFilesSet(new Set(fileSelectionsData.files));
+    }
+  }, [fileSelectionsData]);
 
   useEffect(() => {
     loadDirectory('');
@@ -228,20 +205,7 @@ function ConvertPage() {
       // Set new timeout
       saveTimeoutRef.current = setTimeout(async () => {
         try {
-          const response = await fetch('/api/file-selections', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ files }),
-          });
-
-          if (!response.ok) {
-            console.error('Failed to save file selections');
-            return;
-          }
-
-          const data = await response.json();
+          const data = await saveFileSelectionsMutation.mutateAsync(files);
           navigate({
             to: '/convert',
             search: { key: data.key },
@@ -252,7 +216,7 @@ function ConvertPage() {
         }
       }, 15000); // 15 seconds debounce
     },
-    [navigate],
+    [navigate, saveFileSelectionsMutation],
   );
 
   // Cleanup timeout on unmount
@@ -271,15 +235,7 @@ function ConvertPage() {
       const files: string[] = [];
 
       try {
-        const response = await fetch(
-          `/api/files?path=${encodeURIComponent(folderPath)}`,
-        );
-
-        if (!response.ok) {
-          throw new Error('Failed to load directory');
-        }
-
-        const data = await response.json();
+        const data = await fetchFiles(folderPath);
         const treeNodes: TreeNode[] = [];
 
         for (const item of data.items) {
@@ -550,25 +506,7 @@ function ConvertPage() {
     const files = Array.from(selectedFilesSet);
 
     try {
-      const response = await fetch('/api/file-selections', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ files }),
-      });
-
-      if (!response.ok) {
-        console.error('Failed to save file selections');
-        // Still navigate even if save fails
-        navigate({
-          to: '/convert/configure',
-          search: { key: urlKey },
-        });
-        return;
-      }
-
-      const data = await response.json();
+      const data = await saveFileSelectionsMutation.mutateAsync(files);
       navigate({
         to: '/convert/configure',
         search: { key: data.key },

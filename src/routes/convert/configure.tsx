@@ -1,7 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ConversionConfig } from '@/components/conversion-config';
 import { ConversionOptions } from '@/types/conversion';
+import {
+  useFileSelections,
+  useCreateJobs,
+  useSaveFileSelections,
+} from '@/lib/api-hooks';
 
 export const Route = createFileRoute('/convert/configure')({
   component: ConfigurePage,
@@ -15,88 +20,39 @@ export const Route = createFileRoute('/convert/configure')({
 function ConfigurePage() {
   const navigate = useNavigate();
   const { key: urlKey } = Route.useSearch();
-  const [files, setFiles] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(!!urlKey);
+  const [currentOptions, setCurrentOptions] =
+    useState<ConversionOptions | null>(null);
 
-  // Load file selections from key on mount
-  useEffect(() => {
-    const loadSelections = async () => {
-      if (!urlKey) {
-        setIsLoading(false);
-        return;
-      }
+  // Load file selections using TanStack Query
+  const {
+    data: fileSelectionsData,
+    isLoading,
+    error: fileSelectionsError,
+  } = useFileSelections(urlKey);
 
-      try {
-        const response = await fetch(`/api/file-selections/${urlKey}`);
-
-        if (!response.ok) {
-          console.error('Failed to load file selections');
-          setIsLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        setFiles(data.files);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error loading file selections:', error);
-        setIsLoading(false);
-      }
-    };
-
-    loadSelections();
-  }, [urlKey]);
+  const files = fileSelectionsData?.files || [];
+  const createJobsMutation = useCreateJobs();
+  const saveFileSelectionsMutation = useSaveFileSelections();
 
   const handleStartConversion = async (options: ConversionOptions) => {
     try {
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(options),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Failed to create jobs:', error);
-        alert(
-          `Failed to create conversion jobs: ${error.error || 'Unknown error'}`,
-        );
-        return;
-      }
-
-      const result = await response.json();
+      const result = await createJobsMutation.mutateAsync(options);
       console.log('Jobs created successfully:', result);
 
       // Navigate back to home on success
       navigate({ to: '/' });
     } catch (error) {
       console.error('Error starting conversion:', error);
-      alert('Failed to start conversion. Please try again.');
+      alert(
+        `Failed to create conversion jobs: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   };
 
   const handleFilesChange = async (newFiles: string[]) => {
-    // Update local state immediately
-    setFiles(newFiles);
-
     // Save to server and update URL
     try {
-      const response = await fetch('/api/file-selections', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ files: newFiles }),
-      });
-
-      if (!response.ok) {
-        console.error('Failed to save file selections');
-        return;
-      }
-
-      const data = await response.json();
+      const data = await saveFileSelectionsMutation.mutateAsync(newFiles);
       navigate({
         to: '/convert/configure',
         search: { key: data.key },
@@ -140,9 +96,7 @@ function ConfigurePage() {
         <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
           <ConversionConfig
             selectedFiles={files}
-            onOptionsChange={() => {
-              // Options are saved in localStorage by the component
-            }}
+            onOptionsChange={setCurrentOptions}
             onStartConversion={handleStartConversion}
             onFilesChange={handleFilesChange}
           />
@@ -168,6 +122,21 @@ function ConfigurePage() {
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
                 Cancel
+              </button>
+              <button
+                onClick={() =>
+                  currentOptions && handleStartConversion(currentOptions)
+                }
+                disabled={
+                  !currentOptions ||
+                  files.length === 0 ||
+                  createJobsMutation.isPending
+                }
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                {createJobsMutation.isPending
+                  ? 'Creating Jobs...'
+                  : 'Start Conversion'}
               </button>
             </div>
           </div>

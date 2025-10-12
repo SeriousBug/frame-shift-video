@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FileSystemItem } from '@/types/files';
 import { ConversionConfig } from './conversion-config';
 import { ConversionOptions } from '@/types/conversion';
+import { fetchFiles } from '@/lib/api';
 
 interface FileBrowserModalProps {
   isOpen: boolean;
@@ -115,15 +116,7 @@ export function FileBrowserModal({
     try {
       setIsLoading(true);
       setError('');
-      const response = await fetch(
-        `/api/files?path=${encodeURIComponent(path)}`,
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to load directory');
-      }
-
-      const data = await response.json();
+      const data = await fetchFiles(path);
 
       if (path === '') {
         // Initial load
@@ -220,15 +213,7 @@ export function FileBrowserModal({
       const files: string[] = [];
 
       try {
-        const response = await fetch(
-          `/api/files?path=${encodeURIComponent(folderPath)}`,
-        );
-
-        if (!response.ok) {
-          throw new Error('Failed to load directory');
-        }
-
-        const data = await response.json();
+        const data = await fetchFiles(folderPath);
         const treeNodes: TreeNode[] = [];
 
         for (const item of data.items) {

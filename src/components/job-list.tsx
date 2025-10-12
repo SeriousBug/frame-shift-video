@@ -1,32 +1,22 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { Job } from '@/types/database';
 import { JobCard } from './job-card';
+import { useJobs, useRetryJob } from '@/lib/api-hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/api-hooks';
 
 export function JobList() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
+  const { data, isLoading: loading, error: queryError } = useJobs();
+  const retryJobMutation = useRetryJob();
+  const queryClient = useQueryClient();
+
+  const jobs = data?.jobs || [];
+  const error = queryError ? 'Failed to fetch jobs' : null;
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-
-  const fetchJobs = async () => {
-    try {
-      const response = await fetch('/api/jobs');
-      if (!response.ok) {
-        throw new Error('Failed to fetch jobs');
-      }
-      const data = await response.json();
-      setJobs(data.jobs);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      console.error('Error fetching jobs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [wsConnected, setWsConnected] = React.useState(false);
 
   const connectWebSocket = useCallback(() => {
     // Clear any existing reconnect timeout
@@ -60,32 +50,42 @@ export function JobList() {
         console.log('[WebSocket] Received message:', message);
 
         if (message.type === 'job:updated' || message.type === 'job:created') {
-          // Update the specific job in the list
+          // Update the specific job in the query cache
           const job = message.data;
-          setJobs((prevJobs) => {
-            const jobIndex = prevJobs.findIndex((j) => j.id === job.id);
-            if (jobIndex >= 0) {
-              // Update existing job
-              const newJobs = [...prevJobs];
-              newJobs[jobIndex] = job;
-              return newJobs;
-            } else {
-              // New job, add it to the list
-              return [job, ...prevJobs];
-            }
-          });
+          queryClient.setQueryData(
+            queryKeys.jobs,
+            (oldData: { jobs: Job[] } | undefined) => {
+              if (!oldData) return { jobs: [job] };
+
+              const jobIndex = oldData.jobs.findIndex((j) => j.id === job.id);
+              if (jobIndex >= 0) {
+                // Update existing job
+                const newJobs = [...oldData.jobs];
+                newJobs[jobIndex] = job;
+                return { jobs: newJobs };
+              } else {
+                // New job, add it to the list
+                return { jobs: [job, ...oldData.jobs] };
+              }
+            },
+          );
         } else if (message.type === 'job:progress') {
-          // Update job progress
+          // Update job progress in the query cache
           const { jobId, progress } = message.data;
-          setJobs((prevJobs) => {
-            const jobIndex = prevJobs.findIndex((j) => j.id === jobId);
-            if (jobIndex >= 0) {
-              const newJobs = [...prevJobs];
-              newJobs[jobIndex] = { ...newJobs[jobIndex], progress };
-              return newJobs;
-            }
-            return prevJobs;
-          });
+          queryClient.setQueryData(
+            queryKeys.jobs,
+            (oldData: { jobs: Job[] } | undefined) => {
+              if (!oldData) return oldData;
+
+              const jobIndex = oldData.jobs.findIndex((j) => j.id === jobId);
+              if (jobIndex >= 0) {
+                const newJobs = [...oldData.jobs];
+                newJobs[jobIndex] = { ...newJobs[jobIndex], progress };
+                return { jobs: newJobs };
+              }
+              return oldData;
+            },
+          );
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
@@ -124,12 +124,9 @@ export function JobList() {
     };
 
     wsRef.current = ws;
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
-    // Initial fetch
-    fetchJobs();
-
     // Connect WebSocket
     connectWebSocket();
 
@@ -146,20 +143,8 @@ export function JobList() {
 
   const handleRetry = async (jobId: number) => {
     try {
-      const response = await fetch(`/api/jobs/${jobId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'retry' }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to retry job');
-      }
-
-      // No need to fetch jobs - WebSocket will update the UI automatically
+      await retryJobMutation.mutateAsync(jobId);
+      // No need to fetch jobs - mutation will invalidate the cache and WebSocket will update the UI
     } catch (err) {
       console.error('Error retrying job:', err);
       alert(err instanceof Error ? err.message : 'Failed to retry job');
@@ -181,12 +166,6 @@ export function JobList() {
         <div className="text-red-600 dark:text-red-400 text-lg">
           Error loading jobs: {error}
         </div>
-        <button
-          onClick={fetchJobs}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Retry
-        </button>
       </div>
     );
   }
