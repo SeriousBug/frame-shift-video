@@ -50,6 +50,9 @@ services:
       # Defaults to / if not specified
       - FRAME_SHIFT_HOME=/videos
 
+      # FFmpeg configuration (optional)
+      # - FFMPEG_THREADS=12
+
       # Discord notifications (optional)
       # Get webhook URL from Discord Server Settings -> Integrations -> Webhooks
       - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
@@ -78,6 +81,7 @@ Access the web interface at `http://localhost:3001`
 | `UPLOAD_DIR`          | No       | `./uploads`      | Directory for uploaded files              |
 | `OUTPUT_DIR`          | No       | `./outputs`      | Directory for converted video outputs     |
 | `FRAME_SHIFT_HOME`    | No       | `/` (or `$HOME`) | Starting directory for file browser       |
+| `FFMPEG_THREADS`      | No       | -                | Number of threads FFmpeg should use       |
 | `DISCORD_WEBHOOK_URL` | No       | -                | Discord webhook URL for notifications     |
 | `PUSHOVER_API_TOKEN`  | No       | -                | Pushover application token                |
 | `PUSHOVER_USER_KEY`   | No       | -                | Pushover user key                         |

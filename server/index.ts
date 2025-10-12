@@ -10,6 +10,18 @@ import { serveStatic } from './static';
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
 
+// Validate FFMPEG_THREADS environment variable if set
+if (process.env.FFMPEG_THREADS) {
+  const threads = parseInt(process.env.FFMPEG_THREADS, 10);
+  if (isNaN(threads) || threads <= 0) {
+    console.error(
+      `[Config] Invalid FFMPEG_THREADS value: "${process.env.FFMPEG_THREADS}". Must be a positive integer.`,
+    );
+    process.exit(1);
+  }
+  console.log(`[Config] FFmpeg will use ${threads} threads for encoding`);
+}
+
 // Initialize job processor
 const uploadsDir = process.env.UPLOAD_DIR || './uploads';
 const outputsDir = process.env.OUTPUT_DIR || './outputs';

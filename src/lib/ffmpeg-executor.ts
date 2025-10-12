@@ -129,6 +129,12 @@ export class FFmpegExecutor extends EventEmitter {
       return arg;
     });
 
+    // Prepend thread count if FFMPEG_THREADS is set
+    if (process.env.FFMPEG_THREADS) {
+      const threads = parseInt(process.env.FFMPEG_THREADS, 10);
+      processedArgs.unshift('-threads', threads.toString());
+    }
+
     // Add dry run flag for testing
     if (this.options.dryRun) {
       processedArgs.unshift('-f', 'null');
