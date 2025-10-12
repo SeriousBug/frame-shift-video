@@ -205,7 +205,9 @@ function ConvertPage() {
       // Set new timeout
       saveTimeoutRef.current = setTimeout(async () => {
         try {
-          const data = await saveFileSelectionsMutation.mutateAsync(files);
+          const data = await saveFileSelectionsMutation.mutateAsync({
+            files,
+          });
           navigate({
             to: '/convert',
             search: { key: data.key },
@@ -506,7 +508,9 @@ function ConvertPage() {
     const files = Array.from(selectedFilesSet);
 
     try {
-      const data = await saveFileSelectionsMutation.mutateAsync(files);
+      const data = await saveFileSelectionsMutation.mutateAsync({
+        files,
+      });
       navigate({
         to: '/convert/configure',
         search: { key: data.key },

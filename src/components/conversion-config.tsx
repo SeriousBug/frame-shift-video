@@ -13,6 +13,8 @@ import { Virtuoso } from 'react-virtuoso';
 interface ConversionConfigProps {
   /** Selected files with their relative paths */
   selectedFiles: string[];
+  /** Initial config to load (from API) */
+  initialConfig?: ConversionOptions;
   /** Callback when conversion options change */
   onOptionsChange: (options: ConversionOptions) => void;
   /** Callback when user wants to start conversion */
@@ -23,6 +25,7 @@ interface ConversionConfigProps {
 
 export function ConversionConfig({
   selectedFiles,
+  initialConfig,
   onOptionsChange,
   onStartConversion,
   onFilesChange,
@@ -36,9 +39,19 @@ export function ConversionConfig({
   const [removedHistory, setRemovedHistory] = useState<string[]>([]);
   const MAX_UNDO_HISTORY = 10;
 
-  // Load saved options from localStorage
+  // Load initial config from API or localStorage
   useEffect(() => {
     try {
+      // Prefer initialConfig from API (for retries)
+      if (initialConfig) {
+        setOptions({
+          ...initialConfig,
+          selectedFiles, // Always use current selected files
+        });
+        return;
+      }
+
+      // Otherwise fall back to localStorage
       const saved = localStorage.getItem('frame-shift-conversion-options');
       if (saved) {
         const savedOptions = JSON.parse(saved);
@@ -50,7 +63,7 @@ export function ConversionConfig({
     } catch (error) {
       console.error('Failed to load saved options:', error);
     }
-  }, [selectedFiles]);
+  }, [selectedFiles, initialConfig]);
 
   // Save options to localStorage whenever they change
   useEffect(() => {

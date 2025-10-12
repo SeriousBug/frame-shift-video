@@ -13,7 +13,10 @@ import {
   fetchJobs,
   fetchJobsPaginated,
   createJobs,
-  retryJob,
+  markJobAsRetried,
+  cancelJob,
+  cancelAllJobs,
+  markAllFailedAsRetried,
   saveFileSelections,
   loadFileSelections,
 } from './api';
@@ -77,13 +80,13 @@ export function useCreateJobs() {
 }
 
 /**
- * Hook to retry a failed job
+ * Hook to mark a job as retried and get its input file
  */
-export function useRetryJob() {
+export function useMarkJobAsRetried() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (jobId: number) => retryJob(jobId),
+    mutationFn: (jobId: number) => markJobAsRetried(jobId),
     onSuccess: () => {
       // Invalidate and refetch jobs
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
@@ -92,11 +95,62 @@ export function useRetryJob() {
 }
 
 /**
- * Hook to save file selections
+ * Hook to cancel a job
+ */
+export function useCancelJob() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (jobId: number) => cancelJob(jobId),
+    onSuccess: () => {
+      // Invalidate and refetch jobs
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
+    },
+  });
+}
+
+/**
+ * Hook to cancel all jobs
+ */
+export function useCancelAllJobs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => cancelAllJobs(),
+    onSuccess: () => {
+      // Invalidate and refetch jobs
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
+    },
+  });
+}
+
+/**
+ * Hook to mark all failed jobs as retried and get their input files
+ */
+export function useMarkAllFailedAsRetried() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => markAllFailedAsRetried(),
+    onSuccess: () => {
+      // Invalidate and refetch jobs
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
+    },
+  });
+}
+
+/**
+ * Hook to save file selections with optional config
  */
 export function useSaveFileSelections() {
   return useMutation({
-    mutationFn: (files: string[]) => saveFileSelections(files),
+    mutationFn: ({
+      files,
+      config,
+    }: {
+      files: string[];
+      config?: ConversionOptions;
+    }) => saveFileSelections(files, config),
   });
 }
 

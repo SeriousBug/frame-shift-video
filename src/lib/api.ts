@@ -4,7 +4,7 @@
 
 import { FileSystemItem } from '@/types/files';
 import { Job } from '@/types/database';
-import { ConversionOptions } from '@/types/conversion';
+import type { ConversionOptions } from '@/types/conversion';
 
 // Base API URL
 const API_BASE = '/api';
@@ -88,9 +88,11 @@ export async function createJobs(
 }
 
 /**
- * Retry a failed job
+ * Mark a failed or cancelled job as retried (returns config key for navigation)
  */
-export async function retryJob(jobId: number): Promise<Job> {
+export async function markJobAsRetried(
+  jobId: number,
+): Promise<{ configKey: string | null }> {
   const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
     method: 'PATCH',
     headers: {
@@ -101,16 +103,76 @@ export async function retryJob(jobId: number): Promise<Job> {
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to retry job');
+    throw new Error(error.error || 'Failed to mark job as retried');
   }
 
   return response.json();
 }
 
 /**
- * Save file selections
+ * Cancel a job
  */
-export async function saveFileSelections(files: string[]): Promise<{
+export async function cancelJob(jobId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'cancel' }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to cancel job');
+  }
+}
+
+/**
+ * Cancel all pending and processing jobs
+ */
+export async function cancelAllJobs(): Promise<{ count: number }> {
+  const response = await fetch(`${API_BASE}/jobs`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to cancel all jobs');
+  }
+
+  return response.json();
+}
+
+/**
+ * Mark all failed jobs as retried and return config key
+ */
+export async function markAllFailedAsRetried(): Promise<{
+  count: number;
+  configKey: string | null;
+}> {
+  const response = await fetch(`${API_BASE}/jobs`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'retry-all-failed' }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to mark all failed jobs as retried');
+  }
+
+  return response.json();
+}
+
+/**
+ * Save file selections with optional config
+ */
+export async function saveFileSelections(
+  files: string[],
+  config?: ConversionOptions,
+): Promise<{
   key: string;
 }> {
   const response = await fetch(`${API_BASE}/file-selections`, {
@@ -118,7 +180,7 @@ export async function saveFileSelections(files: string[]): Promise<{
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ files, config }),
   });
 
   if (!response.ok) {
@@ -129,10 +191,11 @@ export async function saveFileSelections(files: string[]): Promise<{
 }
 
 /**
- * Load file selections by key
+ * Load file selections and config by key
  */
 export async function loadFileSelections(key: string): Promise<{
   files: string[];
+  config?: ConversionOptions;
 }> {
   const response = await fetch(`${API_BASE}/file-selections/${key}`);
 

@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 interface JobCardProps {
   job: Job & { currentFrame?: number; currentFps?: number };
   onRetry?: (jobId: number) => void;
+  onCancel?: (jobId: number) => void;
 }
 
 const statusColors = {
@@ -25,8 +26,9 @@ const statusIcons = {
   cancelled: '⏹️',
 };
 
-export function JobCard({ job, onRetry }: JobCardProps) {
+export function JobCard({ job, onRetry, onCancel }: JobCardProps) {
   const [retrying, setRetrying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   // Update current time every second for ETA calculation
@@ -92,6 +94,13 @@ export function JobCard({ job, onRetry }: JobCardProps) {
     return durationSeconds > 0 ? job.total_frames / durationSeconds : 0;
   };
 
+  const getDisplayStatus = () => {
+    if (job.status === 'failed' && job.retried) {
+      return 'Failed, Retried';
+    }
+    return job.status.charAt(0).toUpperCase() + job.status.slice(1);
+  };
+
   const handleRetry = async () => {
     if (!onRetry) return;
     setRetrying(true);
@@ -99,6 +108,16 @@ export function JobCard({ job, onRetry }: JobCardProps) {
       await onRetry(job.id);
     } finally {
       setRetrying(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!onCancel) return;
+    setCancelling(true);
+    try {
+      await onCancel(job.id);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -114,22 +133,34 @@ export function JobCard({ job, onRetry }: JobCardProps) {
               className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[job.status]}`}
             >
               <span className="mr-1">{statusIcons[job.status]}</span>
-              {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+              {getDisplayStatus()}
             </span>
             {job.queue_position !== null && job.status === 'pending' && (
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 Queue position: {job.queue_position}
               </span>
             )}
-            {job.status === 'failed' && onRetry && (
-              <button
-                onClick={handleRetry}
-                disabled={retrying}
-                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
-              >
-                {retrying ? 'Retrying...' : 'Retry'}
-              </button>
-            )}
+            {(job.status === 'failed' || job.status === 'cancelled') &&
+              !job.retried &&
+              onRetry && (
+                <button
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                >
+                  {retrying ? 'Retrying...' : 'Retry'}
+                </button>
+              )}
+            {(job.status === 'pending' || job.status === 'processing') &&
+              onCancel && (
+                <button
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                >
+                  {cancelling ? 'Cancelling...' : 'Cancel'}
+                </button>
+              )}
           </div>
         </div>
       </div>

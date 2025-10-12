@@ -11,7 +11,7 @@ export async function fileSelectionsHandler(
   if (req.method === 'POST') {
     try {
       const body = await req.json();
-      const { files } = body;
+      const { files, config } = body;
 
       if (!Array.isArray(files)) {
         return new Response(
@@ -23,7 +23,9 @@ export async function fileSelectionsHandler(
         );
       }
 
-      const key = FileSelectionService.save(files);
+      // Serialize config if provided
+      const configJson = config ? JSON.stringify(config) : undefined;
+      const key = FileSelectionService.save(files, configJson);
 
       return new Response(JSON.stringify({ key }), {
         status: 200,
@@ -66,9 +68,9 @@ export async function fileSelectionByKeyHandler(
   }
 
   try {
-    const files = FileSelectionService.get(key);
+    const result = FileSelectionService.get(key);
 
-    if (!files) {
+    if (!result) {
       return new Response(
         JSON.stringify({ error: 'File selections not found' }),
         {
@@ -78,7 +80,7 @@ export async function fileSelectionByKeyHandler(
       );
     }
 
-    return new Response(JSON.stringify({ files }), {
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });

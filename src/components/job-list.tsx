@@ -1,9 +1,18 @@
 import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { Job } from '@/types/database';
 import { JobCard } from './job-card';
-import { useJobsInfinite, useRetryJob } from '@/lib/api-hooks';
+import { ConfirmationModal } from './confirmation-modal';
+import {
+  useJobsInfinite,
+  useMarkJobAsRetried,
+  useCancelJob,
+  useCancelAllJobs,
+  useMarkAllFailedAsRetried,
+  useSaveFileSelections,
+} from '@/lib/api-hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { Virtuoso } from 'react-virtuoso';
+import { useNavigate } from '@tanstack/react-router';
 
 export function JobList() {
   const {
@@ -14,7 +23,12 @@ export function JobList() {
     hasNextPage,
     isFetchingNextPage,
   } = useJobsInfinite(20);
-  const retryJobMutation = useRetryJob();
+  const navigate = useNavigate();
+  const markJobAsRetriedMutation = useMarkJobAsRetried();
+  const cancelJobMutation = useCancelJob();
+  const cancelAllJobsMutation = useCancelAllJobs();
+  const markAllFailedAsRetriedMutation = useMarkAllFailedAsRetried();
+  const saveFileSelectionsMutation = useSaveFileSelections();
   const queryClient = useQueryClient();
 
   // Flatten all pages into a single array of jobs
@@ -29,6 +43,9 @@ export function JobList() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const [wsConnected, setWsConnected] = React.useState(false);
+  const [showCancelAllModal, setShowCancelAllModal] = React.useState(false);
+  const [showRetryAllFailedModal, setShowRetryAllFailedModal] =
+    React.useState(false);
 
   const connectWebSocket = useCallback(() => {
     // Clear any existing reconnect timeout
@@ -173,11 +190,74 @@ export function JobList() {
 
   const handleRetry = async (jobId: number) => {
     try {
-      await retryJobMutation.mutateAsync(jobId);
-      // Mutation will invalidate the cache and trigger refetch
+      // Mark job as retried and get config key
+      const { configKey } = await markJobAsRetriedMutation.mutateAsync(jobId);
+
+      // Navigate to configure page with the config key
+      if (configKey) {
+        navigate({ to: '/convert/configure', search: { key: configKey } });
+      } else {
+        alert('Failed to load job configuration');
+      }
     } catch (err) {
       console.error('Error retrying job:', err);
       alert(err instanceof Error ? err.message : 'Failed to retry job');
+    }
+  };
+
+  const handleCancel = async (jobId: number) => {
+    try {
+      await cancelJobMutation.mutateAsync(jobId);
+      // Mutation will invalidate the cache and trigger refetch
+    } catch (err) {
+      console.error('Error cancelling job:', err);
+      alert(err instanceof Error ? err.message : 'Failed to cancel job');
+    }
+  };
+
+  const handleCancelAll = async () => {
+    try {
+      await cancelAllJobsMutation.mutateAsync();
+      // Mutation will invalidate the cache and trigger refetch
+    } catch (err) {
+      console.error('Error cancelling all jobs:', err);
+      alert(err instanceof Error ? err.message : 'Failed to cancel all jobs');
+    }
+  };
+
+  // Count jobs that can be cancelled (pending or processing)
+  const cancellableJobsCount = useMemo(() => {
+    return jobs.filter(
+      (job) => job.status === 'pending' || job.status === 'processing',
+    ).length;
+  }, [jobs]);
+
+  // Count failed jobs that haven't been retried yet
+  const retriableFailedJobsCount = useMemo(() => {
+    return jobs.filter((job) => job.status === 'failed' && !job.retried).length;
+  }, [jobs]);
+
+  const handleRetryAllFailed = async () => {
+    try {
+      // Mark all failed jobs as retried and get config key
+      const { configKey, count } =
+        await markAllFailedAsRetriedMutation.mutateAsync();
+
+      if (count === 0) {
+        return;
+      }
+
+      // Navigate to configure page with the config key
+      if (configKey) {
+        navigate({ to: '/convert/configure', search: { key: configKey } });
+      } else {
+        alert('Failed to load job configuration');
+      }
+    } catch (err) {
+      console.error('Error retrying all failed jobs:', err);
+      alert(
+        err instanceof Error ? err.message : 'Failed to retry all failed jobs',
+      );
     }
   };
 
@@ -219,11 +299,30 @@ export function JobList() {
 
   return (
     <div className="flex flex-col h-full">
+      <ConfirmationModal
+        isOpen={showCancelAllModal}
+        onClose={() => setShowCancelAllModal(false)}
+        onConfirm={handleCancelAll}
+        title="Cancel All Jobs"
+        message={`Are you sure you want to cancel ${cancellableJobsCount} ${cancellableJobsCount === 1 ? 'job' : 'jobs'}? This action cannot be undone.`}
+        confirmText="Cancel All Jobs"
+        cancelText="Keep Jobs"
+      />
+      <ConfirmationModal
+        isOpen={showRetryAllFailedModal}
+        onClose={() => setShowRetryAllFailedModal(false)}
+        onConfirm={handleRetryAllFailed}
+        title="Retry All Failed Jobs"
+        message={`Are you sure you want to retry ${retriableFailedJobsCount} failed ${retriableFailedJobsCount === 1 ? 'job' : 'jobs'}?`}
+        confirmText="Retry All"
+        cancelText="Cancel"
+        confirmClassName="bg-blue-600 hover:bg-blue-700"
+      />
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           Video Jobs
         </h2>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
           <div
             className="flex items-center gap-2 text-sm"
             title={
@@ -242,6 +341,46 @@ export function JobList() {
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} loaded
           </div>
+          <button
+            onClick={() => setShowRetryAllFailedModal(true)}
+            disabled={
+              markAllFailedAsRetriedMutation.isPending ||
+              retriableFailedJobsCount === 0
+            }
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              markAllFailedAsRetriedMutation.isPending ||
+              retriableFailedJobsCount === 0
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            title={
+              retriableFailedJobsCount === 0
+                ? 'No failed jobs to retry'
+                : 'Retry all failed jobs that have not been retried'
+            }
+          >
+            {markAllFailedAsRetriedMutation.isPending
+              ? 'Retrying...'
+              : 'Retry All Failed'}
+          </button>
+          <button
+            onClick={() => setShowCancelAllModal(true)}
+            disabled={
+              cancelAllJobsMutation.isPending || cancellableJobsCount === 0
+            }
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              cancelAllJobsMutation.isPending || cancellableJobsCount === 0
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                : 'bg-red-600 text-white hover:bg-red-700'
+            }`}
+            title={
+              cancellableJobsCount === 0
+                ? 'No jobs to cancel'
+                : 'Cancel all pending and processing jobs'
+            }
+          >
+            {cancelAllJobsMutation.isPending ? 'Cancelling...' : 'Cancel All'}
+          </button>
         </div>
       </div>
 
@@ -254,7 +393,12 @@ export function JobList() {
           endReached={loadMore}
           itemContent={(index, job) => (
             <div className="mb-6 mx-6">
-              <JobCard key={job.id} job={job} onRetry={handleRetry} />
+              <JobCard
+                key={job.id}
+                job={job}
+                onRetry={handleRetry}
+                onCancel={handleCancel}
+              />
             </div>
           )}
           components={{

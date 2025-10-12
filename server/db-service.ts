@@ -46,13 +46,14 @@ export const MetaService = {
 export const JobService = {
   create(input: CreateJobInput): number {
     const result = execute(
-      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command_json, queue_position) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command_json, queue_position, config_key) VALUES (?, ?, ?, ?, ?, ?)',
       [
         input.name,
         input.input_file,
         input.output_file || null,
         input.ffmpeg_command_json || null,
         input.queue_position || null,
+        input.config_key || null,
       ],
     );
     return Number(result.lastInsertRowid);
@@ -175,6 +176,14 @@ export const JobService = {
       updates.push('total_frames = ?');
       params.push(input.total_frames);
     }
+    if (input.retried !== undefined) {
+      updates.push('retried = ?');
+      params.push(input.retried);
+    }
+    if (input.config_key !== undefined) {
+      updates.push('config_key = ?');
+      params.push(input.config_key);
+    }
 
     if (updates.length === 0) return;
 
@@ -250,33 +259,35 @@ export const FileSelectionService = {
   },
 
   /**
-   * Save file selections and return the key
+   * Save file selections with optional config and return the key
    */
-  save(files: string[]): string {
+  save(files: string[], config?: string): string {
     const json = JSON.stringify(files);
     const key = this.generateKey(files);
 
-    execute('INSERT OR REPLACE INTO file_selections (id, data) VALUES (?, ?)', [
-      key,
-      json,
-    ]);
+    execute(
+      'INSERT OR REPLACE INTO file_selections (id, data, config) VALUES (?, ?, ?)',
+      [key, json, config || null],
+    );
 
     return key;
   },
 
   /**
-   * Get file selections by key
+   * Get file selections and config by key
    */
-  get(key: string): string[] | undefined {
+  get(key: string): { files: string[]; config?: any } | undefined {
     const result = queryOne<FileSelection>(
-      'SELECT data FROM file_selections WHERE id = ?',
+      'SELECT data, config FROM file_selections WHERE id = ?',
       [key],
     );
 
     if (!result) return undefined;
 
     try {
-      return JSON.parse(result.data);
+      const files = JSON.parse(result.data);
+      const config = result.config ? JSON.parse(result.config) : undefined;
+      return { files, config };
     } catch (error) {
       console.error('Failed to parse file selections data:', error);
       return undefined;

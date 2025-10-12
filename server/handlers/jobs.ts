@@ -4,7 +4,7 @@ import {
   createFFmpegJobs,
   generateFFmpegCommand,
 } from '../../src/lib/ffmpeg-command';
-import { JobService } from '../db-service';
+import { JobService, FileSelectionService } from '../db-service';
 import { JobProcessor } from '../job-processor';
 import { WSBroadcaster } from '../websocket';
 import { decodeCursor } from '../cursor-utils';
@@ -54,6 +54,172 @@ export async function jobsHandler(
       return new Response(
         JSON.stringify({
           error: 'Failed to fetch jobs',
+          details: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+  }
+
+  /**
+   * PUT /api/jobs - Batch operations (e.g., retry all failed)
+   */
+  if (req.method === 'PUT') {
+    try {
+      const body = await req.json();
+      const { action } = body;
+
+      if (action === 'retry-all-failed') {
+        // Get all failed jobs that haven't been retried yet
+        const failedJobs = JobService.getByStatus('failed').filter(
+          (job) => !job.retried,
+        );
+
+        if (failedJobs.length === 0) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'No failed jobs to retry',
+              count: 0,
+              configKey: null,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            },
+          );
+        }
+
+        const inputFiles: string[] = [];
+        let configKey: string | null = null;
+
+        for (const job of failedJobs) {
+          // Mark the original job as retried
+          JobService.update(job.id, { retried: 1 });
+
+          // Broadcast updated job to WebSocket clients
+          const updatedOriginalJob = JobService.getById(job.id);
+          if (updatedOriginalJob) {
+            WSBroadcaster.broadcastJobUpdate(updatedOriginalJob);
+          }
+
+          // Collect input files
+          inputFiles.push(job.input_file);
+
+          // Use the config_key from the first job (they should all have the same config if from the same batch)
+          if (!configKey && job.config_key) {
+            configKey = job.config_key;
+          }
+        }
+
+        // If we have a config key, load it and update with the failed files
+        if (configKey) {
+          const savedConfig = FileSelectionService.get(configKey);
+          if (savedConfig?.config) {
+            // Update the config with the failed files and save as a new key
+            const updatedConfigJson = JSON.stringify({
+              ...savedConfig.config,
+              selectedFiles: inputFiles,
+            });
+            configKey = FileSelectionService.save(
+              inputFiles,
+              updatedConfigJson,
+            );
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Marked ${failedJobs.length} failed job(s) as retried`,
+            count: failedJobs.length,
+            configKey,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid action. Use action: "retry-all-failed"',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    } catch (error) {
+      console.error('Error handling batch operation:', error);
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to perform batch operation',
+          details: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+  }
+
+  /**
+   * DELETE /api/jobs - Cancel all pending and processing jobs
+   */
+  if (req.method === 'DELETE') {
+    try {
+      // Get all pending and processing jobs
+      const pendingJobs = JobService.getByStatus('pending');
+      const processingJobs = JobService.getByStatus('processing');
+
+      // Cancel all processing jobs
+      for (const job of processingJobs) {
+        try {
+          const processor = JobProcessor.getInstance();
+          processor.cancelJob(job.id);
+        } catch (error) {
+          console.error(`Failed to cancel job ${job.id}:`, error);
+        }
+      }
+
+      // Cancel all pending jobs
+      for (const job of pendingJobs) {
+        JobService.update(job.id, {
+          status: 'cancelled',
+          error_message: 'Job cancelled by user',
+        });
+
+        // Broadcast updated job to WebSocket clients
+        const updatedJob = JobService.getById(job.id);
+        if (updatedJob) {
+          WSBroadcaster.broadcastJobUpdate(updatedJob);
+        }
+      }
+
+      const totalCancelled = pendingJobs.length + processingJobs.length;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Cancelled ${totalCancelled} job(s)`,
+          count: totalCancelled,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    } catch (error) {
+      console.error('Error cancelling all jobs:', error);
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to cancel all jobs',
           details: error instanceof Error ? error.message : String(error),
         }),
         {
@@ -117,6 +283,13 @@ export async function jobsHandler(
       // Create job configs from conversion options
       const jobConfigs = createFFmpegJobs(resolvedOptions);
 
+      // Save the configuration with file selections
+      const configJson = JSON.stringify(resolvedOptions);
+      const configKey = FileSelectionService.save(
+        resolvedOptions.selectedFiles,
+        configJson,
+      );
+
       // Create database entries for each job
       const createdJobIds: number[] = [];
 
@@ -124,7 +297,7 @@ export async function jobsHandler(
         // Generate FFmpeg command for storage
         const ffmpegCommand = generateFFmpegCommand(config);
 
-        // Create job in database with JSON-encoded command
+        // Create job in database with JSON-encoded command and config key
         const jobId = JobService.create({
           name: config.jobName,
           input_file: config.inputFile,
@@ -135,6 +308,7 @@ export async function jobsHandler(
             outputPath: ffmpegCommand.outputPath,
           }),
           queue_position: null, // Auto-assigned by database
+          config_key: configKey,
         });
 
         createdJobIds.push(jobId);
@@ -199,6 +373,7 @@ export async function jobsHandler(
 }
 
 /**
+ * GET /api/jobs/:id - Get a single job
  * PATCH /api/jobs/:id - Update job (e.g., retry failed job)
  */
 export async function jobByIdHandler(
@@ -214,11 +389,7 @@ export async function jobByIdHandler(
       });
     }
 
-    const body = await req.json();
-    const { action } = body;
-
-    if (action === 'retry') {
-      // Get the job to verify it's in a failed state
+    if (req.method === 'GET') {
       const job = JobService.getById(jobId);
       if (!job) {
         return new Response(JSON.stringify({ error: 'Job not found' }), {
@@ -227,9 +398,30 @@ export async function jobByIdHandler(
         });
       }
 
-      if (job.status !== 'failed') {
+      return new Response(JSON.stringify(job), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const body = await req.json();
+    const { action } = body;
+
+    if (action === 'retry') {
+      // Get the job to verify it's in a failed or cancelled state
+      const job = JobService.getById(jobId);
+      if (!job) {
+        return new Response(JSON.stringify({ error: 'Job not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      if (job.status !== 'failed' && job.status !== 'cancelled') {
         return new Response(
-          JSON.stringify({ error: 'Only failed jobs can be retried' }),
+          JSON.stringify({
+            error: 'Only failed or cancelled jobs can be retried',
+          }),
           {
             status: 400,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -237,31 +429,94 @@ export async function jobByIdHandler(
         );
       }
 
-      // Reset job to pending state
-      JobService.update(jobId, {
-        status: 'pending',
-        progress: 0,
-        error_message: null,
-      });
+      // Mark the original job as retried
+      JobService.update(jobId, { retried: 1 });
 
       // Broadcast updated job to WebSocket clients
-      const updatedJob = JobService.getById(jobId);
-      if (updatedJob) {
-        WSBroadcaster.broadcastJobUpdate(updatedJob);
+      const updatedOriginalJob = JobService.getById(jobId);
+      if (updatedOriginalJob) {
+        WSBroadcaster.broadcastJobUpdate(updatedOriginalJob);
       }
 
-      // Trigger job processor
-      try {
-        const processor = JobProcessor.getInstance();
-        processor.trigger();
-      } catch (error) {
-        console.error('Failed to trigger job processor:', error);
+      // If the job has a config_key, load it and update with this single file
+      let configKey = job.config_key || null;
+      if (configKey) {
+        const savedConfig = FileSelectionService.get(configKey);
+        if (savedConfig?.config) {
+          // Update the config with just this file and save as a new key
+          const updatedConfigJson = JSON.stringify({
+            ...savedConfig.config,
+            selectedFiles: [job.input_file],
+          });
+          configKey = FileSelectionService.save(
+            [job.input_file],
+            updatedConfigJson,
+          );
+        }
       }
 
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Job queued for retry',
+          message: 'Job marked as retried',
+          configKey,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    if (action === 'cancel') {
+      // Get the job
+      const job = JobService.getById(jobId);
+      if (!job) {
+        return new Response(JSON.stringify({ error: 'Job not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Only cancel pending or processing jobs
+      if (job.status !== 'pending' && job.status !== 'processing') {
+        return new Response(
+          JSON.stringify({
+            error: 'Only pending or processing jobs can be cancelled',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          },
+        );
+      }
+
+      // If the job is currently processing, kill it
+      if (job.status === 'processing') {
+        try {
+          const processor = JobProcessor.getInstance();
+          processor.cancelJob(jobId);
+        } catch (error) {
+          console.error('Failed to cancel job in processor:', error);
+        }
+      } else {
+        // If pending, just update the status
+        JobService.update(jobId, {
+          status: 'cancelled',
+          error_message: 'Job cancelled by user',
+        });
+
+        // Broadcast updated job to WebSocket clients
+        const updatedJob = JobService.getById(jobId);
+        if (updatedJob) {
+          WSBroadcaster.broadcastJobUpdate(updatedJob);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Job cancelled',
         }),
         {
           status: 200,
@@ -271,7 +526,9 @@ export async function jobByIdHandler(
     }
 
     return new Response(
-      JSON.stringify({ error: 'Invalid action. Use action: "retry"' }),
+      JSON.stringify({
+        error: 'Invalid action. Use action: "retry" or "cancel"',
+      }),
       {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },

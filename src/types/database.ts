@@ -22,6 +22,8 @@ export interface Job {
   start_time?: string;
   end_time?: string;
   total_frames?: number;
+  retried?: number; // SQLite boolean: 0 = false, 1 = true
+  config_key?: string; // Key to file_selections table for configuration
 }
 
 export interface CreateJobInput {
@@ -30,6 +32,7 @@ export interface CreateJobInput {
   output_file?: string;
   ffmpeg_command_json?: string;
   queue_position?: number;
+  config_key?: string;
 }
 
 export interface UpdateJobInput {
@@ -42,10 +45,13 @@ export interface UpdateJobInput {
   start_time?: string;
   end_time?: string;
   total_frames?: number;
+  retried?: number;
+  config_key?: string;
 }
 
 export interface FileSelection {
   id: string;
   data: string;
+  config?: string; // JSON-encoded ConversionOptions
   created_at: string;
 }

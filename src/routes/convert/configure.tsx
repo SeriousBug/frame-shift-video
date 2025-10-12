@@ -31,6 +31,7 @@ function ConfigurePage() {
   } = useFileSelections(urlKey);
 
   const files = fileSelectionsData?.files || [];
+  const savedConfig = fileSelectionsData?.config;
   const createJobsMutation = useCreateJobs();
   const saveFileSelectionsMutation = useSaveFileSelections();
 
@@ -50,9 +51,12 @@ function ConfigurePage() {
   };
 
   const handleFilesChange = async (newFiles: string[]) => {
-    // Save to server and update URL
+    // Save to server with current config and update URL
     try {
-      const data = await saveFileSelectionsMutation.mutateAsync(newFiles);
+      const data = await saveFileSelectionsMutation.mutateAsync({
+        files: newFiles,
+        config: currentOptions || undefined,
+      });
       navigate({
         to: '/convert/configure',
         search: { key: data.key },
@@ -96,6 +100,7 @@ function ConfigurePage() {
         <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
           <ConversionConfig
             selectedFiles={files}
+            initialConfig={savedConfig}
             onOptionsChange={setCurrentOptions}
             onStartConversion={handleStartConversion}
             onFilesChange={handleFilesChange}

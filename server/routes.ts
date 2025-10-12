@@ -36,8 +36,24 @@ export async function setupRoutes(req: Request): Promise<Response> {
       return await jobsHandler(req, corsHeaders);
     }
 
-    // Route: PATCH /api/jobs/:id
+    // Route: PUT /api/jobs
+    if (pathname === '/api/jobs' && req.method === 'PUT') {
+      return await jobsHandler(req, corsHeaders);
+    }
+
+    // Route: DELETE /api/jobs
+    if (pathname === '/api/jobs' && req.method === 'DELETE') {
+      return await jobsHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/jobs/:id
     const jobIdMatch = pathname.match(/^\/api\/jobs\/(\d+)$/);
+    if (jobIdMatch && req.method === 'GET') {
+      const jobId = parseInt(jobIdMatch[1], 10);
+      return await jobByIdHandler(req, jobId, corsHeaders);
+    }
+
+    // Route: PATCH /api/jobs/:id
     if (jobIdMatch && req.method === 'PATCH') {
       const jobId = parseInt(jobIdMatch[1], 10);
       return await jobByIdHandler(req, jobId, corsHeaders);

@@ -136,10 +136,14 @@ export class JobProcessor extends EventEmitter {
 
     // Update current job status if exists
     if (this.currentJobId) {
-      JobService.update(this.currentJobId, {
-        status: 'pending', // Return to pending so it can be retried
-        error_message: 'Job cancelled due to processor shutdown',
-      });
+      const currentJob = JobService.getById(this.currentJobId);
+      // Only return to pending if the job wasn't already cancelled
+      if (currentJob && currentJob.status !== 'cancelled') {
+        JobService.update(this.currentJobId, {
+          status: 'pending', // Return to pending so it can be retried
+          error_message: 'Job cancelled due to processor shutdown',
+        });
+      }
       this.currentJobId = null;
     }
 
@@ -170,6 +174,39 @@ export class JobProcessor extends EventEmitter {
       isProcessing: this.isProcessing,
       currentJobId: this.currentJobId,
     };
+  }
+
+  /**
+   * Cancel a specific job
+   * If the job is currently processing, kill the FFmpeg process
+   * If the job is pending, just update the status
+   */
+  cancelJob(jobId: number): void {
+    const job = JobService.getById(jobId);
+    if (!job) {
+      throw new Error(`Job ${jobId} not found`);
+    }
+
+    // If this is the current job being processed, kill it
+    if (this.currentJobId === jobId && this.executor) {
+      console.log(`[JobProcessor] Cancelling job ${jobId}`);
+      this.executor.kill();
+      JobService.update(jobId, {
+        status: 'cancelled',
+        error_message: 'Job cancelled by user',
+      });
+      const updatedJob = JobService.getById(jobId);
+      if (updatedJob) {
+        this.emit('job:fail', updatedJob, 'Job cancelled by user');
+      }
+    }
+    // If it's a pending job, just update the status
+    else if (job.status === 'pending') {
+      JobService.update(jobId, {
+        status: 'cancelled',
+        error_message: 'Job cancelled by user',
+      });
+    }
   }
 
   /**
@@ -266,26 +303,42 @@ export class JobProcessor extends EventEmitter {
         }
       } else {
         const endTime = new Date().toISOString();
-        const errorMessage = this.formatErrorMessage(result);
-        JobService.setError(job.id, errorMessage);
-        JobService.update(job.id, { end_time: endTime });
-        console.error(`[JobProcessor] Job ${job.id} failed: ${result.error}`);
-        const failedJob = JobService.getById(job.id);
-        if (failedJob) {
-          this.emit('job:fail', failedJob, result.error);
+        // Check if job was already cancelled (don't override cancelled status)
+        const currentJob = JobService.getById(job.id);
+        if (currentJob && currentJob.status !== 'cancelled') {
+          const errorMessage = this.formatErrorMessage(result);
+          JobService.setError(job.id, errorMessage);
+          JobService.update(job.id, { end_time: endTime });
+          console.error(`[JobProcessor] Job ${job.id} failed: ${result.error}`);
+          const failedJob = JobService.getById(job.id);
+          if (failedJob) {
+            this.emit('job:fail', failedJob, result.error);
+          }
+        } else {
+          // Job was cancelled, just update end time
+          JobService.update(job.id, { end_time: endTime });
+          console.log(`[JobProcessor] Job ${job.id} was cancelled`);
         }
       }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      JobService.setError(job.id, errorMessage);
-      console.error(
-        `[JobProcessor] Job ${job.id} failed with exception:`,
-        error,
-      );
-      const failedJob = JobService.getById(job.id);
-      if (failedJob) {
-        this.emit('job:fail', failedJob, errorMessage);
+      // Check if job was already cancelled (don't override cancelled status)
+      const currentJob = JobService.getById(job.id);
+      if (currentJob && currentJob.status !== 'cancelled') {
+        JobService.setError(job.id, errorMessage);
+        console.error(
+          `[JobProcessor] Job ${job.id} failed with exception:`,
+          error,
+        );
+        const failedJob = JobService.getById(job.id);
+        if (failedJob) {
+          this.emit('job:fail', failedJob, errorMessage);
+        }
+      } else {
+        console.log(
+          `[JobProcessor] Job ${job.id} was cancelled during processing`,
+        );
       }
     } finally {
       // Clean up

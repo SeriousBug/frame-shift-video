@@ -6,7 +6,7 @@ const DB_PATH =
   process.env.NODE_ENV === 'test'
     ? path.join(process.cwd(), 'data', 'test-database.sqlite')
     : path.join(process.cwd(), 'data', 'database.sqlite');
-const CURRENT_DB_VERSION = 3;
+const CURRENT_DB_VERSION = 6;
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);
@@ -151,6 +151,18 @@ const MIGRATIONS = [
     ALTER TABLE jobs ADD COLUMN start_time DATETIME;
     ALTER TABLE jobs ADD COLUMN end_time DATETIME;
     ALTER TABLE jobs ADD COLUMN total_frames INTEGER;
+  `,
+  // Migration 4: Add retried flag for tracking retried jobs
+  `
+    ALTER TABLE jobs ADD COLUMN retried INTEGER DEFAULT 0;
+  `,
+  // Migration 5: Add config field to file_selections to store full configuration
+  `
+    ALTER TABLE file_selections ADD COLUMN config TEXT;
+  `,
+  // Migration 6: Add config_key to jobs table to link to configuration
+  `
+    ALTER TABLE jobs ADD COLUMN config_key TEXT;
   `,
 ];
 
