@@ -1,11 +1,10 @@
 # Frame Shift Video
 
-Self-hosted video conversion service with a web interface. Queue up FFmpeg jobs, drag-and-drop to reorder them, and get notifications when they're done.
+Self-hosted video conversion service with a web interface. Queue up FFmpeg jobs and get notifications when they're done.
 
 ## Features
 
 - Web UI for managing video conversion jobs
-- Drag-and-drop queue reordering
 - Custom FFmpeg commands or preset configurations
 - Browse and select files from your server
 - Job queue persists across restarts

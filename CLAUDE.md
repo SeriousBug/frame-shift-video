@@ -2,14 +2,14 @@
 
 ## What This Is
 
-Self-hosted web service for queueing and managing FFmpeg video conversion jobs. Users can drag-and-drop to reorder the job queue, browse the server filesystem to select source files, and receive notifications when jobs complete.
+Self-hosted web service for queueing and managing FFmpeg video conversion jobs. Users can browse the server filesystem to select source files and receive notifications when jobs complete.
 
 ## Technologies
 
 - **Runtime**: Bun (backend server, SQLite, WebSocket)
 - **Frontend**: Vite, React 19, TypeScript, TanStack Router, TanStack Query
 - **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui, React DnD Kit (drag-and-drop)
+- **UI Components**: shadcn/ui
 - **Backend**: Bun HTTP server, integrated WebSocket, built-in SQLite
 - **Video Processing**: FFmpeg (external dependency)
 - **Notifications**: Pushover API, Discord Webhooks
@@ -35,7 +35,7 @@ The Bun server is the single source of truth for job state and queue management,
   - `convert/index.tsx`: File selection
   - `convert/configure.tsx`: FFmpeg configuration
 - **`/src/components/`**: React components
-  - `job-list.tsx`: Main job queue with drag-and-drop
+  - `job-list.tsx`: Main job queue display
   - `job-card.tsx`: Individual job display
   - `file-browser-modal.tsx`: Server file browser
   - `conversion-config.tsx`: FFmpeg preset/command configuration
@@ -56,7 +56,7 @@ The Bun server is the single source of truth for job state and queue management,
 - **`notification-service.ts`**: Pushover and Discord integrations
 - **`static.ts`**: Static file serving for production
 - **`/server/handlers/`**: API endpoint implementations
-  - `jobs.ts`: Job CRUD, retry, reorder endpoints
+  - `jobs.ts`: Job CRUD and retry endpoints
   - `files.ts`: File system browsing
   - `file-selections.ts`: File selection state
 
@@ -137,10 +137,8 @@ The Dockerfile uses a multi-stage build:
 
 - `GET /api/jobs` - List all jobs with counts by status
 - `POST /api/jobs` - Create new job
-- `PATCH /api/jobs/:id` - Update job (reorder)
 - `DELETE /api/jobs/:id` - Delete job
 - `POST /api/jobs/:id/retry` - Retry failed job
-- `POST /api/jobs/reorder` - Reorder multiple jobs
 - `GET /api/files?path=...` - Browse filesystem
 - `GET /api/file-selections` - Get selected files for conversion
 - `POST /api/file-selections` - Save file selections
