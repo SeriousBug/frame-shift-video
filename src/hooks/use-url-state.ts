@@ -101,6 +101,9 @@ export function useUrlState() {
   // Listen for hash changes (back/forward navigation)
   useEffect(() => {
     const handleHashChange = () => {
+      console.log('hashchange event fired', {
+        newHash: window.location.hash,
+      });
       let newState = parseHashToState(window.location.hash);
 
       // Restore files from localStorage when navigating back/forward
@@ -119,6 +122,7 @@ export function useUrlState() {
         }
       }
 
+      console.log('Setting new state from hashchange', newState);
       setState(newState);
     };
 
@@ -187,10 +191,50 @@ export function useUrlState() {
     });
   }, [updateUrl]);
 
+  const setSelectedFilesAndGoToNextStep = useCallback(
+    (files: string[]) => {
+      console.log('setSelectedFilesAndGoToNextStep called', { files });
+      setState((prevState) => {
+        console.log('setState callback running', { prevState });
+        const newState = {
+          ...prevState,
+          selectedFiles: files,
+          currentStep: 'configure' as const,
+        };
+        console.log('New state', newState);
+        updateUrl(newState);
+        // Persist to localStorage
+        try {
+          localStorage.setItem(
+            'frame-shift-selected-files',
+            JSON.stringify(files),
+          );
+        } catch (error) {
+          console.error(
+            'Failed to save selected files to localStorage:',
+            error,
+          );
+        }
+        return newState;
+      });
+    },
+    [updateUrl],
+  );
+
   const goToPreviousStep = useCallback(() => {
-    // Use browser's back button instead of manually changing state
-    window.history.back();
-  }, []);
+    console.log('goToPreviousStep called', {
+      currentHash: window.location.hash,
+      historyLength: window.history.length,
+    });
+    setState((prevState) => {
+      if (prevState.currentStep === 'configure') {
+        const newState = { ...prevState, currentStep: 'select' as const };
+        updateUrl(newState);
+        return newState;
+      }
+      return prevState;
+    });
+  }, [updateUrl]);
 
   return {
     state,
@@ -200,5 +244,6 @@ export function useUrlState() {
     setCurrentStep,
     goToNextStep,
     goToPreviousStep,
+    setSelectedFilesAndGoToNextStep,
   };
 }

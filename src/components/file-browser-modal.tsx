@@ -103,6 +103,8 @@ export function FileBrowserModal({
   const [loadingFolderPath, setLoadingFolderPath] = useState<string | null>(
     null,
   );
+  const [conversionOptions, setConversionOptions] =
+    useState<ConversionOptions | null>(null);
 
   // Sync selectedFiles prop with internal state
   useEffect(() => {
@@ -512,25 +514,47 @@ export function FileBrowserModal({
 
             {/* Step indicator */}
             <div className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+              <button
+                onClick={() => {
+                  console.log('Breadcrumb 1 clicked', {
+                    currentStep,
+                    disabled: currentStep === 'select',
+                  });
+                  onGoBack();
+                }}
+                disabled={currentStep === 'select'}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                   currentStep === 'select'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-green-600 text-white'
+                    ? 'bg-blue-600 text-white cursor-default'
+                    : 'bg-green-600 text-white hover:bg-green-700 cursor-pointer'
                 }`}
               >
                 1
-              </div>
+              </button>
               <div className="w-8 h-1 bg-gray-300 dark:bg-gray-600"></div>
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+              <button
+                onClick={() => {
+                  console.log('Breadcrumb 2 clicked', {
+                    currentStep,
+                    selectedFilesLength: selectedFiles.length,
+                  });
+                  if (currentStep === 'select' && selectedFiles.length > 0) {
+                    onContinue(selectedFiles);
+                  }
+                }}
+                disabled={
+                  currentStep === 'configure' || selectedFiles.length === 0
+                }
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                   currentStep === 'configure'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
+                    ? 'bg-blue-600 text-white cursor-default'
+                    : selectedFiles.length > 0
+                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 hover:bg-blue-600 hover:text-white cursor-pointer'
+                      : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed'
                 }`}
               >
                 2
-              </div>
+              </button>
             </div>
           </div>
 
@@ -573,8 +597,8 @@ export function FileBrowserModal({
             <div className="flex-1 overflow-y-auto">
               <ConversionConfig
                 selectedFiles={selectedFiles}
-                onOptionsChange={() => {
-                  // Options are automatically saved in the component
+                onOptionsChange={(options) => {
+                  setConversionOptions(options);
                 }}
                 onStartConversion={(options) => {
                   onStartConversion?.(options);
@@ -619,10 +643,13 @@ export function FileBrowserModal({
         {currentStep === 'configure' && (
           <div className="p-6 border-t border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedFiles.length} file
-                {selectedFiles.length !== 1 ? 's' : ''} selected for conversion
-              </div>
+              <button
+                onClick={onGoBack}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                Back
+              </button>
+
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
@@ -632,10 +659,15 @@ export function FileBrowserModal({
                 </button>
 
                 <button
-                  onClick={onGoBack}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                  onClick={() => {
+                    if (conversionOptions) {
+                      onStartConversion?.(conversionOptions);
+                    }
+                  }}
+                  disabled={!conversionOptions || selectedFiles.length === 0}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
-                  Back
+                  Start Conversion
                 </button>
               </div>
             </div>

@@ -151,6 +151,9 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     args.push('-c:a', 'copy');
   }
 
+  // Subtitle codec - always copy subtitles
+  args.push('-c:s', 'copy');
+
   // Bitrate mode (if not CRF)
   if (
     options.advanced.bitrate.mode !== 'crf' &&

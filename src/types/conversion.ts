@@ -169,7 +169,7 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
   basic: {
     videoCodec: 'libx265',
     quality: 22,
-    outputFormat: 'mp4',
+    outputFormat: 'mkv',
   },
   advanced: {
     preset: 'slow',
@@ -183,7 +183,7 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
       copyOriginal: true,
     },
     audio: {
-      codec: 'libopus',
+      codec: 'copy',
       bitrate: 128,
     },
   },

@@ -501,17 +501,6 @@ export function ConversionConfig({
           </div>
         </div>
       )}
-
-      {/* Start Conversion Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleStartConversion}
-          disabled={selectedFiles.length === 0}
-          className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-        >
-          Start Conversion
-        </button>
-      </div>
     </div>
   );
 }

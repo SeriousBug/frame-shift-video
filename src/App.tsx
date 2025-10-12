@@ -1,6 +1,5 @@
 import React from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { FileBrowserModal } from '@/components/file-browser-modal';
 import { JobList } from '@/components/job-list';
 import { useUrlState } from '@/hooks/use-url-state';
@@ -12,8 +11,8 @@ export default function App() {
     openModal,
     closeModal,
     setSelectedFiles,
-    goToNextStep,
     goToPreviousStep,
+    setSelectedFilesAndGoToNextStep,
   } = useUrlState();
 
   const handleStartConversion = async (options: ConversionOptions) => {
@@ -49,8 +48,6 @@ export default function App() {
   return (
     <ThemeProvider>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-        <ThemeToggle />
-
         <div className="container mx-auto px-6 py-12">
           <header className="mb-12 text-center">
             <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
@@ -92,9 +89,12 @@ export default function App() {
           currentStep={state.currentStep}
           onClose={closeModal}
           onContinue={(files) => {
-            setSelectedFiles(files);
+            console.log('onContinue called', {
+              files,
+              currentStep: state.currentStep,
+            });
             if (state.currentStep === 'select') {
-              goToNextStep();
+              setSelectedFilesAndGoToNextStep(files);
             }
           }}
           onGoBack={goToPreviousStep}
