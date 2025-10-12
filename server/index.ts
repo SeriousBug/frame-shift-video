@@ -29,7 +29,10 @@ try {
 
   processor.on('job:progress', (job: Job, progress: any) => {
     console.log(`[JobProcessor] Job ${job.id} progress: ${progress.progress}%`);
-    WSBroadcaster.broadcastJobProgress(job.id, progress.progress);
+    WSBroadcaster.broadcastJobProgress(job.id, progress.progress, {
+      frame: progress.frame,
+      fps: progress.fps,
+    });
   });
 
   processor.on('job:complete', (job: Job) => {

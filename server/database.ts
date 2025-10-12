@@ -6,7 +6,7 @@ const DB_PATH =
   process.env.NODE_ENV === 'test'
     ? path.join(process.cwd(), 'data', 'test-database.sqlite')
     : path.join(process.cwd(), 'data', 'database.sqlite');
-const CURRENT_DB_VERSION = 2;
+const CURRENT_DB_VERSION = 3;
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);
@@ -145,6 +145,12 @@ const MIGRATIONS = [
     );
 
     CREATE INDEX IF NOT EXISTS idx_file_selections_created_at ON file_selections(created_at);
+  `,
+  // Migration 3: Add timing and frame tracking fields
+  `
+    ALTER TABLE jobs ADD COLUMN start_time DATETIME;
+    ALTER TABLE jobs ADD COLUMN end_time DATETIME;
+    ALTER TABLE jobs ADD COLUMN total_frames INTEGER;
   `,
 ];
 

@@ -73,10 +73,14 @@ export const WSBroadcaster = {
     });
   },
 
-  broadcastJobProgress(jobId: number, progress: number) {
+  broadcastJobProgress(
+    jobId: number,
+    progress: number,
+    progressData?: { frame: number; fps: number },
+  ) {
     const message = JSON.stringify({
       type: 'job:progress',
-      data: { jobId, progress },
+      data: { jobId, progress, ...progressData },
     });
 
     clients.forEach((client) => {

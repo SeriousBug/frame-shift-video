@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Job } from '@/types/database';
 import { formatDistanceToNow } from 'date-fns';
 
 interface JobCardProps {
-  job: Job;
+  job: Job & { currentFrame?: number; currentFps?: number };
   onRetry?: (jobId: number) => void;
 }
 
@@ -27,6 +27,17 @@ const statusIcons = {
 
 export function JobCard({ job, onRetry }: JobCardProps) {
   const [retrying, setRetrying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every second for ETA calculation
+  useEffect(() => {
+    if (job.status === 'processing' && job.start_time) {
+      const interval = setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [job.status, job.start_time]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -35,6 +46,50 @@ export function JobCard({ job, onRetry }: JobCardProps) {
     } catch {
       return 'Unknown time';
     }
+  };
+
+  const formatDuration = (milliseconds: number) => {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours} h ${minutes % 60} m`;
+    } else if (minutes > 0) {
+      return `${minutes} m ${seconds % 60} s`;
+    } else {
+      return `${seconds} s`;
+    }
+  };
+
+  const calculateETA = () => {
+    if (!job.start_time || job.progress <= 0 || job.progress >= 100) {
+      return null;
+    }
+
+    const startTime = new Date(job.start_time).getTime();
+    const elapsed = currentTime - startTime;
+    const estimatedTotal = (elapsed / job.progress) * 100;
+    const remaining = estimatedTotal - elapsed;
+
+    return remaining > 0 ? remaining : 0;
+  };
+
+  const getElapsedTime = () => {
+    if (!job.start_time) return null;
+    const startTime = new Date(job.start_time).getTime();
+    const endTime = job.end_time
+      ? new Date(job.end_time).getTime()
+      : currentTime;
+    return endTime - startTime;
+  };
+
+  const getAverageFps = () => {
+    if (!job.total_frames || !job.start_time || !job.end_time) return null;
+    const startTime = new Date(job.start_time).getTime();
+    const endTime = new Date(job.end_time).getTime();
+    const durationSeconds = (endTime - startTime) / 1000;
+    return durationSeconds > 0 ? job.total_frames / durationSeconds : 0;
   };
 
   const handleRetry = async () => {
@@ -111,6 +166,42 @@ export function JobCard({ job, onRetry }: JobCardProps) {
               </div>
             ) : (
               <div className="mt-1">
+                {/* Show ETA and FPS for processing jobs */}
+                {job.status === 'processing' && (
+                  <div className="flex gap-4 mb-2 text-sm">
+                    {calculateETA() !== null && (
+                      <div className="text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">ETA:</span>{' '}
+                        {formatDuration(calculateETA()!)}
+                      </div>
+                    )}
+                    {job.currentFps !== undefined && job.currentFps > 0 && (
+                      <div className="text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">Processing:</span>{' '}
+                        {job.currentFps.toFixed(1)} fps
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Show elapsed time and average FPS for completed jobs */}
+                {job.status === 'completed' && (
+                  <div className="flex gap-4 mb-2 text-sm">
+                    {getElapsedTime() !== null && (
+                      <div className="text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">Time:</span>{' '}
+                        {formatDuration(getElapsedTime()!)}
+                      </div>
+                    )}
+                    {getAverageFps() !== null && (
+                      <div className="text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">Average:</span>{' '}
+                        {getAverageFps()!.toFixed(1)} fps
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                   <div
                     className="bg-blue-600 h-3 rounded-full transition-all duration-300"
@@ -118,7 +209,9 @@ export function JobCard({ job, onRetry }: JobCardProps) {
                   />
                 </div>
                 <span className="text-sm text-gray-600 dark:text-gray-400 mt-1 block">
-                  {job.progress.toFixed(1)}%
+                  {job.status === 'completed'
+                    ? 'Completed'
+                    : `${job.progress.toFixed(1)}%`}
                 </span>
               </div>
             )}

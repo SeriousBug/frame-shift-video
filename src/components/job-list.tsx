@@ -71,7 +71,7 @@ export function JobList() {
           );
         } else if (message.type === 'job:progress') {
           // Update job progress in the query cache
-          const { jobId, progress } = message.data;
+          const { jobId, progress, frame, fps } = message.data;
           queryClient.setQueryData(
             queryKeys.jobs,
             (oldData: { jobs: Job[] } | undefined) => {
@@ -80,7 +80,13 @@ export function JobList() {
               const jobIndex = oldData.jobs.findIndex((j) => j.id === jobId);
               if (jobIndex >= 0) {
                 const newJobs = [...oldData.jobs];
-                newJobs[jobIndex] = { ...newJobs[jobIndex], progress };
+                newJobs[jobIndex] = {
+                  ...newJobs[jobIndex],
+                  progress,
+                  // Store current frame and fps temporarily for UI display
+                  currentFrame: frame,
+                  currentFps: fps,
+                };
                 return { jobs: newJobs };
               }
               return oldData;

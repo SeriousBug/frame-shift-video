@@ -103,23 +103,23 @@ export class FFmpegExecutor extends EventEmitter {
     // Validate command for security
     validateFFmpegCommand(command);
 
-    // Ensure output directory exists
-    const outputDir = path.dirname(
-      path.join(this.options.outputsDir, command.outputPath),
-    );
-    await fs.mkdir(outputDir, { recursive: true });
-
     // Get input video duration for accurate progress calculation
     const inputPath = path.isAbsolute(command.inputPath)
       ? command.inputPath
       : path.join(this.options.uploadsDir, command.inputPath);
     this.inputDuration = await this.getVideoDuration(inputPath);
 
+    // Resolve output path (handle both absolute and relative paths)
+    const outputPath = path.isAbsolute(command.outputPath)
+      ? command.outputPath
+      : path.join(this.options.outputsDir, command.outputPath);
+
+    // Ensure output directory exists
+    const outputDir = path.dirname(outputPath);
+    await fs.mkdir(outputDir, { recursive: true });
+
     // Prepare command arguments
     const args = [...command.args.slice(1)]; // Remove 'ffmpeg' from start
-
-    // Resolve output path
-    const outputPath = path.join(this.options.outputsDir, command.outputPath);
 
     // Replace relative paths with absolute paths in args
     const processedArgs = args.map((arg, index) => {

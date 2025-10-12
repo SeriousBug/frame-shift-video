@@ -19,6 +19,9 @@ export interface Job {
   queue_position?: number;
   created_at: string;
   updated_at: string;
+  start_time?: string;
+  end_time?: string;
+  total_frames?: number;
 }
 
 export interface CreateJobInput {
@@ -36,6 +39,9 @@ export interface UpdateJobInput {
   progress?: number;
   error_message?: string;
   queue_position?: number;
+  start_time?: string;
+  end_time?: string;
+  total_frames?: number;
 }
 
 export interface FileSelection {

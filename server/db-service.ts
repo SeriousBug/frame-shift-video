@@ -110,6 +110,18 @@ export const JobService = {
       updates.push('queue_position = ?');
       params.push(input.queue_position);
     }
+    if (input.start_time !== undefined) {
+      updates.push('start_time = ?');
+      params.push(input.start_time);
+    }
+    if (input.end_time !== undefined) {
+      updates.push('end_time = ?');
+      params.push(input.end_time);
+    }
+    if (input.total_frames !== undefined) {
+      updates.push('total_frames = ?');
+      params.push(input.total_frames);
+    }
 
     if (updates.length === 0) return;
 

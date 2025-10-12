@@ -89,11 +89,11 @@ function escapeArgument(arg: string | number): string {
 
 /**
  * Generate output filename with proper extension
+ * Places the output file in the same directory as the source file
  */
 function generateOutputFileName(inputFile: string, format: string): string {
   const parsed = path.parse(inputFile);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `${parsed.name}-${timestamp}.${format}`;
+  return path.join(parsed.dir, `${parsed.name}_output.${format}`);
 }
 
 /**

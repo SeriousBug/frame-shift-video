@@ -204,8 +204,13 @@ export class JobProcessor extends EventEmitter {
     this.emit('state:change', true);
 
     try {
-      // Update job status to processing
-      JobService.update(job.id, { status: 'processing', progress: 0 });
+      // Update job status to processing and set start time
+      const startTime = new Date().toISOString();
+      JobService.update(job.id, {
+        status: 'processing',
+        progress: 0,
+        start_time: startTime,
+      });
       console.log(
         `[JobProcessor] Started processing job ${job.id}: ${job.name}`,
       );
@@ -223,8 +228,15 @@ export class JobProcessor extends EventEmitter {
         outputsDir: this.config.outputsDir,
       });
 
+      // Track maximum frame count
+      let maxFrames = 0;
+
       // Set up progress tracking
       this.executor.on('progress', (progress: FFmpegProgress) => {
+        // Track maximum frame count
+        if (progress.frame > maxFrames) {
+          maxFrames = progress.frame;
+        }
         JobService.updateProgress(job.id, progress.progress);
         const updatedJob = JobService.getById(job.id);
         if (updatedJob) {
@@ -237,15 +249,26 @@ export class JobProcessor extends EventEmitter {
 
       // Handle result
       if (result.success) {
+        const endTime = new Date().toISOString();
+        // Update with total frames if we have them
+        if (result.finalProgress && result.finalProgress.frame > maxFrames) {
+          maxFrames = result.finalProgress.frame;
+        }
         JobService.complete(job.id, result.outputPath);
+        JobService.update(job.id, {
+          end_time: endTime,
+          total_frames: maxFrames > 0 ? maxFrames : undefined,
+        });
         console.log(`[JobProcessor] Job ${job.id} completed successfully`);
         const completedJob = JobService.getById(job.id);
         if (completedJob) {
           this.emit('job:complete', completedJob);
         }
       } else {
+        const endTime = new Date().toISOString();
         const errorMessage = this.formatErrorMessage(result);
         JobService.setError(job.id, errorMessage);
+        JobService.update(job.id, { end_time: endTime });
         console.error(`[JobProcessor] Job ${job.id} failed: ${result.error}`);
         const failedJob = JobService.getById(job.id);
         if (failedJob) {
