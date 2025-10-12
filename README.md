@@ -13,9 +13,13 @@ Self-hosted video conversion service with a web interface. Queue up FFmpeg jobs 
 
 ## Security Warning
 
-⚠️ **This application is NOT secure for public internet access.** It allows arbitrary FFmpeg command execution and file system access.
+⚠️ **This application is NOT secure for public internet access.**
 
-**You MUST run this behind a VPN like Tailscale** or on a trusted private network only.
+This service has no authentication and allows users to browse the server filesystem and execute FFmpeg commands. While safeguards exist to prevent accidental command injection and directory traversal, these are designed to prevent mistakes—not to stop determined adversaries.
+
+In the best-case scenario, anonymous users can browse your files and queue video conversion jobs. In the worst case, security measures could potentially be circumvented to achieve unintended access or command execution.
+
+**You MUST run this behind a trusted VPN (like Tailscale) or on a private network only.** Do not expose this service to the public internet or untrusted users.
 
 ## Usage
 
