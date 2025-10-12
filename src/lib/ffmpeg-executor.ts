@@ -75,7 +75,7 @@ export interface FFmpegExecutionOptions {
   outputsDir: string;
   /** Enable dry run mode (for testing) */
   dryRun?: boolean;
-  /** Timeout in milliseconds (default: 30 minutes) */
+  /** Timeout in milliseconds (optional, no timeout if not specified) */
   timeout?: number;
 }
 
@@ -90,10 +90,7 @@ export class FFmpegExecutor extends EventEmitter {
 
   constructor(options: FFmpegExecutionOptions) {
     super();
-    this.options = {
-      timeout: 30 * 60 * 1000, // 30 minutes default
-      ...options,
-    };
+    this.options = options;
   }
 
   /**
@@ -152,17 +149,19 @@ export class FFmpegExecutor extends EventEmitter {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        this.kill();
-        resolve({
-          success: false,
-          error: 'FFmpeg execution timed out',
-          stderr,
-          exitCode: null,
-          finalProgress: lastProgress,
-        });
-      }, this.options.timeout);
+      // Set up timeout (only if specified)
+      const timeoutId = this.options.timeout
+        ? setTimeout(() => {
+            this.kill();
+            resolve({
+              success: false,
+              error: 'FFmpeg execution timed out',
+              stderr,
+              exitCode: null,
+              finalProgress: lastProgress,
+            });
+          }, this.options.timeout)
+        : null;
 
       // Parse progress from stdout
       this.process.stdout?.on('data', (data: Buffer) => {
@@ -184,7 +183,7 @@ export class FFmpegExecutor extends EventEmitter {
 
       // Handle process completion
       this.process.on('close', (code) => {
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
         this.process = null;
 
         if (this.killed) {
@@ -221,7 +220,7 @@ export class FFmpegExecutor extends EventEmitter {
 
       // Handle process errors
       this.process.on('error', (error) => {
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
         this.process = null;
         resolve({
           success: false,
