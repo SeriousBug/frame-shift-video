@@ -136,6 +136,31 @@ export const JobService = {
     );
   },
 
+  getStatusCounts(): Record<string, number> {
+    const results = query<{ status: string; count: number }>(
+      'SELECT status, COUNT(*) as count FROM jobs GROUP BY status',
+    );
+    const counts: Record<string, number> = {
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+    };
+    for (const row of results) {
+      counts[row.status] = row.count;
+    }
+    return counts;
+  },
+
+  getFailedNotRetriedCount(): number {
+    const result = queryOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM jobs WHERE status = ? AND retried = 0',
+      ['failed'],
+    );
+    return result?.count || 0;
+  },
+
   update(id: number, input: UpdateJobInput): void {
     const updates: string[] = [];
     const params: any[] = [];

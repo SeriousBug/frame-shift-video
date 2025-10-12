@@ -37,6 +37,23 @@ export function JobList() {
     return data.pages.flatMap((page) => page.jobs);
   }, [data]);
 
+  // Extract status counts from the first page (they're the same for all pages)
+  const statusCounts = useMemo(() => {
+    return (
+      data?.pages?.[0]?.statusCounts || {
+        pending: 0,
+        processing: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+      }
+    );
+  }, [data]);
+
+  const failedNotRetriedCount = useMemo(() => {
+    return data?.pages?.[0]?.failedNotRetriedCount || 0;
+  }, [data]);
+
   const error = queryError ? 'Failed to fetch jobs' : null;
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -225,17 +242,8 @@ export function JobList() {
     }
   };
 
-  // Count jobs that can be cancelled (pending or processing)
-  const cancellableJobsCount = useMemo(() => {
-    return jobs.filter(
-      (job) => job.status === 'pending' || job.status === 'processing',
-    ).length;
-  }, [jobs]);
-
-  // Count failed jobs that haven't been retried yet
-  const retriableFailedJobsCount = useMemo(() => {
-    return jobs.filter((job) => job.status === 'failed' && !job.retried).length;
-  }, [jobs]);
+  // Calculate total cancellable jobs from status counts
+  const cancellableJobsCount = statusCounts.pending + statusCounts.processing;
 
   const handleRetryAllFailed = async () => {
     try {
@@ -313,7 +321,7 @@ export function JobList() {
         onClose={() => setShowRetryAllFailedModal(false)}
         onConfirm={handleRetryAllFailed}
         title="Retry All Failed Jobs"
-        message={`Are you sure you want to retry ${retriableFailedJobsCount} failed ${retriableFailedJobsCount === 1 ? 'job' : 'jobs'}?`}
+        message={`Are you sure you want to retry ${failedNotRetriedCount} failed ${failedNotRetriedCount === 1 ? 'job' : 'jobs'}?`}
         confirmText="Retry All"
         cancelText="Cancel"
         confirmClassName="bg-blue-600 hover:bg-blue-700"
@@ -339,22 +347,37 @@ export function JobList() {
             </span>
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} loaded
+            {statusCounts.processing > 0 && (
+              <span>
+                processing {statusCounts.processing}{' '}
+                {statusCounts.processing === 1 ? 'job' : 'jobs'}
+                {statusCounts.pending > 0 && ', '}
+              </span>
+            )}
+            {statusCounts.pending > 0 && (
+              <span>
+                {statusCounts.pending}{' '}
+                {statusCounts.pending === 1 ? 'job' : 'jobs'} pending
+              </span>
+            )}
+            {statusCounts.processing === 0 && statusCounts.pending === 0 && (
+              <span>no active jobs</span>
+            )}
           </div>
           <button
             onClick={() => setShowRetryAllFailedModal(true)}
             disabled={
               markAllFailedAsRetriedMutation.isPending ||
-              retriableFailedJobsCount === 0
+              failedNotRetriedCount === 0
             }
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               markAllFailedAsRetriedMutation.isPending ||
-              retriableFailedJobsCount === 0
+              failedNotRetriedCount === 0
                 ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
             title={
-              retriableFailedJobsCount === 0
+              failedNotRetriedCount === 0
                 ? 'No failed jobs to retry'
                 : 'Retry all failed jobs that have not been retried'
             }

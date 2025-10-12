@@ -49,6 +49,8 @@ export async function fetchJobsPaginated(
   jobs: Job[];
   nextCursor?: string;
   hasMore: boolean;
+  statusCounts: Record<string, number>;
+  failedNotRetriedCount: number;
 }> {
   const params = new URLSearchParams();
   if (cursor) {

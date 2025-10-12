@@ -44,11 +44,20 @@ export async function jobsHandler(
       }
 
       const result = JobService.getPaginated(limit, cursorId, cursorCreatedAt);
+      const statusCounts = JobService.getStatusCounts();
+      const failedNotRetriedCount = JobService.getFailedNotRetriedCount();
 
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
+      return new Response(
+        JSON.stringify({
+          ...result,
+          statusCounts,
+          failedNotRetriedCount,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
     } catch (error) {
       console.error('Error fetching jobs:', error);
       return new Response(
