@@ -5,8 +5,10 @@ import { setupRoutes } from './routes';
 import { setupWebSocket, WSBroadcaster } from './websocket';
 import { JobProcessor } from './job-processor';
 import { Job } from '../src/types/database';
+import { serveStatic } from './static';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
+const DIST_DIR = process.env.DIST_DIR || './dist';
 
 // Initialize job processor
 const uploadsDir = process.env.UPLOAD_DIR || './uploads';
@@ -68,8 +70,13 @@ const server = Bun.serve({
       return undefined;
     }
 
-    // Handle HTTP routes
-    return setupRoutes(req);
+    // Handle API routes
+    if (url.pathname.startsWith('/api')) {
+      return setupRoutes(req);
+    }
+
+    // Serve static files for non-API routes
+    return serveStatic(req, DIST_DIR);
   },
   websocket: setupWebSocket(),
 });

@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.github
+*.md
+.gitignore
+.prettierrc
+.prettierignore
+.eslintrc.json
+.husky
+uploads
+outputs
+*.log
+.DS_Store
