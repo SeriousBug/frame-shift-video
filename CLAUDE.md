@@ -1,85 +1,147 @@
-# Frame Shift Video - Project Summary
+# Frame Shift Video - Developer Guide
 
-## Project Overview
+## What This Is
 
-Self-hosted video conversion web service using FFmpeg, built with Vite + React frontend and Bun backend. Designed for personal use with a simple drag-and-drop interface for video conversion jobs.
+Self-hosted web service for queueing and managing FFmpeg video conversion jobs. Users can drag-and-drop to reorder the job queue, browse the server filesystem to select source files, and receive notifications when jobs complete.
 
-## Key Features
+## Technologies
 
-- File upload and server-local file selection
-- Video format conversion with customizable settings
-- Manual FFmpeg command input for advanced users
-- Drag-and-drop job queue reordering (React DnD Kit)
-- SQLite database for job persistence and history
-- Pushover and Discord notifications
-- Job queue survives server restarts
-- Real-time updates via WebSocket integration
-
-## Technical Stack
-
-- **Frontend**: Vite, React 19, TypeScript, Tailwind CSS, React DnD Kit
-- **Backend**: Bun runtime with built-in SQLite, WebSocket server, FFmpeg integration
-- **Development**: ESLint, Prettier, Husky git hooks, Vitest
+- **Runtime**: Bun (backend server, SQLite, WebSocket)
+- **Frontend**: Vite, React 19, TypeScript, TanStack Router, TanStack Query
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui, React DnD Kit (drag-and-drop)
+- **Backend**: Bun HTTP server, integrated WebSocket, built-in SQLite
+- **Video Processing**: FFmpeg (external dependency)
+- **Notifications**: Pushover API, Discord Webhooks
+- **Testing**: Vitest
+- **Code Quality**: ESLint, Prettier, Husky
 
 ## Architecture
 
-The application uses a **separated frontend-backend architecture**:
+**Separated frontend-backend architecture:**
 
-- **Vite (port 3000)**: Serves the React UI with hot module reloading
-- **Bun Server (port 3001)**: Handles API routes, WebSocket connections, SQLite database, and job processing
-- **Proxying**: Vite proxies `/api` requests to the Bun server during development
+- **Vite dev server (port 3000)**: Serves React UI during development with HMR
+- **Bun server (port 3001)**: HTTP API, WebSocket, SQLite database, FFmpeg job processor
+- **Production**: Bun server serves pre-built static files from `dist/` and handles all requests
 
-This architecture eliminates state synchronization issues by:
+The Bun server is the single source of truth for job state and queue management, eliminating synchronization issues between the API and WebSocket.
 
-- Running a single stateful backend server (Bun)
-- WebSocket server integrated directly with the HTTP server
-- Job processor running in the same process as the API and WebSocket
+## Codebase Layout
 
-## Current Status
+### Frontend (`/src`)
 
-✅ **Completed:**
+- **`/src/routes/`**: TanStack Router pages
+  - `index.tsx`: Job list/dashboard
+  - `convert/index.tsx`: File selection
+  - `convert/configure.tsx`: FFmpeg configuration
+- **`/src/components/`**: React components
+  - `job-list.tsx`: Main job queue with drag-and-drop
+  - `job-card.tsx`: Individual job display
+  - `file-browser-modal.tsx`: Server file browser
+  - `conversion-config.tsx`: FFmpeg preset/command configuration
+- **`/src/lib/`**: Frontend utilities
+  - `api.ts`: API client functions
+  - `api-hooks.ts`: TanStack Query hooks
+  - `ffmpeg-command.ts`: FFmpeg command builder
+  - `ffmpeg-executor.ts`: FFmpeg process execution
 
-- Vite + React frontend setup with TypeScript
-- Bun backend server with integrated WebSocket
-- SQLite database using Bun's built-in support
-- API routes (files, jobs, job retry)
-- Job processor with automatic queue management
-- Real-time job updates via WebSocket
-- Tailwind CSS configuration
-- ESLint, Prettier, Husky setup
-- Database service layer with migrations
-- Vitest testing framework setup
+### Backend (`/server`)
 
-🔄 **Next Steps:**
+- **`index.ts`**: Main server entry point, HTTP + WebSocket setup
+- **`routes.ts`**: API route handlers
+- **`websocket.ts`**: WebSocket server for real-time updates
+- **`database.ts`**: SQLite connection and schema
+- **`db-service.ts`**: Database query layer
+- **`job-processor.ts`**: Job queue manager, processes FFmpeg jobs
+- **`notification-service.ts`**: Pushover and Discord integrations
+- **`static.ts`**: Static file serving for production
+- **`/server/handlers/`**: API endpoint implementations
+  - `jobs.ts`: Job CRUD, retry, reorder endpoints
+  - `files.ts`: File system browsing
+  - `file-selections.ts`: File selection state
 
-1. Add drag-and-drop job queue reordering
-2. Build notification systems (Pushover, Discord)
-3. Add file upload functionality
-4. Improve error handling and logging
+### Configuration
 
-## Important Notes
+- **`package.json`**: Scripts and dependencies
+- **`vite.config.ts`**: Vite dev server config with proxy to Bun server
+- **`tsconfig.json`**: TypeScript compiler options
+- **`Dockerfile`**: Production container image
+- **`.env.example`**: Environment variable documentation
 
-- **Security**: Self-hosted only - allows direct FFmpeg execution
-- **Dependencies**: Requires FFmpeg and Bun installed on host system
-- **Database**: SQLite with Bun's built-in driver (no external dependencies)
-- **Notifications**: Pushover API and Discord webhooks (planned)
-- **Real-time Updates**: WebSocket integrated with Bun server for live progress updates
+### Tests
 
-## Development Commands
+- **`/src/test/`**: Test files (Vitest)
+  - `ffmpeg-executor.test.ts`: Unit tests for FFmpeg execution
+  - `job-processor.test.ts`: Job queue processor tests
+  - Integration tests for FFmpeg progress parsing
+
+## Database Schema
+
+SQLite database in `/data/jobs.db`:
+
+- **`jobs`**: Conversion job records (id, filename, paths, status, progress, FFmpeg command, order)
+- **`settings`**: Key-value configuration store (notifications, etc.)
+
+Migrations run automatically on server startup via `db-service.ts`.
+
+## Job Processing Flow
+
+1. User creates job via web UI
+2. Job saved to database with `pending` status
+3. Job processor picks up next pending job
+4. FFmpeg process spawned with progress parsing
+5. Progress updates broadcast via WebSocket
+6. On completion, notifications sent (if configured)
+7. Job marked `completed` or `failed` in database
+
+## WebSocket Events
+
+- `job-update`: Real-time job status and progress changes
+- `job-created`: New job added to queue
+- `job-deleted`: Job removed from queue
+- `active-jobs-count`: Number of currently processing jobs
+
+## Development Workflow
 
 ```bash
-npm run dev          # Start both Vite and Bun server (concurrently)
-npm run dev:client   # Start Vite dev server only
-npm run dev:server   # Start Bun server only
-npm run build        # Build Vite frontend for production
-npm run start        # Start production Bun server
-npm run test         # Run tests in watch mode
-npm run test:run     # Run tests once
-npm run test:ui      # Run tests with UI dashboard
-npm run lint         # Run ESLint
-npm run format       # Format code with Prettier
+# Start both Vite and Bun servers (recommended)
+npm run dev
+
+# Or start individually:
+npm run dev:client  # Vite only (port 3000)
+npm run dev:server  # Bun only (port 3001)
+
+# Run tests
+npm run test        # Watch mode
+npm run test:run    # Single run
+npm run test:ui     # With Vitest UI
+
+# Linting and formatting
+npm run lint
+npm run format
+
+# Production build
+npm run build       # Builds frontend to dist/
+npm run start       # Starts Bun server (serves from dist/)
 ```
 
-## Reference
+## Docker Build
 
-See `README.md` for complete project documentation, architecture details, and setup instructions.
+The Dockerfile uses a multi-stage build:
+
+1. **Builder stage**: Installs dependencies, builds frontend
+2. **Production stage**: Alpine Linux, copies built artifacts, installs FFmpeg
+3. Final image: ~200MB
+
+## API Endpoints
+
+- `GET /api/jobs` - List all jobs with counts by status
+- `POST /api/jobs` - Create new job
+- `PATCH /api/jobs/:id` - Update job (reorder)
+- `DELETE /api/jobs/:id` - Delete job
+- `POST /api/jobs/:id/retry` - Retry failed job
+- `POST /api/jobs/reorder` - Reorder multiple jobs
+- `GET /api/files?path=...` - Browse filesystem
+- `GET /api/file-selections` - Get selected files for conversion
+- `POST /api/file-selections` - Save file selections
+- `DELETE /api/file-selections` - Clear selections

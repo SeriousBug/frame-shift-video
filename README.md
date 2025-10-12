@@ -1,226 +1,102 @@
-# Frame Shift Video - Self-Hosted Video Converter
+# Frame Shift Video
 
-A self-hosted web service for video conversion and compression using FFmpeg. Built with Next.js, TypeScript, and Tailwind CSS.
-
-## Overview
-
-Frame Shift Video provides a simple web interface for converting and compressing video files using FFmpeg. Perfect for personal use, this self-hosted solution offers full control over your video processing workflow.
+Self-hosted video conversion service with a web interface. Queue up FFmpeg jobs, drag-and-drop to reorder them, and get notifications when they're done.
 
 ## Features
 
-### Core Functionality
+- Web UI for managing video conversion jobs
+- Drag-and-drop queue reordering
+- Custom FFmpeg commands or preset configurations
+- Browse and select files from your server
+- Job queue persists across restarts
+- Real-time progress updates via WebSocket
+- Pushover and Discord notifications
 
-- **File Management**: Upload files or select from server-local files
-- **Video Conversion**: Convert between various video formats
-- **Compression**: Optimize video files with customizable settings
-- **Manual FFmpeg Commands**: Direct FFmpeg command input for advanced users
-- **Queue Management**: Drag-and-drop reordering of conversion jobs
-- **Persistent Queue**: Jobs survive server restarts and resume automatically
+## Security Warning
 
-### User Interface
+⚠️ **This application is NOT secure for public internet access.** It allows arbitrary FFmpeg command execution and file system access.
 
-- **Single Page Application**: Clean, intuitive interface
-- **Real-time Progress**: Live updates on conversion status
-- **Drag & Drop Reordering**: Using React DnD Kit (except for active jobs)
-- **Responsive Design**: Works on desktop and mobile devices
-
-### Notifications
-
-- **Pushover Integration**: Mobile push notifications for job completion
-- **Discord Webhooks**: Channel notifications for team workflows
-- **Configurable Alerts**: Customize notification preferences
-
-### Data Persistence
-
-- **SQLite Database**: Tracks all conversions and job history
-- **Job Recovery**: Automatically resumes incomplete jobs on restart
-- **History Tracking**: Complete audit trail of all conversions
-
-## Technical Architecture
-
-### Frontend
-
-- **Next.js 15**: React framework with App Router
-- **TypeScript**: Type-safe development
-- **Tailwind CSS**: Utility-first styling
-- **React DnD Kit**: Drag-and-drop functionality
-
-### Backend
-
-- **Next.js API Routes**: RESTful API endpoints
-- **SQLite**: Lightweight database for job tracking
-- **FFmpeg**: Video processing engine
-- **Node.js**: Server-side JavaScript runtime
-
-### Development Tools
-
-- **ESLint**: Code linting
-- **Prettier**: Code formatting
-- **Husky**: Git hooks for code quality
-- **TypeScript**: Static type checking
-
-## Database Schema
-
-```sql
--- Conversion jobs table
-CREATE TABLE jobs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  filename TEXT NOT NULL,
-  original_path TEXT NOT NULL,
-  output_path TEXT,
-  status TEXT DEFAULT 'pending', -- pending, processing, completed, failed
-  ffmpeg_command TEXT NOT NULL,
-  progress INTEGER DEFAULT 0,
-  error_message TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  started_at DATETIME,
-  completed_at DATETIME,
-  order_index INTEGER DEFAULT 0
-);
-
--- Notification settings
-CREATE TABLE settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
-);
-```
-
-## API Endpoints
-
-### Jobs Management
-
-- `GET /api/jobs` - List all jobs
-- `POST /api/jobs` - Create new conversion job
-- `PUT /api/jobs/:id` - Update job (reorder, cancel)
-- `DELETE /api/jobs/:id` - Delete job
-- `POST /api/jobs/:id/restart` - Restart failed job
-
-### File Management
-
-- `GET /api/files` - List server files
-- `POST /api/upload` - Upload new file
-- `GET /api/download/:id` - Download converted file
-
-### System
-
-- `GET /api/status` - System status and current job
-- `POST /api/settings` - Update notification settings
-
-## Installation & Setup
-
-### Prerequisites
-
-- Node.js 18+
-- FFmpeg installed on system
-- Git
-
-### Quick Start
-
-```bash
-# Clone repository
-git clone <repository-url>
-cd frame-shift-video
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env.local
-# Edit .env.local with your settings
-
-# Initialize database
-npm run db:init
-
-# Start development server
-npm run dev
-```
-
-### Environment Variables
-
-```env
-# Pushover API
-PUSHOVER_APP_TOKEN=your_app_token
-PUSHOVER_USER_KEY=your_user_key
-
-# Discord Webhook
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-
-# File paths
-UPLOAD_DIR=./uploads
-OUTPUT_DIR=./outputs
-
-# Database
-DATABASE_URL=./data/jobs.db
-```
+**You MUST run this behind a VPN like Tailscale** or on a trusted private network only.
 
 ## Usage
 
-1. **Access the Web Interface**: Navigate to `http://localhost:3000`
-2. **Upload or Select Files**: Choose files for conversion
-3. **Configure Settings**: Select output format and quality settings
-4. **Queue Jobs**: Add multiple jobs to the conversion queue
-5. **Reorder Queue**: Drag and drop to reorder pending jobs
-6. **Monitor Progress**: Watch real-time conversion progress
-7. **Download Results**: Access converted files when complete
+### Docker Compose (Recommended)
 
-## Development Roadmap
+Create a `docker-compose.yml`:
 
-### Phase 1: Core Setup ✅
+```yaml
+services:
+  frame-shift-video:
+    image: ghcr.io/seriousbug/frame-shift-video:latest
+    container_name: frame-shift-video
+    ports:
+      - '3001:3001'
+    volumes:
+      # Mount your media directories
+      - /path/to/your/videos:/videos
+      - /path/to/your/outputs:/outputs
+      # Persistent database
+      - ./data:/app/data
+    environment:
+      # Server configuration
+      - PORT=3001
+      - UPLOAD_DIR=/app/uploads
+      - OUTPUT_DIR=/outputs
 
-- [x] Next.js project initialization
-- [x] TypeScript configuration
-- [x] Tailwind CSS setup
-- [x] ESLint, Prettier, Husky setup
+      # File browser home directory (optional)
+      # Defaults to / if not specified
+      - FRAME_SHIFT_HOME=/videos
 
-### Phase 2: Basic Infrastructure
+      # Discord notifications (optional)
+      # Get webhook URL from Discord Server Settings -> Integrations -> Webhooks
+      - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
 
-- [ ] SQLite database setup and schema
-- [ ] File upload and management system
-- [ ] Basic UI layout and components
+      # Pushover notifications (optional)
+      # Get credentials from https://pushover.net/
+      - PUSHOVER_API_TOKEN=your_app_token_here
+      - PUSHOVER_USER_KEY=your_user_key_here
+    restart: unless-stopped
+```
 
-### Phase 3: Video Processing
+Then run:
 
-- [ ] FFmpeg integration
-- [ ] Job queue system
-- [ ] Progress tracking and UI updates
+```bash
+docker compose up -d
+```
 
-### Phase 4: Advanced Features
+Access the web interface at `http://localhost:3001`
 
-- [ ] Drag-and-drop reordering with React DnD Kit
-- [ ] Job persistence and restart logic
-- [ ] Notification integrations (Pushover, Discord)
+### Environment Variables
 
-### Phase 5: Polish
+| Variable              | Required | Default          | Description                               |
+| --------------------- | -------- | ---------------- | ----------------------------------------- |
+| `PORT`                | No       | `3001`           | Port the server listens on                |
+| `DIST_DIR`            | No       | `./dist`         | Directory containing built frontend files |
+| `UPLOAD_DIR`          | No       | `./uploads`      | Directory for uploaded files              |
+| `OUTPUT_DIR`          | No       | `./outputs`      | Directory for converted video outputs     |
+| `FRAME_SHIFT_HOME`    | No       | `/` (or `$HOME`) | Starting directory for file browser       |
+| `DISCORD_WEBHOOK_URL` | No       | -                | Discord webhook URL for notifications     |
+| `PUSHOVER_API_TOKEN`  | No       | -                | Pushover application token                |
+| `PUSHOVER_USER_KEY`   | No       | -                | Pushover user key                         |
 
-- [ ] Error handling and validation
-- [ ] Performance optimizations
-- [ ] Documentation and deployment guides
+## Development
 
-## Security Considerations
+Requires Bun and FFmpeg installed on your system.
 
-⚠️ **Important**: This application is designed for self-hosted, personal use only. It allows direct FFmpeg command execution, which could be dangerous in multi-user or public environments.
+```bash
+# Install dependencies
+npm install
 
-### Safety Measures for Self-Hosting
+# Start development servers (Vite + Bun)
+npm run dev
 
-- Run behind a firewall or VPN
-- Use strong authentication if exposed to network
-- Regular backups of conversion jobs and settings
-- Monitor system resources during heavy conversions
+# Build for production
+npm run build
 
-## Contributing
-
-This is a personal project, but contributions are welcome:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
+# Start production server
+npm run start
+```
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Support
-
-For issues, feature requests, or questions, please open a GitHub issue.
+MIT
