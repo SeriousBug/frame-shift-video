@@ -14,6 +14,7 @@ import {
 import { FFmpegCommand } from '../src/lib/ffmpeg-command';
 import { DEFAULT_CONVERSION_OPTIONS } from '../src/types/conversion';
 import { JobService } from './db-service';
+import { notificationService } from './notification-service';
 
 /**
  * Job processor configuration
@@ -54,6 +55,7 @@ export class JobProcessor extends EventEmitter {
   private checkIntervalId: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private isShuttingDown = false;
+  private lastCompletionNotificationSent = false;
 
   private constructor(config: JobProcessorConfig) {
     super();
@@ -226,6 +228,12 @@ export class JobProcessor extends EventEmitter {
       return;
     }
 
+    // Reset notification flag when starting a new batch of jobs
+    if (this.lastCompletionNotificationSent) {
+      this.lastCompletionNotificationSent = false;
+      console.log('[JobProcessor] Starting new batch of jobs');
+    }
+
     console.log(
       `[JobProcessor] Found pending job: ${nextJob.id} - ${nextJob.name}`,
     );
@@ -347,6 +355,11 @@ export class JobProcessor extends EventEmitter {
       this.isProcessing = false;
       this.emit('state:change', false);
 
+      // Check if all jobs are complete and send notification
+      if (!this.isShuttingDown) {
+        await this.checkAndNotifyIfAllJobsComplete();
+      }
+
       // Check for next job if not shutting down
       if (!this.isShuttingDown) {
         setImmediate(() => this.checkForJobs());
@@ -386,6 +399,49 @@ export class JobProcessor extends EventEmitter {
     const parsed = path.parse(inputPath);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     return `${parsed.name}-${timestamp}${parsed.ext}`;
+  }
+
+  /**
+   * Check if all jobs are complete and send notification if enabled
+   */
+  private async checkAndNotifyIfAllJobsComplete(): Promise<void> {
+    // Skip if notifications are not enabled
+    if (!notificationService.isEnabled()) {
+      return;
+    }
+
+    // Check if there are any pending or processing jobs
+    const pendingJobs = JobService.getByStatus('pending');
+    const processingJobs = JobService.getByStatus('processing');
+
+    // If there are still jobs in the queue, don't send notification
+    if (pendingJobs.length > 0 || processingJobs.length > 0) {
+      // Reset the flag since there are still jobs to process
+      this.lastCompletionNotificationSent = false;
+      return;
+    }
+
+    // All jobs are complete - send notification if we haven't already
+    if (!this.lastCompletionNotificationSent) {
+      const completedJobs = JobService.getByStatus('completed');
+      const failedJobs = JobService.getByStatus('failed');
+
+      // Only send notification if there were actually jobs processed
+      if (completedJobs.length > 0 || failedJobs.length > 0) {
+        try {
+          await notificationService.notifyAllJobsComplete(
+            completedJobs.length,
+            failedJobs.length,
+          );
+          this.lastCompletionNotificationSent = true;
+        } catch (error) {
+          console.error(
+            '[JobProcessor] Failed to send completion notification:',
+            error,
+          );
+        }
+      }
+    }
   }
 
   /**
