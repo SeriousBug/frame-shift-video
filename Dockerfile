@@ -28,13 +28,13 @@ RUN apt-get update && \
 # Copy built frontend from build stage
 COPY --from=build /app/dist ./dist
 
+# Copy node_modules from build stage
+COPY --from=build /app/node_modules ./node_modules
+
 # Copy backend code
 COPY server ./server
 COPY src/types ./src/types
 COPY package*.json ./
-
-# Install production dependencies
-RUN bun install --production
 
 # Create directories for uploads and outputs
 RUN mkdir -p uploads outputs
