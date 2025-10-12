@@ -1,4 +1,4 @@
-FROM node:24 AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
@@ -14,27 +14,21 @@ COPY . .
 # Build the frontend
 RUN npm run build
 
-# Production stage
-FROM oven/bun:1.3
+# Production stage - use Alpine for smaller size
+FROM oven/bun:1.3-alpine
 
 WORKDIR /app
 
-# Install ffmpeg
-RUN apt-get update && \
-    apt-get install -y ffmpeg && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install ffmpeg (Alpine version is much smaller)
+RUN apk add --no-cache ffmpeg
 
 # Copy built frontend from build stage
 COPY --from=build /app/dist ./dist
 
-# Copy node_modules from build stage
-COPY --from=build /app/node_modules ./node_modules
-
-# Copy backend code
+# Copy backend code (no node_modules needed - server uses only Bun built-ins)
 COPY server ./server
 COPY src/types ./src/types
-COPY package*.json ./
+COPY src/lib ./src/lib
 
 # Create directories for uploads and outputs
 RUN mkdir -p uploads outputs
