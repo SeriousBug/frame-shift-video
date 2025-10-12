@@ -245,12 +245,15 @@ export function JobList() {
         </div>
       </div>
 
-      <div style={{ height: 'calc(100vh - 200px)' }}>
+      <div
+        className="bg-slate-100 dark:bg-slate-900 rounded-xl py-6 border-2 border-slate-300 dark:border-slate-700"
+        style={{ height: 'calc(100vh - 200px)' }}
+      >
         <Virtuoso
           data={jobs}
           endReached={loadMore}
           itemContent={(index, job) => (
-            <div className="mb-6">
+            <div className="mb-6 mx-6">
               <JobCard key={job.id} job={job} onRetry={handleRetry} />
             </div>
           )}
@@ -269,7 +272,7 @@ export function JobList() {
               if (!hasNextPage && jobs.length > 0) {
                 return (
                   <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-                    No more jobs to load
+                    That's all!
                   </div>
                 );
               }

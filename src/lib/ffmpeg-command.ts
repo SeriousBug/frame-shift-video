@@ -93,7 +93,7 @@ function escapeArgument(arg: string | number): string {
  */
 function generateOutputFileName(inputFile: string, format: string): string {
   const parsed = path.parse(inputFile);
-  return path.join(parsed.dir, `${parsed.name}_output.${format}`);
+  return path.join(parsed.dir, `${parsed.name}_converted.${format}`);
 }
 
 /**

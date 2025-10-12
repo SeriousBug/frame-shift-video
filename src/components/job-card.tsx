@@ -135,25 +135,14 @@ export function JobCard({ job, onRetry }: JobCardProps) {
       </div>
 
       <div className="space-y-3">
-        <div>
-          <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
-            Input File:
+        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1">
+            File
           </label>
-          <p className="text-gray-900 dark:text-white font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded">
+          <p className="text-gray-900 dark:text-white font-mono text-sm break-all">
             {job.input_file}
           </p>
         </div>
-
-        {job.output_file && (
-          <div>
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              Output File:
-            </label>
-            <p className="text-gray-900 dark:text-white font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded">
-              {job.output_file}
-            </p>
-          </div>
-        )}
 
         {(job.status === 'processing' || job.status === 'completed') && (
           <div>
