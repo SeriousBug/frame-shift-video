@@ -102,6 +102,14 @@ export class JobProcessor extends EventEmitter {
 
     console.log('[JobProcessor] Starting job processor...');
 
+    // Reset any jobs that were in processing state (from server restart/crash)
+    const resetCount = JobService.resetProcessingJobs();
+    if (resetCount > 0) {
+      console.log(
+        `[JobProcessor] Reset ${resetCount} processing job(s) to pending`,
+      );
+    }
+
     // Check for incomplete jobs immediately (don't await - run async)
     this.checkForJobs();
 

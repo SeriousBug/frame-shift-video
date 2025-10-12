@@ -268,6 +268,19 @@ export const JobService = {
     );
     return result || undefined;
   },
+
+  /**
+   * Reset all processing jobs to pending state
+   * This should be called on server startup to recover from crashes
+   */
+  resetProcessingJobs(): number {
+    const result = execute(
+      `UPDATE jobs
+       SET status = 'pending', progress = 0, updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'processing'`,
+    );
+    return result.changes;
+  },
 };
 
 /**
