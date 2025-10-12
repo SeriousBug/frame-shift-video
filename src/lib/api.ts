@@ -27,10 +27,36 @@ export async function fetchFiles(path: string): Promise<{
 }
 
 /**
- * Fetch all jobs
+ * Fetch all jobs (legacy - used for WebSocket updates)
  */
 export async function fetchJobs(): Promise<{ jobs: Job[] }> {
   const response = await fetch(`${API_BASE}/jobs`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch jobs');
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch jobs with cursor-based pagination
+ */
+export async function fetchJobsPaginated(
+  cursor?: string,
+  limit: number = 20,
+): Promise<{
+  jobs: Job[];
+  nextCursor?: string;
+  hasMore: boolean;
+}> {
+  const params = new URLSearchParams();
+  if (cursor) {
+    params.append('cursor', cursor);
+  }
+  params.append('limit', limit.toString());
+
+  const response = await fetch(`${API_BASE}/jobs?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch jobs');

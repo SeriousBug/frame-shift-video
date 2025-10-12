@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileSystemItem } from '@/types/files';
 import { ConversionConfig } from './conversion-config';
 import { ConversionOptions } from '@/types/conversion';
 import { fetchFiles } from '@/lib/api';
+import { Virtuoso } from 'react-virtuoso';
 
 interface FileBrowserModalProps {
   isOpen: boolean;
@@ -397,21 +398,39 @@ export function FileBrowserModal({
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const renderTreeNode = (node: TreeNode, depth = 0) => {
-    const isSelected = node.isDirectory
-      ? isFolderSelected(node.path)
-      : isFileSelected(node.path);
-    const folderState = node.isDirectory
-      ? getFolderSelectionState(node.path)
-      : null;
-    const isIndeterminate = folderState === 'some';
-    const isTopLevelFolder = node.isDirectory && depth === 0;
+  // Flatten tree structure for virtualization
+  const flattenedTree = useMemo(() => {
+    const flattened: Array<{ node: TreeNode; depth: number }> = [];
 
-    // Add extra indentation for files (non-directories)
-    const extraFileIndent = node.isDirectory ? 0 : 20;
+    const flatten = (nodes: TreeNode[], depth: number) => {
+      for (const node of nodes) {
+        flattened.push({ node, depth });
+        if (node.isDirectory && node.isExpanded && node.children) {
+          flatten(node.children, depth + 1);
+        }
+      }
+    };
 
-    return (
-      <div key={node.path}>
+    flatten(treeData, 0);
+    return flattened;
+  }, [treeData]);
+
+  const renderTreeNode = useCallback(
+    (index: number) => {
+      const { node, depth } = flattenedTree[index];
+      const isSelected = node.isDirectory
+        ? isFolderSelected(node.path)
+        : isFileSelected(node.path);
+      const folderState = node.isDirectory
+        ? getFolderSelectionState(node.path)
+        : null;
+      const isIndeterminate = folderState === 'some';
+      const isTopLevelFolder = node.isDirectory && depth === 0;
+
+      // Add extra indentation for files (non-directories)
+      const extraFileIndent = node.isDirectory ? 0 : 20;
+
+      return (
         <div
           className={`flex items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 ${
             isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
@@ -474,15 +493,17 @@ export function FileBrowserModal({
             </div>
           </div>
         </div>
-
-        {node.isDirectory && node.isExpanded && node.children && (
-          <div>
-            {node.children.map((child) => renderTreeNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
+      );
+    },
+    [
+      flattenedTree,
+      isFolderSelected,
+      isFileSelected,
+      getFolderSelectionState,
+      handleFileSelect,
+      toggleDirectory,
+    ],
+  );
 
   if (!isOpen) return null;
 
@@ -575,7 +596,11 @@ export function FileBrowserModal({
                   </span>
                 </div>
               ) : (
-                <div>{treeData.map((node) => renderTreeNode(node))}</div>
+                <Virtuoso
+                  style={{ height: '100%' }}
+                  totalCount={flattenedTree.length}
+                  itemContent={renderTreeNode}
+                />
               )}
             </div>
           ) : (

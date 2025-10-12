@@ -67,6 +67,59 @@ export const JobService = {
     return query<Job>('SELECT * FROM jobs ORDER BY created_at DESC');
   },
 
+  /**
+   * Get jobs with cursor-based pagination
+   * @param limit Number of jobs to return
+   * @param cursor Optional cursor for pagination (encoded job id and created_at)
+   * @returns Jobs and optional next cursor
+   */
+  getPaginated(
+    limit: number = 20,
+    cursorId?: number,
+    cursorCreatedAt?: string,
+  ): { jobs: Job[]; nextCursor?: string; hasMore: boolean } {
+    let jobs: Job[];
+
+    if (cursorId !== undefined && cursorCreatedAt !== undefined) {
+      // Fetch jobs after the cursor
+      // We use created_at and id for stable sorting
+      jobs = query<Job>(
+        `SELECT * FROM jobs
+         WHERE (created_at, id) < (?, ?)
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`,
+        [cursorCreatedAt, cursorId, limit + 1],
+      );
+    } else {
+      // First page
+      jobs = query<Job>(
+        `SELECT * FROM jobs
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`,
+        [limit + 1],
+      );
+    }
+
+    const hasMore = jobs.length > limit;
+    const result = hasMore ? jobs.slice(0, limit) : jobs;
+
+    // Generate next cursor if there are more results
+    let nextCursor: string | undefined;
+    if (hasMore && result.length > 0) {
+      const lastJob = result[result.length - 1];
+      const cursorData = {
+        id: lastJob.id,
+        created_at: lastJob.created_at,
+      };
+      // Inline encoding to avoid circular dependency
+      nextCursor = Buffer.from(JSON.stringify(cursorData)).toString(
+        'base64url',
+      );
+    }
+
+    return { jobs: result, nextCursor, hasMore };
+  },
+
   getByStatus(status: Job['status']): Job[] {
     return query<Job>(
       'SELECT * FROM jobs WHERE status = ? ORDER BY queue_position ASC, created_at ASC',

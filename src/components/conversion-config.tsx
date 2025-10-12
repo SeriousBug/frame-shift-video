@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ConversionOptions,
   DEFAULT_CONVERSION_OPTIONS,
@@ -8,6 +8,7 @@ import {
   AudioCodec,
   BitrateMode,
 } from '@/types/conversion';
+import { Virtuoso } from 'react-virtuoso';
 
 interface ConversionConfigProps {
   /** Selected files with their relative paths */
@@ -152,6 +153,26 @@ export function ConversionConfig({
 
   const qualityRange = getQualityRange(options.basic.videoCodec);
 
+  const renderFileItem = useCallback(
+    (index: number) => {
+      const file = selectedFiles[index];
+      return (
+        <div className="flex items-center justify-between text-sm font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1 group mb-1">
+          <span className="truncate flex-1 mr-2">{file}</span>
+          <button
+            onClick={() => handleRemoveFile(file)}
+            className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label={`Remove ${file}`}
+            title="Remove file"
+          >
+            ×
+          </button>
+        </div>
+      );
+    },
+    [selectedFiles, handleRemoveFile],
+  );
+
   return (
     <div className="p-6 space-y-6">
       {/* Selected Files Display */}
@@ -176,23 +197,12 @@ export function ConversionConfig({
             </button>
           )}
         </div>
-        <div className="max-h-32 overflow-y-auto space-y-1">
-          {selectedFiles.map((file, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between text-sm font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1 group"
-            >
-              <span className="truncate flex-1 mr-2">{file}</span>
-              <button
-                onClick={() => handleRemoveFile(file)}
-                className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label={`Remove ${file}`}
-                title="Remove file"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+        <div style={{ height: '128px' }}>
+          <Virtuoso
+            style={{ height: '100%' }}
+            totalCount={selectedFiles.length}
+            itemContent={renderFileItem}
+          />
         </div>
       </div>
 

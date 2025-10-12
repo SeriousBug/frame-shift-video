@@ -2,10 +2,16 @@
  * TanStack Query hooks for API operations
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  useInfiniteQuery,
+} from '@tanstack/react-query';
 import {
   fetchFiles,
   fetchJobs,
+  fetchJobsPaginated,
   createJobs,
   retryJob,
   saveFileSelections,
@@ -33,12 +39,25 @@ export function useFiles(path: string) {
 }
 
 /**
- * Hook to fetch all jobs
+ * Hook to fetch all jobs (legacy)
  */
 export function useJobs() {
   return useQuery({
     queryKey: queryKeys.jobs,
     queryFn: fetchJobs,
+  });
+}
+
+/**
+ * Hook to fetch jobs with infinite scroll pagination
+ */
+export function useJobsInfinite(limit: number = 20) {
+  return useInfiniteQuery({
+    queryKey: ['jobs', 'infinite', limit],
+    queryFn: ({ pageParam }) => fetchJobsPaginated(pageParam, limit),
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.nextCursor : undefined,
+    initialPageParam: undefined as string | undefined,
   });
 }
 

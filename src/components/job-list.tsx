@@ -1,16 +1,28 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { Job } from '@/types/database';
 import { JobCard } from './job-card';
-import { useJobs, useRetryJob } from '@/lib/api-hooks';
+import { useJobsInfinite, useRetryJob } from '@/lib/api-hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/api-hooks';
+import { Virtuoso } from 'react-virtuoso';
 
 export function JobList() {
-  const { data, isLoading: loading, error: queryError } = useJobs();
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useJobsInfinite(20);
   const retryJobMutation = useRetryJob();
   const queryClient = useQueryClient();
 
-  const jobs = data?.jobs || [];
+  // Flatten all pages into a single array of jobs
+  const jobs = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.jobs);
+  }, [data]);
+
   const error = queryError ? 'Failed to fetch jobs' : null;
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -39,7 +51,6 @@ export function JobList() {
     ws.onopen = () => {
       console.log('[WebSocket] Connected');
       setWsConnected(true);
-      setError(null);
       // Reset reconnect attempts on successful connection
       reconnectAttemptsRef.current = 0;
     };
@@ -50,36 +61,47 @@ export function JobList() {
         console.log('[WebSocket] Received message:', message);
 
         if (message.type === 'job:updated' || message.type === 'job:created') {
-          // Update the specific job in the query cache
+          // Update the job in the infinite query cache
           const job = message.data;
-          queryClient.setQueryData(
-            queryKeys.jobs,
-            (oldData: { jobs: Job[] } | undefined) => {
-              if (!oldData) return { jobs: [job] };
+          queryClient.setQueryData(['jobs', 'infinite', 20], (oldData: any) => {
+            if (!oldData?.pages) return oldData;
 
-              const jobIndex = oldData.jobs.findIndex((j) => j.id === job.id);
+            // Create a new pages array with the updated job
+            const newPages = oldData.pages.map((page: any) => {
+              const jobIndex = page.jobs.findIndex((j: Job) => j.id === job.id);
               if (jobIndex >= 0) {
-                // Update existing job
-                const newJobs = [...oldData.jobs];
+                // Update existing job in this page
+                const newJobs = [...page.jobs];
                 newJobs[jobIndex] = job;
-                return { jobs: newJobs };
-              } else {
-                // New job, add it to the list
-                return { jobs: [job, ...oldData.jobs] };
+                return { ...page, jobs: newJobs };
               }
-            },
-          );
-        } else if (message.type === 'job:progress') {
-          // Update job progress in the query cache
-          const { jobId, progress, frame, fps } = message.data;
-          queryClient.setQueryData(
-            queryKeys.jobs,
-            (oldData: { jobs: Job[] } | undefined) => {
-              if (!oldData) return oldData;
+              return page;
+            });
 
-              const jobIndex = oldData.jobs.findIndex((j) => j.id === jobId);
+            // If job not found in any page, add it to the first page
+            const jobExists = newPages.some((page: any) =>
+              page.jobs.some((j: Job) => j.id === job.id),
+            );
+
+            if (!jobExists && newPages.length > 0) {
+              newPages[0] = {
+                ...newPages[0],
+                jobs: [job, ...newPages[0].jobs],
+              };
+            }
+
+            return { ...oldData, pages: newPages };
+          });
+        } else if (message.type === 'job:progress') {
+          // Update job progress in the infinite query cache
+          const { jobId, progress, frame, fps } = message.data;
+          queryClient.setQueryData(['jobs', 'infinite', 20], (oldData: any) => {
+            if (!oldData?.pages) return oldData;
+
+            const newPages = oldData.pages.map((page: any) => {
+              const jobIndex = page.jobs.findIndex((j: Job) => j.id === jobId);
               if (jobIndex >= 0) {
-                const newJobs = [...oldData.jobs];
+                const newJobs = [...page.jobs];
                 newJobs[jobIndex] = {
                   ...newJobs[jobIndex],
                   progress,
@@ -87,11 +109,13 @@ export function JobList() {
                   currentFrame: frame,
                   currentFps: fps,
                 };
-                return { jobs: newJobs };
+                return { ...page, jobs: newJobs };
               }
-              return oldData;
-            },
-          );
+              return page;
+            });
+
+            return { ...oldData, pages: newPages };
+          });
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
@@ -150,12 +174,18 @@ export function JobList() {
   const handleRetry = async (jobId: number) => {
     try {
       await retryJobMutation.mutateAsync(jobId);
-      // No need to fetch jobs - mutation will invalidate the cache and WebSocket will update the UI
+      // Mutation will invalidate the cache and trigger refetch
     } catch (err) {
       console.error('Error retrying job:', err);
       alert(err instanceof Error ? err.message : 'Failed to retry job');
     }
   };
+
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (loading) {
     return (
@@ -188,7 +218,7 @@ export function JobList() {
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           Video Jobs
@@ -210,15 +240,43 @@ export function JobList() {
             </span>
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} total
+            {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'} loaded
           </div>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {jobs.map((job) => (
-          <JobCard key={job.id} job={job} onRetry={handleRetry} />
-        ))}
+      <div style={{ height: 'calc(100vh - 200px)' }}>
+        <Virtuoso
+          data={jobs}
+          endReached={loadMore}
+          itemContent={(index, job) => (
+            <div className="mb-6">
+              <JobCard key={job.id} job={job} onRetry={handleRetry} />
+            </div>
+          )}
+          components={{
+            Footer: () => {
+              if (isFetchingNextPage) {
+                return (
+                  <div className="text-center py-8">
+                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      Loading more jobs...
+                    </p>
+                  </div>
+                );
+              }
+              if (!hasNextPage && jobs.length > 0) {
+                return (
+                  <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                    No more jobs to load
+                  </div>
+                );
+              }
+              return null;
+            },
+          }}
+        />
       </div>
     </div>
   );

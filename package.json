@@ -24,7 +24,8 @@
     "@tanstack/react-router-devtools": "^1.132.51",
     "date-fns": "^4.1.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-virtuoso": "^4.14.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

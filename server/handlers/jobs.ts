@@ -7,9 +7,13 @@ import {
 import { JobService } from '../db-service';
 import { JobProcessor } from '../job-processor';
 import { WSBroadcaster } from '../websocket';
+import { decodeCursor } from '../cursor-utils';
 
 /**
- * GET /api/jobs - Fetch all jobs
+ * GET /api/jobs - Fetch jobs with cursor-based pagination
+ * Query params:
+ *   - cursor: opaque cursor for pagination
+ *   - limit: number of jobs to return (default: 20)
  */
 export async function jobsHandler(
   req: Request,
@@ -17,8 +21,31 @@ export async function jobsHandler(
 ): Promise<Response> {
   if (req.method === 'GET') {
     try {
-      const jobs = JobService.getAll();
-      return new Response(JSON.stringify({ jobs }), {
+      const url = new URL(req.url);
+      const cursorParam = url.searchParams.get('cursor');
+      const limitParam = url.searchParams.get('limit');
+
+      const limit = limitParam ? parseInt(limitParam, 10) : 20;
+
+      let cursorId: number | undefined;
+      let cursorCreatedAt: string | undefined;
+
+      if (cursorParam) {
+        const decodedCursor = decodeCursor(cursorParam);
+        if (decodedCursor) {
+          cursorId = decodedCursor.id;
+          cursorCreatedAt = decodedCursor.created_at;
+        } else {
+          return new Response(JSON.stringify({ error: 'Invalid cursor' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      const result = JobService.getPaginated(limit, cursorId, cursorCreatedAt);
+
+      return new Response(JSON.stringify(result), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
