@@ -102,8 +102,8 @@ export class JobProcessor extends EventEmitter {
 
     console.log('[JobProcessor] Starting job processor...');
 
-    // Check for incomplete jobs immediately
-    await this.checkForJobs();
+    // Check for incomplete jobs immediately (don't await - run async)
+    this.checkForJobs();
 
     // Set up periodic checks
     this.checkIntervalId = setInterval(() => {
@@ -213,8 +213,10 @@ export class JobProcessor extends EventEmitter {
 
   /**
    * Check for pending jobs and process the next one
+   * Note: This is intentionally non-async to prevent accidental awaiting.
+   * The async work happens in an IIFE.
    */
-  private async checkForJobs(): Promise<void> {
+  private checkForJobs(): void {
     // Don't check if already processing or shutting down
     if (this.isProcessing || this.isShuttingDown) {
       return;
@@ -237,7 +239,11 @@ export class JobProcessor extends EventEmitter {
     console.log(
       `[JobProcessor] Found pending job: ${nextJob.id} - ${nextJob.name}`,
     );
-    await this.processJob(nextJob);
+
+    // Run async processing in IIFE (don't await - fire and forget)
+    (async () => {
+      await this.processJob(nextJob);
+    })();
   }
 
   /**
