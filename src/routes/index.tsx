@@ -29,6 +29,7 @@ function IndexComponent() {
             </p>
             <Link
               to="/convert"
+              search={{}}
               className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
             >
               Start Conversions

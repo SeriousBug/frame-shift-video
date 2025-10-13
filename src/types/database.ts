@@ -51,7 +51,9 @@ export interface UpdateJobInput {
 
 export interface FileSelection {
   id: string;
-  data: string;
+  data: string; // JSON array of selected file paths
   config?: string; // JSON-encoded ConversionOptions
+  expanded_folders?: string; // JSON array of expanded folder paths
+  current_path?: string; // Current directory being viewed
   created_at: string;
 }

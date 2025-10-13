@@ -2,7 +2,7 @@
  * API client functions for the Frame Shift Video app
  */
 
-import { FileSystemItem } from '@/types/files';
+import { FileSystemItem, FilePickerState } from '@/types/files';
 import { Job } from '@/types/database';
 import type { ConversionOptions } from '@/types/conversion';
 
@@ -206,4 +206,61 @@ export async function loadFileSelections(key: string): Promise<{
   }
 
   return response.json();
+}
+
+/**
+ * Picker action types
+ */
+export type PickerAction =
+  | { type: 'toggle-folder'; path: string }
+  | { type: 'toggle-file'; path: string }
+  | { type: 'toggle-folder-selection'; path: string }
+  | { type: 'navigate'; path: string }
+  | { type: 'update-config'; config: any };
+
+/**
+ * Get picker state by key (creates new empty state if no key provided)
+ */
+export async function getPickerState(key?: string): Promise<FilePickerState> {
+  const url = key
+    ? `${API_BASE}/picker-state?key=${encodeURIComponent(key)}`
+    : `${API_BASE}/picker-state`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error('Failed to get picker state');
+  }
+
+  return response.json();
+}
+
+/**
+ * Perform an action on picker state and get new state
+ */
+export async function performPickerAction(
+  action: PickerAction,
+  key?: string,
+): Promise<FilePickerState> {
+  console.log('[API] performPickerAction called:', { action, key });
+
+  const response = await fetch(`${API_BASE}/picker-action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ key, action }),
+  });
+
+  console.log('[API] performPickerAction response status:', response.status);
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error('[API] performPickerAction error:', error);
+    throw new Error(error.error || 'Failed to perform picker action');
+  }
+
+  const result = await response.json();
+  console.log('[API] performPickerAction result:', result);
+  return result;
 }

@@ -4,6 +4,10 @@ import {
   fileSelectionsHandler,
   fileSelectionByKeyHandler,
 } from './handlers/file-selections';
+import {
+  getPickerStateHandler,
+  pickerActionHandler,
+} from './handlers/file-picker';
 
 export async function setupRoutes(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -69,6 +73,16 @@ export async function setupRoutes(req: Request): Promise<Response> {
     if (fileSelectionMatch && req.method === 'GET') {
       const key = fileSelectionMatch[1];
       return await fileSelectionByKeyHandler(req, key, corsHeaders);
+    }
+
+    // Route: GET /api/picker-state
+    if (pathname === '/api/picker-state' && req.method === 'GET') {
+      return await getPickerStateHandler(req, corsHeaders);
+    }
+
+    // Route: POST /api/picker-action
+    if (pathname === '/api/picker-action' && req.method === 'POST') {
+      return await pickerActionHandler(req, corsHeaders);
     }
 
     // 404 Not Found

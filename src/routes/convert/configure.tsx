@@ -113,7 +113,7 @@ function ConfigurePage() {
               onClick={() =>
                 navigate({
                   to: '/convert',
-                  search: urlKey ? { key: urlKey } : {},
+                  search: { key: urlKey },
                 })
               }
               className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"

@@ -6,7 +6,7 @@ const DB_PATH =
   process.env.NODE_ENV === 'test'
     ? path.join(process.cwd(), 'data', 'test-database.sqlite')
     : path.join(process.cwd(), 'data', 'database.sqlite');
-const CURRENT_DB_VERSION = 6;
+const CURRENT_DB_VERSION = 7;
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);
@@ -163,6 +163,11 @@ const MIGRATIONS = [
   // Migration 6: Add config_key to jobs table to link to configuration
   `
     ALTER TABLE jobs ADD COLUMN config_key TEXT;
+  `,
+  // Migration 7: Add expanded_folders and current_path to file_selections for server-side state management
+  `
+    ALTER TABLE file_selections ADD COLUMN expanded_folders TEXT;
+    ALTER TABLE file_selections ADD COLUMN current_path TEXT DEFAULT '';
   `,
 ];
 
