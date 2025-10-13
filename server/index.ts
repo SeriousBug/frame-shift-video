@@ -6,6 +6,7 @@ import { setupWebSocket, WSBroadcaster } from './websocket';
 import { JobProcessor } from './job-processor';
 import { Job } from '../src/types/database';
 import { serveStatic } from './static';
+import { FileSelectionService } from './db-service';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -65,6 +66,27 @@ try {
 } catch (error) {
   console.error('[JobProcessor] Failed to initialize:', error);
   process.exit(1);
+}
+
+// Run file selections cleanup on startup and schedule daily cleanup
+try {
+  const deletedCount = FileSelectionService.cleanup();
+  console.log(
+    `[FileSelections] Cleanup complete: ${deletedCount} old entries deleted`,
+  );
+
+  // Run cleanup daily (every 24 hours)
+  setInterval(
+    () => {
+      const count = FileSelectionService.cleanup();
+      console.log(
+        `[FileSelections] Daily cleanup: ${count} old entries deleted`,
+      );
+    },
+    24 * 60 * 60 * 1000,
+  );
+} catch (error) {
+  console.error('[FileSelections] Cleanup failed:', error);
 }
 
 // Create the HTTP server

@@ -333,11 +333,12 @@ export const FileSelectionService = {
   },
 
   /**
-   * Delete old file selections (older than 30 days)
+   * Delete old file selections (older than 7 days or NULL created_at)
    */
-  cleanup(): void {
-    execute(
-      "DELETE FROM file_selections WHERE created_at < datetime('now', '-30 days')",
+  cleanup(): number {
+    const result = execute(
+      "DELETE FROM file_selections WHERE created_at IS NULL OR created_at < datetime('now', '-7 days')",
     );
+    return result.changes;
   },
 };
