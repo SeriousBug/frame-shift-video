@@ -41,6 +41,34 @@ export const MetaService = {
 };
 
 /**
+ * Normalize SQLite datetime strings to ISO 8601 UTC format
+ * SQLite CURRENT_TIMESTAMP returns UTC time but without timezone indicator,
+ * which JavaScript interprets as local time. We convert to proper ISO format.
+ */
+function normalizeJobTimestamps(job: Job): Job {
+  const normalizeDate = (dateStr: string | undefined): string | undefined => {
+    if (!dateStr) return undefined;
+
+    // If already in ISO format with 'Z', return as is
+    if (dateStr.endsWith('Z')) {
+      return dateStr;
+    }
+
+    // SQLite datetime format: "2025-10-13 12:00:00" (UTC but lacks 'Z')
+    // Replace space with 'T' and append 'Z' to make proper ISO 8601 UTC
+    return new Date(dateStr.replace(' ', 'T') + 'Z').toISOString();
+  };
+
+  return {
+    ...job,
+    created_at: normalizeDate(job.created_at)!,
+    updated_at: normalizeDate(job.updated_at)!,
+    start_time: normalizeDate(job.start_time),
+    end_time: normalizeDate(job.end_time),
+  };
+}
+
+/**
  * Job table operations
  */
 export const JobService = {
@@ -61,11 +89,12 @@ export const JobService = {
 
   getById(id: number): Job | undefined {
     const result = queryOne<Job>('SELECT * FROM jobs WHERE id = ?', [id]);
-    return result || undefined;
+    return result ? normalizeJobTimestamps(result) : undefined;
   },
 
   getAll(): Job[] {
-    return query<Job>('SELECT * FROM jobs ORDER BY created_at DESC');
+    const jobs = query<Job>('SELECT * FROM jobs ORDER BY created_at DESC');
+    return jobs.map(normalizeJobTimestamps);
   },
 
   /**
@@ -118,22 +147,28 @@ export const JobService = {
       );
     }
 
-    return { jobs: result, nextCursor, hasMore };
+    return {
+      jobs: result.map(normalizeJobTimestamps),
+      nextCursor,
+      hasMore,
+    };
   },
 
   getByStatus(status: Job['status']): Job[] {
-    return query<Job>(
+    const jobs = query<Job>(
       'SELECT * FROM jobs WHERE status = ? ORDER BY queue_position ASC, created_at ASC',
       [status],
     );
+    return jobs.map(normalizeJobTimestamps);
   },
 
   getQueue(): Job[] {
-    return query<Job>(
+    const jobs = query<Job>(
       `SELECT * FROM jobs
        WHERE status IN ('pending', 'processing')
        ORDER BY queue_position ASC, created_at ASC`,
     );
+    return jobs.map(normalizeJobTimestamps);
   },
 
   getStatusCounts(): Record<string, number> {
@@ -266,7 +301,7 @@ export const JobService = {
        ORDER BY queue_position ASC, created_at ASC
        LIMIT 1`,
     );
-    return result || undefined;
+    return result ? normalizeJobTimestamps(result) : undefined;
   },
 
   /**
