@@ -6,7 +6,7 @@ import { setupWebSocket, WSBroadcaster } from './websocket';
 import { JobProcessor } from './job-processor';
 import { Job } from '../src/types/database';
 import { serveStatic } from './static';
-import { FileSelectionService } from './db-service';
+import { FileSelectionService, JobService } from './db-service';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -40,6 +40,7 @@ try {
   processor.on('job:start', (job: Job) => {
     console.log(`[JobProcessor] Job ${job.id} started`);
     WSBroadcaster.broadcastJobUpdate(job);
+    WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
   });
 
   processor.on('job:progress', (job: Job, progress: any) => {
@@ -48,16 +49,19 @@ try {
       frame: progress.frame,
       fps: progress.fps,
     });
+    // Note: Status counts don't change during progress, only when job status changes
   });
 
   processor.on('job:complete', (job: Job) => {
     console.log(`[JobProcessor] Job ${job.id} completed`);
     WSBroadcaster.broadcastJobUpdate(job);
+    WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
   });
 
   processor.on('job:fail', (job: Job) => {
     console.log(`[JobProcessor] Job ${job.id} failed`);
     WSBroadcaster.broadcastJobUpdate(job);
+    WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
   });
 
   // Start the processor

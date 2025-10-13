@@ -140,6 +140,9 @@ export async function jobsHandler(
           }
         }
 
+        // Broadcast updated status counts
+        WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -212,6 +215,9 @@ export async function jobsHandler(
       }
 
       const totalCancelled = pendingJobs.length + processingJobs.length;
+
+      // Broadcast updated status counts
+      WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
 
       return new Response(
         JSON.stringify({
@@ -331,6 +337,9 @@ export async function jobsHandler(
           WSBroadcaster.broadcastJobCreated(job);
         }
       }
+
+      // Broadcast updated status counts
+      WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
 
       // Get or initialize job processor
       const uploadsDir = process.env.UPLOAD_DIR || './uploads';
@@ -470,6 +479,9 @@ export async function jobByIdHandler(
         }
       }
 
+      // Broadcast updated status counts
+      WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -527,6 +539,9 @@ export async function jobByIdHandler(
           WSBroadcaster.broadcastJobUpdate(updatedJob);
         }
       }
+
+      // Broadcast updated status counts
+      WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
 
       return new Response(
         JSON.stringify({

@@ -93,6 +93,22 @@ export const WSBroadcaster = {
     });
   },
 
+  broadcastStatusCounts(statusCounts: Record<string, number>) {
+    const message = JSON.stringify({
+      type: 'status-counts',
+      data: statusCounts,
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error('[WebSocket] Error sending to client:', error);
+        clients.delete(client);
+      }
+    });
+  },
+
   getClientCount() {
     return clients.size;
   },

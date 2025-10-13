@@ -150,6 +150,20 @@ export function JobList() {
 
             return { ...oldData, pages: newPages };
           });
+        } else if (message.type === 'status-counts') {
+          // Update status counts in all pages of the infinite query cache
+          const statusCounts = message.data;
+          queryClient.setQueryData(['jobs', 'infinite', 20], (oldData: any) => {
+            if (!oldData?.pages) return oldData;
+
+            // Update statusCounts in all pages
+            const newPages = oldData.pages.map((page: any) => ({
+              ...page,
+              statusCounts,
+            }));
+
+            return { ...oldData, pages: newPages };
+          });
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
