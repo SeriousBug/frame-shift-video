@@ -12,12 +12,19 @@ const API_BASE = '/api';
 /**
  * Fetch files in a directory
  */
-export async function fetchFiles(path: string): Promise<{
+export async function fetchFiles(
+  path: string,
+  searchQuery?: string,
+): Promise<{
   items: FileSystemItem[];
+  searchQuery?: string;
 }> {
-  const response = await fetch(
-    `${API_BASE}/files?path=${encodeURIComponent(path)}`,
-  );
+  const params = new URLSearchParams({ path });
+  if (searchQuery) {
+    params.append('search', searchQuery);
+  }
+
+  const response = await fetch(`${API_BASE}/files?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error('Failed to load directory');
@@ -239,7 +246,8 @@ export type PickerAction =
   | { type: 'toggle-file'; path: string }
   | { type: 'toggle-folder-selection'; path: string }
   | { type: 'navigate'; path: string }
-  | { type: 'update-config'; config: any };
+  | { type: 'update-config'; config: any }
+  | { type: 'search'; query: string };
 
 /**
  * Get picker state by key (creates new empty state if no key provided)

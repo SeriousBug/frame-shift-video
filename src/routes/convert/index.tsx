@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { usePickerState, usePickerAction } from '@/lib/api-hooks';
 import { FilePickerItem } from '@/types/files';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { SearchHelpModal } from '@/components/search-help-modal';
 
 export const Route = createFileRoute('/convert/')({
   component: ConvertPage,
@@ -15,6 +16,10 @@ export const Route = createFileRoute('/convert/')({
 function ConvertPage() {
   const navigate = useNavigate();
   const { key: urlKey } = Route.useSearch();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchHelpOpen, setIsSearchHelpOpen] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [videosOnly, setVideosOnly] = useState(true);
 
   // Fetch picker state from server
   const { data: pickerState, isLoading, error } = usePickerState(urlKey);
@@ -39,6 +44,75 @@ function ConvertPage() {
       });
     }
   }, [pickerState, urlKey, navigate]);
+
+  // Sync search query from picker state when loaded
+  useEffect(() => {
+    if (pickerState?.searchQuery !== undefined) {
+      // Extract the user's original query from the transformed query
+      const transformed = pickerState.searchQuery;
+
+      // Try to reverse the transformation
+      let original = transformed;
+
+      // Remove video extensions if present
+      const videoExtPattern =
+        '.{mp4,mkv,avi,mov,wmv,flv,webm,m4v,mpg,mpeg,3gp,mts,m2ts}';
+      if (original.endsWith(videoExtPattern)) {
+        original = original.slice(0, -videoExtPattern.length);
+        setVideosOnly(true);
+      } else {
+        setVideosOnly(false);
+      }
+
+      // Remove wildcards if wrapped
+      if (
+        original.startsWith('*') &&
+        original.endsWith('*') &&
+        original.length > 2
+      ) {
+        original = original.slice(1, -1);
+        setAdvancedMode(false);
+      } else {
+        setAdvancedMode(true);
+      }
+
+      setSearchQuery(original);
+    }
+  }, [pickerState?.key]); // Only run when state key changes (new state loaded)
+
+  // Transform search query based on mode settings
+  const transformSearchQuery = (query: string): string => {
+    if (!query.trim()) return '';
+
+    // Advanced mode: use query as-is
+    if (advancedMode) return query;
+
+    // Simple mode: wrap with wildcards
+    let transformed = `*${query}*`;
+
+    // Add video extensions if Videos Only is enabled
+    if (videosOnly) {
+      transformed +=
+        '.{mp4,mkv,avi,mov,wmv,flv,webm,m4v,mpg,mpeg,3gp,mts,m2ts}';
+    }
+
+    return transformed;
+  };
+
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (pickerAction.isPending) return;
+
+      const transformedQuery = transformSearchQuery(searchQuery);
+      pickerAction.mutate({
+        action: { type: 'search', query: transformedQuery },
+        key: pickerState?.key,
+      });
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, advancedMode, videosOnly]); // Run when any of these change
 
   const handleToggleFolder = async (folderPath: string) => {
     console.log('[CLIENT] handleToggleFolder called', {
@@ -107,6 +181,7 @@ function ConvertPage() {
     const isTopLevelFolder = item.isDirectory && item.depth === 0;
     const canInteract = !pickerAction.isPending && !isTopLevelFolder;
     const isExpanding = pickerAction.isPending;
+    const isSearching = transformSearchQuery(searchQuery).trim() !== '';
 
     const extraFileIndent = item.isDirectory ? 0 : 20;
     const paddingLeft = item.depth * 20 + 12 + extraFileIndent;
@@ -124,13 +199,24 @@ function ConvertPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleToggleFolder(item.path);
+                  if (!isSearching) {
+                    handleToggleFolder(item.path);
+                  }
                 }}
-                disabled={isExpanding}
-                className={`mr-2 w-4 h-4 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 rounded disabled:hover:bg-transparent ${isExpanding ? 'cursor-default' : ''}`}
+                disabled={isExpanding || isSearching}
+                className={`mr-2 w-4 h-4 flex items-center justify-center rounded ${
+                  isSearching
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                } disabled:hover:bg-transparent ${isExpanding ? 'cursor-default' : ''}`}
+                title={
+                  isSearching
+                    ? 'Cannot collapse folders while searching'
+                    : undefined
+                }
               >
                 <span className="text-gray-500 text-xs">
-                  {item.isExpanded ? '▼' : '▶'}
+                  {isSearching || item.isExpanded ? '▼' : '▶'}
                 </span>
               </button>
             )}
@@ -234,6 +320,80 @@ function ConvertPage() {
             </div>
           )}
 
+          {/* Search bar */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+            <div className="flex gap-2 items-center">
+              {/* Toggle buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setAdvancedMode(!advancedMode);
+                    if (!advancedMode) {
+                      // Turning on advanced mode, disable videos only
+                      setVideosOnly(false);
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    advancedMode
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                  title="Advanced Mode: Use exact pattern matching"
+                >
+                  Advanced Mode
+                </button>
+                <button
+                  onClick={() => setVideosOnly(!videosOnly)}
+                  disabled={advancedMode}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    videosOnly && !advancedMode
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  } ${advancedMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={
+                    advancedMode
+                      ? 'Videos Only is disabled in Advanced Mode'
+                      : 'Videos Only: Filter to video files only'
+                  }
+                >
+                  Videos Only
+                </button>
+              </div>
+
+              {/* Search input */}
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={
+                  advancedMode
+                    ? 'Search files (e.g., *.mp4, 2024-*.{mp4,mkv})'
+                    : videosOnly
+                      ? 'Search video files (e.g., charlie, 2024-)'
+                      : 'Search files (e.g., charlie, 2024-)'
+                }
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={() => setIsSearchHelpOpen(true)}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                title="Search pattern help"
+              >
+                <span className="text-lg">❓</span>
+                <span className="hidden sm:inline">Help</span>
+              </button>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto border-b border-gray-200 dark:border-gray-600">
             {isLoading ? (
               <div className="flex items-center justify-center p-8">
@@ -288,6 +448,11 @@ function ConvertPage() {
           </div>
         </div>
       </div>
+
+      <SearchHelpModal
+        isOpen={isSearchHelpOpen}
+        onClose={() => setIsSearchHelpOpen(false)}
+      />
     </div>
   );
 }

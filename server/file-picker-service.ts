@@ -9,12 +9,14 @@ import { FilePickerItem, FilePickerState } from '../src/types/files';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import micromatch from 'micromatch';
 
 interface PickerStateData {
   selectedFiles: Set<string>;
   expandedFolders: Set<string>;
   currentPath: string;
   config?: any;
+  searchQuery?: string;
 }
 
 export class FilePickerStateService {
@@ -26,6 +28,7 @@ export class FilePickerStateService {
       selected: Array.from(state.selectedFiles).sort(),
       expanded: Array.from(state.expandedFolders).sort(),
       path: state.currentPath,
+      search: state.searchQuery || '',
     };
     const json = JSON.stringify(data);
     return crypto.createHash('sha256').update(json).digest('base64url');
@@ -41,17 +44,19 @@ export class FilePickerStateService {
       Array.from(state.expandedFolders),
     );
     const configJson = state.config ? JSON.stringify(state.config) : null;
+    const searchQuery = state.searchQuery || null;
 
     execute(
       `INSERT OR REPLACE INTO file_selections
-       (id, data, expanded_folders, current_path, config)
-       VALUES (?, ?, ?, ?, ?)`,
+       (id, data, expanded_folders, current_path, config, search_query)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         key,
         selectedFilesJson,
         expandedFoldersJson,
         state.currentPath,
         configJson,
+        searchQuery,
       ],
     );
 
@@ -63,7 +68,7 @@ export class FilePickerStateService {
    */
   static get(key: string): PickerStateData | null {
     const result = queryOne<FileSelection>(
-      'SELECT data, expanded_folders, current_path, config FROM file_selections WHERE id = ?',
+      'SELECT data, expanded_folders, current_path, config, search_query FROM file_selections WHERE id = ?',
       [key],
     );
 
@@ -75,12 +80,14 @@ export class FilePickerStateService {
         result.expanded_folders ? JSON.parse(result.expanded_folders) : [],
       );
       const config = result.config ? JSON.parse(result.config) : undefined;
+      const searchQuery = result.search_query || undefined;
 
       return {
         selectedFiles,
         expandedFolders,
         currentPath: result.current_path || '',
         config,
+        searchQuery,
       };
     } catch (error) {
       console.error('Failed to parse picker state:', error);
@@ -222,13 +229,116 @@ export class FilePickerStateService {
   }
 
   /**
+   * Recursively scan directory tree and filter by search pattern
+   */
+  private static scanDirectoryWithSearch(
+    dirPath: string,
+    searchPattern: string,
+  ): FilePickerItem[] {
+    const basePath = this.getBasePath();
+    const fullPath = path.join(basePath, dirPath);
+    const results: FilePickerItem[] = [];
+
+    try {
+      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        // Skip hidden files
+        if (entry.name.startsWith('.')) continue;
+
+        const itemPath = path.join(dirPath, entry.name);
+        const fullItemPath = path.join(fullPath, entry.name);
+
+        try {
+          const stats = fs.statSync(fullItemPath);
+
+          if (entry.isDirectory()) {
+            // Recursively search subdirectories
+            const subResults = this.scanDirectoryWithSearch(
+              itemPath,
+              searchPattern,
+            );
+
+            // Only include directory if it has matching descendants
+            if (subResults.length > 0) {
+              results.push({
+                name: entry.name,
+                path: itemPath,
+                isDirectory: true,
+                size: undefined,
+                modified: stats.mtime.toISOString(),
+                depth: 0,
+                selectionState: 'none',
+              });
+              results.push(...subResults);
+            }
+          } else {
+            // Check if file matches the search pattern (case insensitive)
+            if (
+              micromatch.isMatch(entry.name, searchPattern, { nocase: true })
+            ) {
+              results.push({
+                name: entry.name,
+                path: itemPath,
+                isDirectory: false,
+                size: stats.size,
+                modified: stats.mtime.toISOString(),
+                depth: 0,
+                selectionState: 'none',
+              });
+            }
+          }
+        } catch (error) {
+          // Skip files we can't access
+          console.warn(`Could not access ${entry.name}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to scan directory ${dirPath}:`, error);
+    }
+
+    return results;
+  }
+
+  /**
    * Build the flat list of items to render based on current state
    */
   static buildItemsList(state: PickerStateData): FilePickerItem[] {
     const items: FilePickerItem[] = [];
     const basePath = this.getBasePath();
 
-    // Get items in current directory
+    // If search query is present, use search mode
+    if (state.searchQuery && state.searchQuery.trim()) {
+      const searchResults = this.scanDirectoryWithSearch('', state.searchQuery);
+
+      // Calculate depths and selection states
+      const itemsByPath = new Map<string, FilePickerItem>();
+      searchResults.forEach((item) => itemsByPath.set(item.path, item));
+
+      for (const item of searchResults) {
+        // Calculate depth based on path
+        item.depth = item.path.split('/').length - 1;
+
+        // Calculate selection state
+        if (item.isDirectory) {
+          item.selectionState = this.calculateFolderSelectionState(
+            item.path,
+            state.selectedFiles,
+          );
+          item.isExpanded = false;
+        } else {
+          item.selectionState = state.selectedFiles.has(item.path)
+            ? 'full'
+            : 'none';
+        }
+
+        items.push(item);
+      }
+
+      return items;
+    }
+
+    // Normal mode: Get items in current directory
     const currentItems = this.listDirectory(state.currentPath);
 
     // Build flat list with expanded folders
@@ -284,6 +394,7 @@ export class FilePickerStateService {
       currentPath: state.currentPath,
       items,
       selectedCount,
+      searchQuery: state.searchQuery,
     };
   }
 
@@ -394,6 +505,19 @@ export class FilePickerStateService {
     return {
       ...state,
       config,
+    };
+  }
+
+  /**
+   * Update search query in state
+   */
+  static updateSearch(
+    state: PickerStateData,
+    searchQuery: string,
+  ): PickerStateData {
+    return {
+      ...state,
+      searchQuery: searchQuery.trim() || undefined,
     };
   }
 }

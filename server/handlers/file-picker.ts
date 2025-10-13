@@ -9,7 +9,8 @@ export type PickerAction =
   | { type: 'toggle-file'; path: string }
   | { type: 'toggle-folder-selection'; path: string }
   | { type: 'navigate'; path: string }
-  | { type: 'update-config'; config: any };
+  | { type: 'update-config'; config: any }
+  | { type: 'search'; query: string };
 
 /**
  * GET /api/picker-state?key=xxx
@@ -195,6 +196,19 @@ export async function pickerActionHandler(
           );
         }
         newState = FilePickerStateService.updateConfig(state, action.config);
+        break;
+
+      case 'search':
+        if (action.query === undefined) {
+          return new Response(
+            JSON.stringify({ error: 'query is required for search' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            },
+          );
+        }
+        newState = FilePickerStateService.updateSearch(state, action.query);
         break;
 
       default:

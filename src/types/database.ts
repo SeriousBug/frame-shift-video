@@ -55,5 +55,6 @@ export interface FileSelection {
   config?: string; // JSON-encoded ConversionOptions
   expanded_folders?: string; // JSON array of expanded folder paths
   current_path?: string; // Current directory being viewed
+  search_query?: string; // Search query for filtering files
   created_at: string;
 }

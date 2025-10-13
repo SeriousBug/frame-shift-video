@@ -6,7 +6,6 @@ const DB_PATH =
   process.env.NODE_ENV === 'test'
     ? path.join(process.cwd(), 'data', 'test-database.sqlite')
     : path.join(process.cwd(), 'data', 'database.sqlite');
-const CURRENT_DB_VERSION = 7;
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);
@@ -84,33 +83,6 @@ export function transaction(callback: () => void): void {
 }
 
 /**
- * Initialize database with meta table and run migrations
- */
-function initializeDatabase(): void {
-  const database = getDatabase();
-
-  // Always create meta table if it doesn't exist
-  database.run(`
-    CREATE TABLE IF NOT EXISTS meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    )
-  `);
-
-  // Check current database version
-  const versionResult = queryOne<{ value: string }>(
-    'SELECT value FROM meta WHERE key = ?',
-    ['version'],
-  );
-  const currentVersion = versionResult ? parseInt(versionResult.value, 10) : 0;
-
-  // Run migrations if needed
-  if (currentVersion < CURRENT_DB_VERSION) {
-    runMigrations(currentVersion);
-  }
-}
-
-/**
  * Database migrations
  * IMPORTANT: Never delete old migration entries, only add new ones!
  * Each migration runs only once and updates the version incrementally.
@@ -169,7 +141,38 @@ const MIGRATIONS = [
     ALTER TABLE file_selections ADD COLUMN expanded_folders TEXT;
     ALTER TABLE file_selections ADD COLUMN current_path TEXT DEFAULT '';
   `,
+  // Migration 8: Add search_query to file_selections for search functionality
+  `
+    ALTER TABLE file_selections ADD COLUMN search_query TEXT;
+  `,
 ];
+
+/**
+ * Initialize database with meta table and run migrations
+ */
+function initializeDatabase(): void {
+  const database = getDatabase();
+
+  // Always create meta table if it doesn't exist
+  database.run(`
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
+  // Check current database version
+  const versionResult = queryOne<{ value: string }>(
+    'SELECT value FROM meta WHERE key = ?',
+    ['version'],
+  );
+  const currentVersion = versionResult ? parseInt(versionResult.value, 10) : 0;
+
+  // Run migrations if needed
+  if (currentVersion < MIGRATIONS.length) {
+    runMigrations(currentVersion);
+  }
+}
 
 /**
  * Run database migrations from the given version
@@ -197,7 +200,7 @@ function runMigrations(fromVersion: number): void {
     }
   });
 
-  console.log(`Database migrated to version ${CURRENT_DB_VERSION}`);
+  console.log(`Database migrated to version ${MIGRATIONS.length}`);
 }
 
 /**

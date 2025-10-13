@@ -28,4 +28,5 @@ export interface FilePickerState {
   currentPath: string; // Current directory being viewed
   items: FilePickerItem[]; // Flat list of items to render
   selectedCount: number; // Total number of selected files
+  searchQuery?: string; // Current search query if any
 }
