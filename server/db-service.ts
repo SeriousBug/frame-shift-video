@@ -374,6 +374,6 @@ export const FileSelectionService = {
     const result = execute(
       "DELETE FROM file_selections WHERE created_at IS NULL OR created_at < datetime('now', '-7 days')",
     );
-    return result.changes;
+    return Number(result.changes) || 0;
   },
 };
