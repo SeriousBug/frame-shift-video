@@ -310,3 +310,24 @@ export async function fetchServerVersion(): Promise<{
 
   return response.json();
 }
+
+/**
+ * Send a test notification
+ */
+export async function sendTestNotification(): Promise<{
+  success: boolean;
+  message: string;
+  completedCount: number;
+  failedCount: number;
+}> {
+  const response = await fetch(`${API_BASE}/notifications/test`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to send test notification');
+  }
+
+  return response.json();
+}

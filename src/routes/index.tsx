@@ -1,11 +1,48 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { JobList } from '@/components/job-list';
+import { sendTestNotification } from '@/lib/api';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/')({
   component: IndexComponent,
 });
 
 function IndexComponent() {
+  const [testNotificationStatus, setTestNotificationStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [testNotificationMessage, setTestNotificationMessage] = useState('');
+
+  const handleTestNotification = async () => {
+    setTestNotificationStatus('loading');
+    setTestNotificationMessage('');
+
+    try {
+      const result = await sendTestNotification();
+      setTestNotificationStatus('success');
+      setTestNotificationMessage(result.message);
+
+      // Reset status after 3 seconds
+      setTimeout(() => {
+        setTestNotificationStatus('idle');
+        setTestNotificationMessage('');
+      }, 3000);
+    } catch (error) {
+      setTestNotificationStatus('error');
+      setTestNotificationMessage(
+        error instanceof Error
+          ? error.message
+          : 'Failed to send test notification',
+      );
+
+      // Reset status after 5 seconds
+      setTimeout(() => {
+        setTestNotificationStatus('idle');
+        setTestNotificationMessage('');
+      }, 5000);
+    }
+  };
+
   return (
     <div className="container mx-auto px-6 py-12">
       <header className="mb-12 text-center">
@@ -39,6 +76,34 @@ function IndexComponent() {
 
         <div className="mt-16">
           <JobList />
+        </div>
+
+        <div className="mt-8 text-center">
+          <button
+            onClick={handleTestNotification}
+            disabled={testNotificationStatus === 'loading'}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-sm"
+          >
+            {testNotificationStatus === 'loading' ? (
+              <>
+                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Sending...
+              </>
+            ) : (
+              'Test Notification'
+            )}
+          </button>
+          {testNotificationMessage && (
+            <p
+              className={`mt-2 text-sm ${
+                testNotificationStatus === 'success'
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              {testNotificationMessage}
+            </p>
+          )}
         </div>
       </main>
     </div>

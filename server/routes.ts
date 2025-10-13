@@ -8,6 +8,7 @@ import {
   getPickerStateHandler,
   pickerActionHandler,
 } from './handlers/file-picker';
+import { testNotificationHandler } from './handlers/notifications';
 
 export async function setupRoutes(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -92,6 +93,11 @@ export async function setupRoutes(req: Request): Promise<Response> {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
+    }
+
+    // Route: POST /api/notifications/test
+    if (pathname === '/api/notifications/test' && req.method === 'POST') {
+      return await testNotificationHandler(req, corsHeaders);
     }
 
     // 404 Not Found
