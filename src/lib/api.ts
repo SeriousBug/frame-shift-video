@@ -287,3 +287,18 @@ export async function performPickerAction(
   console.log('[API] performPickerAction result:', result);
   return result;
 }
+
+/**
+ * Fetch server version
+ */
+export async function fetchServerVersion(): Promise<{
+  version: string | null;
+}> {
+  const response = await fetch(`${API_BASE}/version`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch server version');
+  }
+
+  return response.json();
+}

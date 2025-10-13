@@ -1,5 +1,8 @@
 FROM node:24-alpine AS build
 
+# Accept version as build argument
+ARG VERSION
+
 WORKDIR /app
 
 # Copy package files
@@ -11,11 +14,15 @@ RUN npm ci
 # Copy source files
 COPY . .
 
-# Build the frontend
+# Build the frontend with version
+ENV VITE_APP_VERSION=${VERSION}
 RUN npm run build
 
 # Production stage - use Alpine for smaller size
 FROM oven/bun:1.3-alpine
+
+# Accept version from build stage
+ARG VERSION
 
 WORKDIR /app
 
@@ -38,6 +45,9 @@ EXPOSE 3001
 
 # Set environment to production
 ENV NODE_ENV=production
+
+# Set app version for server
+ENV APP_VERSION=${VERSION}
 
 # Start the server
 CMD ["bun", "run", "server/index.ts"]

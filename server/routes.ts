@@ -85,6 +85,15 @@ export async function setupRoutes(req: Request): Promise<Response> {
       return await pickerActionHandler(req, corsHeaders);
     }
 
+    // Route: GET /api/version
+    if (pathname === '/api/version' && req.method === 'GET') {
+      const version = process.env.APP_VERSION || null;
+      return new Response(JSON.stringify({ version }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
     // 404 Not Found
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,
