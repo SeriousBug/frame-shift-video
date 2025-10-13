@@ -12,6 +12,7 @@ import {
   fetchFiles,
   fetchJobs,
   fetchJobsPaginated,
+  fetchJobsByStatus,
   createJobs,
   markJobAsRetried,
   cancelJob,
@@ -24,6 +25,7 @@ import {
   type PickerAction,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
+import { Job } from '@/types/database';
 
 /**
  * Query keys for caching
@@ -65,6 +67,16 @@ export function useJobsInfinite(limit: number = 20) {
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? lastPage.nextCursor : undefined,
     initialPageParam: undefined as string | undefined,
+  });
+}
+
+/**
+ * Hook to fetch jobs by status
+ */
+export function useJobsByStatus(status: Job['status']) {
+  return useQuery({
+    queryKey: ['jobs', 'status', status],
+    queryFn: () => fetchJobsByStatus(status),
   });
 }
 

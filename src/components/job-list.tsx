@@ -4,6 +4,7 @@ import { JobCard } from './job-card';
 import { ConfirmationModal } from './confirmation-modal';
 import {
   useJobsInfinite,
+  useJobsByStatus,
   useMarkJobAsRetried,
   useCancelJob,
   useCancelAllJobs,
@@ -23,6 +24,8 @@ export function JobList() {
     hasNextPage,
     isFetchingNextPage,
   } = useJobsInfinite(20);
+  const { data: processingJobsData, isLoading: loadingProcessingJobs } =
+    useJobsByStatus('processing');
   const navigate = useNavigate();
   const markJobAsRetriedMutation = useMarkJobAsRetried();
   const cancelJobMutation = useCancelJob();
@@ -31,11 +34,28 @@ export function JobList() {
   const saveFileSelectionsMutation = useSaveFileSelections();
   const queryClient = useQueryClient();
 
-  // Flatten all pages into a single array of jobs
-  const jobs = useMemo(() => {
+  // Get processing jobs
+  const processingJobs = useMemo(() => {
+    return processingJobsData?.jobs || [];
+  }, [processingJobsData]);
+
+  // Get processing job IDs for filtering
+  const processingJobIds = useMemo(() => {
+    return new Set(processingJobs.map((job) => job.id));
+  }, [processingJobs]);
+
+  // Flatten all pages into a single array of jobs, excluding processing jobs
+  const otherJobs = useMemo(() => {
     if (!data?.pages) return [];
-    return data.pages.flatMap((page) => page.jobs);
-  }, [data]);
+    return data.pages
+      .flatMap((page) => page.jobs)
+      .filter((job) => !processingJobIds.has(job.id));
+  }, [data, processingJobIds]);
+
+  // Combine processing jobs at the top with other jobs
+  const jobs = useMemo(() => {
+    return [...processingJobs, ...otherJobs];
+  }, [processingJobs, otherJobs]);
 
   // Extract status counts from the first page (they're the same for all pages)
   const statusCounts = useMemo(() => {
@@ -126,6 +146,41 @@ export function JobList() {
 
             return { ...oldData, pages: newPages };
           });
+
+          // Update the processing jobs cache
+          queryClient.setQueryData(
+            ['jobs', 'status', 'processing'],
+            (oldData: any) => {
+              if (!oldData?.jobs) return oldData;
+
+              const jobIndex = oldData.jobs.findIndex(
+                (j: Job) => j.id === job.id,
+              );
+
+              // If the job is processing, update it or add it
+              if (job.status === 'processing') {
+                if (jobIndex >= 0) {
+                  // Update existing processing job
+                  const newJobs = [...oldData.jobs];
+                  newJobs[jobIndex] = job;
+                  return { ...oldData, jobs: newJobs };
+                } else {
+                  // Add new processing job
+                  return { ...oldData, jobs: [job, ...oldData.jobs] };
+                }
+              } else {
+                // Job is no longer processing, remove it
+                if (jobIndex >= 0) {
+                  const newJobs = oldData.jobs.filter(
+                    (j: Job) => j.id !== job.id,
+                  );
+                  return { ...oldData, jobs: newJobs };
+                }
+              }
+
+              return oldData;
+            },
+          );
         } else if (message.type === 'job:progress') {
           // Update job progress in the infinite query cache
           const { jobId, progress, frame, fps } = message.data;
@@ -150,6 +205,31 @@ export function JobList() {
 
             return { ...oldData, pages: newPages };
           });
+
+          // Update job progress in the processing jobs cache
+          queryClient.setQueryData(
+            ['jobs', 'status', 'processing'],
+            (oldData: any) => {
+              if (!oldData?.jobs) return oldData;
+
+              const jobIndex = oldData.jobs.findIndex(
+                (j: Job) => j.id === jobId,
+              );
+              if (jobIndex >= 0) {
+                const newJobs = [...oldData.jobs];
+                newJobs[jobIndex] = {
+                  ...newJobs[jobIndex],
+                  progress,
+                  // Store current frame and fps temporarily for UI display
+                  currentFrame: frame,
+                  currentFps: fps,
+                };
+                return { ...oldData, jobs: newJobs };
+              }
+
+              return oldData;
+            },
+          );
         } else if (message.type === 'status-counts') {
           // Update status counts in all pages of the infinite query cache
           const statusCounts = message.data;
@@ -289,7 +369,7 @@ export function JobList() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  if (loading) {
+  if (loading || loadingProcessingJobs) {
     return (
       <div className="text-center py-12">
         <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>

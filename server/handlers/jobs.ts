@@ -24,6 +24,16 @@ export async function jobsHandler(
       const url = new URL(req.url);
       const cursorParam = url.searchParams.get('cursor');
       const limitParam = url.searchParams.get('limit');
+      const statusParam = url.searchParams.get('status');
+
+      // If status filter is provided, return jobs by status (non-paginated)
+      if (statusParam) {
+        const jobs = JobService.getByStatus(statusParam as any);
+        return new Response(JSON.stringify({ jobs }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
 
       const limit = limitParam ? parseInt(limitParam, 10) : 20;
 

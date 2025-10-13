@@ -68,6 +68,22 @@ export async function fetchJobsPaginated(
 }
 
 /**
+ * Fetch jobs by status (non-paginated)
+ */
+export async function fetchJobsByStatus(
+  status: Job['status'],
+): Promise<{ jobs: Job[] }> {
+  const params = new URLSearchParams({ status });
+  const response = await fetch(`${API_BASE}/jobs?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch jobs by status');
+  }
+
+  return response.json();
+}
+
+/**
  * Create new jobs
  */
 export async function createJobs(
