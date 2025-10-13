@@ -302,6 +302,8 @@ export async function jobsHandler(
       // Create database entries for each job
       const createdJobIds: number[] = [];
 
+      console.log(`[Jobs API] Creating ${jobConfigs.length} job(s)`);
+
       for (const config of jobConfigs) {
         // Generate FFmpeg command for storage
         const ffmpegCommand = generateFFmpegCommand(config);
@@ -320,6 +322,7 @@ export async function jobsHandler(
           config_key: configKey,
         });
 
+        console.log(`[Jobs API] Created job ${jobId}: ${config.jobName}`);
         createdJobIds.push(jobId);
 
         // Broadcast new job to WebSocket clients
@@ -336,8 +339,10 @@ export async function jobsHandler(
       let processor: JobProcessor;
       try {
         processor = JobProcessor.getInstance();
+        console.log('[Jobs API] Got existing job processor instance');
       } catch {
         // If not initialized, initialize it now
+        console.log('[Jobs API] Initializing new job processor');
         processor = JobProcessor.getInstance({
           uploadsDir,
           outputsDir,
@@ -347,6 +352,7 @@ export async function jobsHandler(
       }
 
       // Trigger immediate job processing
+      console.log('[Jobs API] Triggering job processor');
       processor.trigger();
 
       return new Response(

@@ -172,7 +172,9 @@ export class JobProcessor extends EventEmitter {
       return;
     }
 
-    console.log('[JobProcessor] Manual trigger requested');
+    console.log(
+      `[JobProcessor] Manual trigger requested (isProcessing: ${this.isProcessing}, currentJobId: ${this.currentJobId})`,
+    );
     this.checkForJobs();
   }
 
@@ -225,8 +227,15 @@ export class JobProcessor extends EventEmitter {
    * The async work happens in an IIFE.
    */
   private checkForJobs(): void {
+    console.log(
+      `[JobProcessor] checkForJobs called (isProcessing: ${this.isProcessing}, isShuttingDown: ${this.isShuttingDown})`,
+    );
+
     // Don't check if already processing or shutting down
     if (this.isProcessing || this.isShuttingDown) {
+      console.log(
+        '[JobProcessor] Skipping check - already processing or shutting down',
+      );
       return;
     }
 
@@ -235,6 +244,7 @@ export class JobProcessor extends EventEmitter {
 
     if (!nextJob) {
       // No pending jobs
+      console.log('[JobProcessor] No pending jobs found');
       return;
     }
 
@@ -369,6 +379,8 @@ export class JobProcessor extends EventEmitter {
       this.isProcessing = false;
       this.emit('state:change', false);
 
+      console.log('[JobProcessor] Job finished, cleaning up');
+
       // Check if all jobs are complete and send notification
       if (!this.isShuttingDown) {
         await this.checkAndNotifyIfAllJobsComplete();
@@ -376,6 +388,7 @@ export class JobProcessor extends EventEmitter {
 
       // Check for next job if not shutting down
       if (!this.isShuttingDown) {
+        console.log('[JobProcessor] Scheduling next job check');
         setImmediate(() => this.checkForJobs());
       }
     }

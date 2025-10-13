@@ -36,14 +36,15 @@ function ConfigurePage() {
   const saveFileSelectionsMutation = useSaveFileSelections();
 
   const handleStartConversion = async (options: ConversionOptions) => {
+    console.log('[Configure Page] Starting conversion with options:', options);
     try {
       const result = await createJobsMutation.mutateAsync(options);
-      console.log('Jobs created successfully:', result);
+      console.log('[Configure Page] Jobs created successfully:', result);
 
       // Navigate back to home on success
       navigate({ to: '/' });
     } catch (error) {
-      console.error('Error starting conversion:', error);
+      console.error('[Configure Page] Error starting conversion:', error);
       alert(
         `Failed to create conversion jobs: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );

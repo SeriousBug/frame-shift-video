@@ -75,10 +75,17 @@ export function useCreateJobs() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (options: ConversionOptions) => createJobs(options),
-    onSuccess: () => {
+    mutationFn: (options: ConversionOptions) => {
+      console.log('[API Hook] Creating jobs mutation started');
+      return createJobs(options);
+    },
+    onSuccess: (data) => {
+      console.log('[API Hook] Creating jobs mutation succeeded:', data);
       // Invalidate and refetch jobs
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
+    },
+    onError: (error) => {
+      console.error('[API Hook] Creating jobs mutation failed:', error);
     },
   });
 }

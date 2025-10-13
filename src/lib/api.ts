@@ -73,6 +73,8 @@ export async function fetchJobsPaginated(
 export async function createJobs(
   options: ConversionOptions,
 ): Promise<{ jobs: Job[] }> {
+  console.log('[API Client] Creating jobs with options:', options);
+
   const response = await fetch(`${API_BASE}/jobs`, {
     method: 'POST',
     headers: {
@@ -81,12 +83,17 @@ export async function createJobs(
     body: JSON.stringify(options),
   });
 
+  console.log('[API Client] Create jobs response status:', response.status);
+
   if (!response.ok) {
     const error = await response.json();
+    console.error('[API Client] Create jobs error:', error);
     throw new Error(error.error || 'Failed to create jobs');
   }
 
-  return response.json();
+  const result = await response.json();
+  console.log('[API Client] Create jobs result:', result);
+  return result;
 }
 
 /**
