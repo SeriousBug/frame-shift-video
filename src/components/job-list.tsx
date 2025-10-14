@@ -9,6 +9,7 @@ import {
   useCancelJob,
   useCancelAllJobs,
   useMarkAllFailedAsRetried,
+  useClearFinishedJobs,
   useSaveFileSelections,
 } from '@/lib/api-hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,6 +17,7 @@ import { Virtuoso } from 'react-virtuoso';
 import { useNavigate } from '@tanstack/react-router';
 
 export function JobList() {
+  const [showCleared, setShowCleared] = React.useState(false);
   const {
     data,
     isLoading: loading,
@@ -23,7 +25,7 @@ export function JobList() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useJobsInfinite(20);
+  } = useJobsInfinite(20, showCleared);
   const { data: processingJobsData, isLoading: loadingProcessingJobs } =
     useJobsByStatus('processing');
   const navigate = useNavigate();
@@ -31,6 +33,7 @@ export function JobList() {
   const cancelJobMutation = useCancelJob();
   const cancelAllJobsMutation = useCancelAllJobs();
   const markAllFailedAsRetriedMutation = useMarkAllFailedAsRetried();
+  const clearFinishedJobsMutation = useClearFinishedJobs();
   const saveFileSelectionsMutation = useSaveFileSelections();
   const queryClient = useQueryClient();
 
@@ -83,6 +86,8 @@ export function JobList() {
   const [showCancelAllModal, setShowCancelAllModal] = React.useState(false);
   const [showRetryAllFailedModal, setShowRetryAllFailedModal] =
     React.useState(false);
+  const [showClearFinishedModal, setShowClearFinishedModal] =
+    React.useState(false);
 
   const connectWebSocket = useCallback(() => {
     // Clear any existing reconnect timeout
@@ -117,35 +122,40 @@ export function JobList() {
         if (message.type === 'job:updated' || message.type === 'job:created') {
           // Update the job in the infinite query cache
           const job = message.data;
-          queryClient.setQueryData(['jobs', 'infinite', 20], (oldData: any) => {
-            if (!oldData?.pages) return oldData;
+          queryClient.setQueryData(
+            ['jobs', 'infinite', 20, showCleared],
+            (oldData: any) => {
+              if (!oldData?.pages) return oldData;
 
-            // Create a new pages array with the updated job
-            const newPages = oldData.pages.map((page: any) => {
-              const jobIndex = page.jobs.findIndex((j: Job) => j.id === job.id);
-              if (jobIndex >= 0) {
-                // Update existing job in this page
-                const newJobs = [...page.jobs];
-                newJobs[jobIndex] = job;
-                return { ...page, jobs: newJobs };
+              // Create a new pages array with the updated job
+              const newPages = oldData.pages.map((page: any) => {
+                const jobIndex = page.jobs.findIndex(
+                  (j: Job) => j.id === job.id,
+                );
+                if (jobIndex >= 0) {
+                  // Update existing job in this page
+                  const newJobs = [...page.jobs];
+                  newJobs[jobIndex] = job;
+                  return { ...page, jobs: newJobs };
+                }
+                return page;
+              });
+
+              // If job not found in any page, add it to the first page
+              const jobExists = newPages.some((page: any) =>
+                page.jobs.some((j: Job) => j.id === job.id),
+              );
+
+              if (!jobExists && newPages.length > 0) {
+                newPages[0] = {
+                  ...newPages[0],
+                  jobs: [job, ...newPages[0].jobs],
+                };
               }
-              return page;
-            });
 
-            // If job not found in any page, add it to the first page
-            const jobExists = newPages.some((page: any) =>
-              page.jobs.some((j: Job) => j.id === job.id),
-            );
-
-            if (!jobExists && newPages.length > 0) {
-              newPages[0] = {
-                ...newPages[0],
-                jobs: [job, ...newPages[0].jobs],
-              };
-            }
-
-            return { ...oldData, pages: newPages };
-          });
+              return { ...oldData, pages: newPages };
+            },
+          );
 
           // Update the processing jobs cache
           queryClient.setQueryData(
@@ -184,27 +194,32 @@ export function JobList() {
         } else if (message.type === 'job:progress') {
           // Update job progress in the infinite query cache
           const { jobId, progress, frame, fps } = message.data;
-          queryClient.setQueryData(['jobs', 'infinite', 20], (oldData: any) => {
-            if (!oldData?.pages) return oldData;
+          queryClient.setQueryData(
+            ['jobs', 'infinite', 20, showCleared],
+            (oldData: any) => {
+              if (!oldData?.pages) return oldData;
 
-            const newPages = oldData.pages.map((page: any) => {
-              const jobIndex = page.jobs.findIndex((j: Job) => j.id === jobId);
-              if (jobIndex >= 0) {
-                const newJobs = [...page.jobs];
-                newJobs[jobIndex] = {
-                  ...newJobs[jobIndex],
-                  progress,
-                  // Store current frame and fps temporarily for UI display
-                  currentFrame: frame,
-                  currentFps: fps,
-                };
-                return { ...page, jobs: newJobs };
-              }
-              return page;
-            });
+              const newPages = oldData.pages.map((page: any) => {
+                const jobIndex = page.jobs.findIndex(
+                  (j: Job) => j.id === jobId,
+                );
+                if (jobIndex >= 0) {
+                  const newJobs = [...page.jobs];
+                  newJobs[jobIndex] = {
+                    ...newJobs[jobIndex],
+                    progress,
+                    // Store current frame and fps temporarily for UI display
+                    currentFrame: frame,
+                    currentFps: fps,
+                  };
+                  return { ...page, jobs: newJobs };
+                }
+                return page;
+              });
 
-            return { ...oldData, pages: newPages };
-          });
+              return { ...oldData, pages: newPages };
+            },
+          );
 
           // Update job progress in the processing jobs cache
           queryClient.setQueryData(
@@ -233,17 +248,20 @@ export function JobList() {
         } else if (message.type === 'status-counts') {
           // Update status counts in all pages of the infinite query cache
           const statusCounts = message.data;
-          queryClient.setQueryData(['jobs', 'infinite', 20], (oldData: any) => {
-            if (!oldData?.pages) return oldData;
+          queryClient.setQueryData(
+            ['jobs', 'infinite', 20, showCleared],
+            (oldData: any) => {
+              if (!oldData?.pages) return oldData;
 
-            // Update statusCounts in all pages
-            const newPages = oldData.pages.map((page: any) => ({
-              ...page,
-              statusCounts,
-            }));
+              // Update statusCounts in all pages
+              const newPages = oldData.pages.map((page: any) => ({
+                ...page,
+                statusCounts,
+              }));
 
-            return { ...oldData, pages: newPages };
-          });
+              return { ...oldData, pages: newPages };
+            },
+          );
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
@@ -282,7 +300,7 @@ export function JobList() {
     };
 
     wsRef.current = ws;
-  }, [queryClient]);
+  }, [queryClient, showCleared]);
 
   useEffect(() => {
     // Connect WebSocket
@@ -339,6 +357,10 @@ export function JobList() {
   // Calculate total cancellable jobs from status counts
   const cancellableJobsCount = statusCounts.pending + statusCounts.processing;
 
+  // Calculate total clearable jobs (completed, failed, cancelled)
+  const clearableJobsCount =
+    statusCounts.completed + statusCounts.failed + statusCounts.cancelled;
+
   const handleRetryAllFailed = async () => {
     try {
       // Mark all failed jobs as retried and get config key
@@ -359,6 +381,18 @@ export function JobList() {
       console.error('Error retrying all failed jobs:', err);
       alert(
         err instanceof Error ? err.message : 'Failed to retry all failed jobs',
+      );
+    }
+  };
+
+  const handleClearFinished = async () => {
+    try {
+      await clearFinishedJobsMutation.mutateAsync();
+      // Mutation will invalidate the cache and trigger refetch
+    } catch (err) {
+      console.error('Error clearing finished jobs:', err);
+      alert(
+        err instanceof Error ? err.message : 'Failed to clear finished jobs',
       );
     }
   };
@@ -388,17 +422,6 @@ export function JobList() {
     );
   }
 
-  if (jobs.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-6xl mb-4">📭</div>
-        <p className="text-gray-600 dark:text-gray-400 text-lg">
-          No jobs yet. Start a conversion to see jobs here.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <ConfirmationModal
@@ -419,6 +442,16 @@ export function JobList() {
         confirmText="Retry All"
         cancelText="Cancel"
         confirmClassName="bg-blue-600 hover:bg-blue-700"
+      />
+      <ConfirmationModal
+        isOpen={showClearFinishedModal}
+        onClose={() => setShowClearFinishedModal(false)}
+        onConfirm={handleClearFinished}
+        title="Clear Finished Jobs"
+        message={`Are you sure you want to clear ${clearableJobsCount} finished ${clearableJobsCount === 1 ? 'job' : 'jobs'}? They will be hidden from the job list.`}
+        confirmText="Clear Finished Jobs"
+        cancelText="Cancel"
+        confirmClassName="bg-orange-600 hover:bg-orange-700"
       />
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -458,6 +491,37 @@ export function JobList() {
               <span>no active jobs</span>
             )}
           </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showCleared}
+              onChange={(e) => setShowCleared(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-blue-600 focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-gray-700 dark:text-gray-300">
+              Show cleared jobs
+            </span>
+          </label>
+          <button
+            onClick={() => setShowClearFinishedModal(true)}
+            disabled={
+              clearFinishedJobsMutation.isPending || clearableJobsCount === 0
+            }
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              clearFinishedJobsMutation.isPending || clearableJobsCount === 0
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                : 'bg-orange-600 text-white hover:bg-orange-700'
+            }`}
+            title={
+              clearableJobsCount === 0
+                ? 'No finished jobs to clear'
+                : 'Clear all completed, failed, and cancelled jobs'
+            }
+          >
+            {clearFinishedJobsMutation.isPending
+              ? 'Clearing...'
+              : 'Clear Queue'}
+          </button>
           <button
             onClick={() => setShowRetryAllFailedModal(true)}
             disabled={
@@ -505,42 +569,58 @@ export function JobList() {
         className="bg-slate-100 dark:bg-slate-900 rounded-xl py-6 border-2 border-slate-300 dark:border-slate-700"
         style={{ height: 'calc(100vh - 200px)' }}
       >
-        <Virtuoso
-          data={jobs}
-          endReached={loadMore}
-          itemContent={(index, job) => (
-            <div className="mb-6 mx-6">
-              <JobCard
-                key={job.id}
-                job={job}
-                onRetry={handleRetry}
-                onCancel={handleCancel}
-              />
-            </div>
-          )}
-          components={{
-            Footer: () => {
-              if (isFetchingNextPage) {
-                return (
-                  <div className="text-center py-8">
-                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                      Loading more jobs...
-                    </p>
-                  </div>
-                );
-              }
-              if (!hasNextPage && jobs.length > 0) {
-                return (
-                  <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-                    That's all!
-                  </div>
-                );
-              }
-              return null;
-            },
-          }}
-        />
+        {jobs.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📭</div>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">
+              {showCleared
+                ? 'No jobs found.'
+                : 'No jobs yet. Start a conversion to see jobs here.'}
+            </p>
+            {!showCleared && (
+              <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
+                (Toggle "Show cleared jobs" to see cleared jobs)
+              </p>
+            )}
+          </div>
+        ) : (
+          <Virtuoso
+            data={jobs}
+            endReached={loadMore}
+            itemContent={(index, job) => (
+              <div className="mb-6 mx-6">
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  onRetry={handleRetry}
+                  onCancel={handleCancel}
+                />
+              </div>
+            )}
+            components={{
+              Footer: () => {
+                if (isFetchingNextPage) {
+                  return (
+                    <div className="text-center py-8">
+                      <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        Loading more jobs...
+                      </p>
+                    </div>
+                  );
+                }
+                if (!hasNextPage && jobs.length > 0) {
+                  return (
+                    <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                      That's all!
+                    </div>
+                  );
+                }
+                return null;
+              },
+            }}
+          />
+        )}
       </div>
     </div>
   );

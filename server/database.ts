@@ -149,6 +149,11 @@ const MIGRATIONS = [
   `
     DELETE FROM file_selections;
   `,
+  // Migration 10: Add cleared flag for hiding completed/failed jobs from UI
+  `
+    ALTER TABLE jobs ADD COLUMN cleared INTEGER DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_jobs_cleared ON jobs(cleared);
+  `,
 ];
 
 /**

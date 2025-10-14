@@ -461,6 +461,14 @@ export class JobProcessor extends EventEmitter {
             failedJobs.length,
           );
           this.lastCompletionNotificationSent = true;
+
+          // Auto-clear all successful jobs when queue completes
+          const clearedCount = JobService.clearSuccessfulJobs();
+          if (clearedCount > 0) {
+            console.log(
+              `[JobProcessor] Auto-cleared ${clearedCount} successful job(s)`,
+            );
+          }
         } catch (error) {
           console.error(
             '[JobProcessor] Failed to send completion notification:',

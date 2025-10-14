@@ -25,6 +25,7 @@ export async function jobsHandler(
       const cursorParam = url.searchParams.get('cursor');
       const limitParam = url.searchParams.get('limit');
       const statusParam = url.searchParams.get('status');
+      const includeClearedParam = url.searchParams.get('includeCleared');
 
       // If status filter is provided, return jobs by status (non-paginated)
       if (statusParam) {
@@ -36,6 +37,7 @@ export async function jobsHandler(
       }
 
       const limit = limitParam ? parseInt(limitParam, 10) : 20;
+      const includeCleared = includeClearedParam === 'true';
 
       let cursorId: number | undefined;
       let cursorCreatedAt: string | undefined;
@@ -53,7 +55,12 @@ export async function jobsHandler(
         }
       }
 
-      const result = JobService.getPaginated(limit, cursorId, cursorCreatedAt);
+      const result = JobService.getPaginated(
+        limit,
+        cursorId,
+        cursorCreatedAt,
+        includeCleared,
+      );
       const statusCounts = JobService.getStatusCounts();
       const failedNotRetriedCount = JobService.getFailedNotRetriedCount();
 
@@ -91,6 +98,26 @@ export async function jobsHandler(
       const body = await req.json();
       const { action } = body;
 
+      if (action === 'clear-finished') {
+        // Clear all finished jobs (completed, failed, cancelled)
+        const clearedCount = JobService.clearAllFinishedJobs();
+
+        // Broadcast updated status counts
+        WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Cleared ${clearedCount} finished job(s)`,
+            count: clearedCount,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          },
+        );
+      }
+
       if (action === 'retry-all-failed') {
         // Get all failed jobs that haven't been retried yet
         const failedJobs = JobService.getByStatus('failed').filter(
@@ -116,8 +143,8 @@ export async function jobsHandler(
         let configKey: string | null = null;
 
         for (const job of failedJobs) {
-          // Mark the original job as retried
-          JobService.update(job.id, { retried: 1 });
+          // Mark the original job as retried and cleared
+          JobService.update(job.id, { retried: 1, cleared: 1 });
 
           // Broadcast updated job to WebSocket clients
           const updatedOriginalJob = JobService.getById(job.id);
@@ -169,7 +196,8 @@ export async function jobsHandler(
 
       return new Response(
         JSON.stringify({
-          error: 'Invalid action. Use action: "retry-all-failed"',
+          error:
+            'Invalid action. Use action: "retry-all-failed" or "clear-finished"',
         }),
         {
           status: 400,
@@ -463,8 +491,8 @@ export async function jobByIdHandler(
         );
       }
 
-      // Mark the original job as retried
-      JobService.update(jobId, { retried: 1 });
+      // Mark the original job as retried and cleared
+      JobService.update(jobId, { retried: 1, cleared: 1 });
 
       // Broadcast updated job to WebSocket clients
       const updatedOriginalJob = JobService.getById(jobId);

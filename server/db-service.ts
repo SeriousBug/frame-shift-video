@@ -101,21 +101,24 @@ export const JobService = {
    * Get jobs with cursor-based pagination
    * @param limit Number of jobs to return
    * @param cursor Optional cursor for pagination (encoded job id and created_at)
+   * @param includeCleared Whether to include cleared jobs (default: false)
    * @returns Jobs and optional next cursor
    */
   getPaginated(
     limit: number = 20,
     cursorId?: number,
     cursorCreatedAt?: string,
+    includeCleared: boolean = false,
   ): { jobs: Job[]; nextCursor?: string; hasMore: boolean } {
     let jobs: Job[];
+    const clearedFilter = includeCleared ? '' : 'AND cleared = 0';
 
     if (cursorId !== undefined && cursorCreatedAt !== undefined) {
       // Fetch jobs after the cursor
       // We use created_at and id for stable sorting
       jobs = query<Job>(
         `SELECT * FROM jobs
-         WHERE (created_at, id) < (?, ?)
+         WHERE (created_at, id) < (?, ?) ${clearedFilter}
          ORDER BY created_at DESC, id DESC
          LIMIT ?`,
         [cursorCreatedAt, cursorId, limit + 1],
@@ -124,6 +127,7 @@ export const JobService = {
       // First page
       jobs = query<Job>(
         `SELECT * FROM jobs
+         WHERE 1=1 ${clearedFilter}
          ORDER BY created_at DESC, id DESC
          LIMIT ?`,
         [limit + 1],
@@ -244,6 +248,10 @@ export const JobService = {
       updates.push('config_key = ?');
       params.push(input.config_key);
     }
+    if (input.cleared !== undefined) {
+      updates.push('cleared = ?');
+      params.push(input.cleared);
+    }
 
     if (updates.length === 0) return;
 
@@ -313,6 +321,31 @@ export const JobService = {
       `UPDATE jobs
        SET status = 'pending', progress = 0, updated_at = CURRENT_TIMESTAMP
        WHERE status = 'processing'`,
+    );
+    return result.changes;
+  },
+
+  /**
+   * Clear all successful jobs (mark as cleared = 1)
+   */
+  clearSuccessfulJobs(): number {
+    const result = execute(
+      `UPDATE jobs
+       SET cleared = 1, updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'completed' AND cleared = 0`,
+    );
+    return result.changes;
+  },
+
+  /**
+   * Clear all jobs that are not pending or processing
+   * (i.e., completed, failed, cancelled jobs)
+   */
+  clearAllFinishedJobs(): number {
+    const result = execute(
+      `UPDATE jobs
+       SET cleared = 1, updated_at = CURRENT_TIMESTAMP
+       WHERE status NOT IN ('pending', 'processing') AND cleared = 0`,
     );
     return result.changes;
   },

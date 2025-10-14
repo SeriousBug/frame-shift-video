@@ -52,6 +52,7 @@ export async function fetchJobs(): Promise<{ jobs: Job[] }> {
 export async function fetchJobsPaginated(
   cursor?: string,
   limit: number = 20,
+  includeCleared: boolean = false,
 ): Promise<{
   jobs: Job[];
   nextCursor?: string;
@@ -64,6 +65,9 @@ export async function fetchJobsPaginated(
     params.append('cursor', cursor);
   }
   params.append('limit', limit.toString());
+  if (includeCleared) {
+    params.append('includeCleared', 'true');
+  }
 
   const response = await fetch(`${API_BASE}/jobs?${params.toString()}`);
 
@@ -193,6 +197,26 @@ export async function markAllFailedAsRetried(): Promise<{
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to mark all failed jobs as retried');
+  }
+
+  return response.json();
+}
+
+/**
+ * Clear all finished jobs (completed, failed, cancelled)
+ */
+export async function clearFinishedJobs(): Promise<{ count: number }> {
+  const response = await fetch(`${API_BASE}/jobs`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'clear-finished' }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to clear finished jobs');
   }
 
   return response.json();

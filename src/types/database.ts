@@ -24,6 +24,7 @@ export interface Job {
   total_frames?: number;
   retried?: number; // SQLite boolean: 0 = false, 1 = true
   config_key?: string; // Key to file_selections table for configuration
+  cleared?: number; // SQLite boolean: 0 = false, 1 = true - whether job is hidden from UI
 }
 
 export interface CreateJobInput {
@@ -47,6 +48,7 @@ export interface UpdateJobInput {
   total_frames?: number;
   retried?: number;
   config_key?: string;
+  cleared?: number;
 }
 
 export interface FileSelection {

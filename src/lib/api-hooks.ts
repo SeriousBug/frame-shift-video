@@ -18,6 +18,7 @@ import {
   cancelJob,
   cancelAllJobs,
   markAllFailedAsRetried,
+  clearFinishedJobs,
   saveFileSelections,
   loadFileSelections,
   getPickerState,
@@ -60,10 +61,14 @@ export function useJobs() {
 /**
  * Hook to fetch jobs with infinite scroll pagination
  */
-export function useJobsInfinite(limit: number = 20) {
+export function useJobsInfinite(
+  limit: number = 20,
+  includeCleared: boolean = false,
+) {
   return useInfiniteQuery({
-    queryKey: ['jobs', 'infinite', limit],
-    queryFn: ({ pageParam }) => fetchJobsPaginated(pageParam, limit),
+    queryKey: ['jobs', 'infinite', limit, includeCleared],
+    queryFn: ({ pageParam }) =>
+      fetchJobsPaginated(pageParam, limit, includeCleared),
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? lastPage.nextCursor : undefined,
     initialPageParam: undefined as string | undefined,
@@ -155,6 +160,21 @@ export function useMarkAllFailedAsRetried() {
 
   return useMutation({
     mutationFn: () => markAllFailedAsRetried(),
+    onSuccess: () => {
+      // Invalidate and refetch jobs
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
+    },
+  });
+}
+
+/**
+ * Hook to clear all finished jobs
+ */
+export function useClearFinishedJobs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => clearFinishedJobs(),
     onSuccess: () => {
       // Invalidate and refetch jobs
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
