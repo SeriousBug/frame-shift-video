@@ -3,6 +3,7 @@ import { usePickerState, usePickerAction } from '@/lib/api-hooks';
 import { FilePickerItem } from '@/types/files';
 import { useEffect, useState } from 'react';
 import { SearchHelpModal } from '@/components/search-help-modal';
+import { Menu } from '@ark-ui/react/menu';
 
 export const Route = createFileRoute('/convert/')({
   component: ConvertPage,
@@ -20,6 +21,7 @@ function ConvertPage() {
   const [isSearchHelpOpen, setIsSearchHelpOpen] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
   const [videosOnly, setVideosOnly] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
 
   // Fetch picker state from server
   const { data: pickerState, isLoading, error } = usePickerState(urlKey);
@@ -113,6 +115,16 @@ function ConvertPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery, advancedMode, videosOnly]); // Run when any of these change
+
+  // Update showHidden setting immediately
+  useEffect(() => {
+    if (pickerAction.isPending || !pickerState) return;
+
+    pickerAction.mutate({
+      action: { type: 'update-show-hidden', showHidden },
+      key: pickerState.key,
+    });
+  }, [showHidden]); // Run when showHidden changes
 
   const handleToggleFolder = async (folderPath: string) => {
     console.log('[CLIENT] handleToggleFolder called', {
@@ -323,42 +335,122 @@ function ConvertPage() {
           {/* Search bar */}
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-600">
             <div className="flex gap-2 items-center">
-              {/* Toggle buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setAdvancedMode(!advancedMode);
-                    if (!advancedMode) {
-                      // Turning on advanced mode, disable videos only
-                      setVideosOnly(false);
-                    }
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    advancedMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                  title="Advanced Mode: Use exact pattern matching"
-                >
-                  Advanced Mode
-                </button>
-                <button
-                  onClick={() => setVideosOnly(!videosOnly)}
-                  disabled={advancedMode}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    videosOnly && !advancedMode
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  } ${advancedMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={
-                    advancedMode
-                      ? 'Videos Only is disabled in Advanced Mode'
-                      : 'Videos Only: Filter to video files only'
-                  }
-                >
-                  Videos Only
-                </button>
-              </div>
+              {/* Filter Menu */}
+              <Menu.Root>
+                <Menu.Trigger className="px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2">
+                  Filters
+                  <span className="text-xs">▼</span>
+                </Menu.Trigger>
+                <Menu.Positioner>
+                  <Menu.Content className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-1 min-w-[200px] z-50">
+                    <Menu.CheckboxItem
+                      value="advanced-mode"
+                      checked={advancedMode}
+                      onCheckedChange={() => {
+                        setAdvancedMode(!advancedMode);
+                        if (!advancedMode) {
+                          setVideosOnly(false);
+                        }
+                      }}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                    >
+                      <div
+                        className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
+                          advancedMode
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      >
+                        {advancedMode && (
+                          <svg
+                            className="w-3 h-3 text-white"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                          >
+                            <path
+                              d="M10 3L4.5 8.5L2 6"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                        Advanced Mode
+                      </Menu.ItemText>
+                    </Menu.CheckboxItem>
+                    <Menu.CheckboxItem
+                      value="videos-only"
+                      checked={videosOnly && !advancedMode}
+                      disabled={advancedMode}
+                      onCheckedChange={() => setVideosOnly(!videosOnly)}
+                      className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 ${advancedMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div
+                        className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
+                          videosOnly && !advancedMode
+                            ? 'bg-green-600 border-green-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      >
+                        {videosOnly && !advancedMode && (
+                          <svg
+                            className="w-3 h-3 text-white"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                          >
+                            <path
+                              d="M10 3L4.5 8.5L2 6"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                        Videos Only
+                      </Menu.ItemText>
+                    </Menu.CheckboxItem>
+                    <Menu.CheckboxItem
+                      value="show-hidden"
+                      checked={showHidden}
+                      onCheckedChange={() => setShowHidden(!showHidden)}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                    >
+                      <div
+                        className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
+                          showHidden
+                            ? 'bg-purple-600 border-purple-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      >
+                        {showHidden && (
+                          <svg
+                            className="w-3 h-3 text-white"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                          >
+                            <path
+                              d="M10 3L4.5 8.5L2 6"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                        Show Hidden Files
+                      </Menu.ItemText>
+                    </Menu.CheckboxItem>
+                  </Menu.Content>
+                </Menu.Positioner>
+              </Menu.Root>
 
               {/* Search input */}
               <input

@@ -10,6 +10,7 @@ async function scanDirectory(
   basePath: string,
   relativePath: string,
   searchPattern: string,
+  showHidden: boolean = false,
 ): Promise<FileSystemItem[]> {
   const results: FileSystemItem[] = [];
   const fullPath = join(basePath, relativePath);
@@ -18,8 +19,8 @@ async function scanDirectory(
     const items = await readdir(fullPath);
 
     for (const item of items) {
-      // Skip hidden files and system files
-      if (item.startsWith('.')) continue;
+      // Skip hidden files and system files unless showHidden is true
+      if (!showHidden && item.startsWith('.')) continue;
 
       try {
         const itemFullPath = join(fullPath, item);
@@ -32,6 +33,7 @@ async function scanDirectory(
             basePath,
             itemRelativePath,
             searchPattern,
+            showHidden,
           );
 
           // Only include directory if it has matching descendants
@@ -116,6 +118,7 @@ export async function filesHandler(
   const url = new URL(req.url);
   const requestedPath = url.searchParams.get('path');
   const searchQuery = url.searchParams.get('search');
+  const showHidden = url.searchParams.get('showHidden') === 'true';
 
   // Determine the base directory
   const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
@@ -135,7 +138,12 @@ export async function filesHandler(
 
     if (searchQuery) {
       // Search mode: recursively scan from base directory
-      const allItems = await scanDirectory(baseDir, '', searchQuery);
+      const allItems = await scanDirectory(
+        baseDir,
+        '',
+        searchQuery,
+        showHidden,
+      );
       fileSystemItems = buildTreeStructure(allItems);
     } else {
       // Normal mode: list current directory only
@@ -146,8 +154,8 @@ export async function filesHandler(
           const itemPath = join(resolvedPath, item);
           const stats = await stat(itemPath);
 
-          // Skip hidden files and system files
-          if (item.startsWith('.')) continue;
+          // Skip hidden files and system files unless showHidden is true
+          if (!showHidden && item.startsWith('.')) continue;
 
           fileSystemItems.push({
             name: item,

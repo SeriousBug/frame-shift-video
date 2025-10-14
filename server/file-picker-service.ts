@@ -17,6 +17,7 @@ interface PickerStateData {
   currentPath: string;
   config?: any;
   searchQuery?: string;
+  showHidden?: boolean;
 }
 
 export class FilePickerStateService {
@@ -29,6 +30,7 @@ export class FilePickerStateService {
       expanded: Array.from(state.expandedFolders).sort(),
       path: state.currentPath,
       search: state.searchQuery || '',
+      showHidden: state.showHidden || false,
     };
     const json = JSON.stringify(data);
     return crypto.createHash('sha256').update(json).digest('base64url');
@@ -39,26 +41,21 @@ export class FilePickerStateService {
    */
   static save(state: PickerStateData): string {
     const key = this.generateKey(state);
-    const selectedFilesJson = JSON.stringify(Array.from(state.selectedFiles));
-    const expandedFoldersJson = JSON.stringify(
-      Array.from(state.expandedFolders),
-    );
-    const configJson = state.config ? JSON.stringify(state.config) : null;
-    const searchQuery = state.searchQuery || null;
+    // NOTE: The 'data' JSON field contains all picker state settings.
+    // Add new properties here rather than creating new columns.
+    const dataJson = JSON.stringify({
+      selectedFiles: Array.from(state.selectedFiles),
+      expandedFolders: Array.from(state.expandedFolders),
+      currentPath: state.currentPath,
+      config: state.config,
+      searchQuery: state.searchQuery,
+      showHidden: state.showHidden || false,
+    });
 
-    execute(
-      `INSERT OR REPLACE INTO file_selections
-       (id, data, expanded_folders, current_path, config, search_query)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        key,
-        selectedFilesJson,
-        expandedFoldersJson,
-        state.currentPath,
-        configJson,
-        searchQuery,
-      ],
-    );
+    execute(`INSERT OR REPLACE INTO file_selections (id, data) VALUES (?, ?)`, [
+      key,
+      dataJson,
+    ]);
 
     return key;
   }
@@ -68,26 +65,22 @@ export class FilePickerStateService {
    */
   static get(key: string): PickerStateData | null {
     const result = queryOne<FileSelection>(
-      'SELECT data, expanded_folders, current_path, config, search_query FROM file_selections WHERE id = ?',
+      'SELECT data FROM file_selections WHERE id = ?',
       [key],
     );
 
     if (!result) return null;
 
     try {
-      const selectedFiles = new Set<string>(JSON.parse(result.data));
-      const expandedFolders = new Set<string>(
-        result.expanded_folders ? JSON.parse(result.expanded_folders) : [],
-      );
-      const config = result.config ? JSON.parse(result.config) : undefined;
-      const searchQuery = result.search_query || undefined;
+      const data = JSON.parse(result.data);
 
       return {
-        selectedFiles,
-        expandedFolders,
-        currentPath: result.current_path || '',
-        config,
-        searchQuery,
+        selectedFiles: new Set<string>(data.selectedFiles || []),
+        expandedFolders: new Set<string>(data.expandedFolders || []),
+        currentPath: data.currentPath || '',
+        config: data.config,
+        searchQuery: data.searchQuery,
+        showHidden: data.showHidden || false,
       };
     } catch (error) {
       console.error('Failed to parse picker state:', error);
@@ -117,7 +110,10 @@ export class FilePickerStateService {
   /**
    * List files and directories in a path
    */
-  private static listDirectory(dirPath: string): FilePickerItem[] {
+  private static listDirectory(
+    dirPath: string,
+    showHidden: boolean = false,
+  ): FilePickerItem[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
 
@@ -131,6 +127,7 @@ export class FilePickerStateService {
     try {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
       return entries
+        .filter((entry) => showHidden || !entry.name.startsWith('.'))
         .map((entry) => {
           const itemPath = path.join(dirPath, entry.name);
           const fullItemPath = path.join(fullPath, entry.name);
@@ -234,6 +231,7 @@ export class FilePickerStateService {
   private static scanDirectoryWithSearch(
     dirPath: string,
     searchPattern: string,
+    showHidden: boolean = false,
   ): FilePickerItem[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
@@ -243,8 +241,8 @@ export class FilePickerStateService {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
 
       for (const entry of entries) {
-        // Skip hidden files
-        if (entry.name.startsWith('.')) continue;
+        // Skip hidden files unless showHidden is true
+        if (!showHidden && entry.name.startsWith('.')) continue;
 
         const itemPath = path.join(dirPath, entry.name);
         const fullItemPath = path.join(fullPath, entry.name);
@@ -257,6 +255,7 @@ export class FilePickerStateService {
             const subResults = this.scanDirectoryWithSearch(
               itemPath,
               searchPattern,
+              showHidden,
             );
 
             // Only include directory if it has matching descendants
@@ -309,7 +308,11 @@ export class FilePickerStateService {
 
     // If search query is present, use search mode
     if (state.searchQuery && state.searchQuery.trim()) {
-      const searchResults = this.scanDirectoryWithSearch('', state.searchQuery);
+      const searchResults = this.scanDirectoryWithSearch(
+        '',
+        state.searchQuery,
+        state.showHidden || false,
+      );
 
       // Calculate depths and selection states
       const itemsByPath = new Map<string, FilePickerItem>();
@@ -339,7 +342,8 @@ export class FilePickerStateService {
     }
 
     // Normal mode: Get items in current directory
-    const currentItems = this.listDirectory(state.currentPath);
+    const showHidden = state.showHidden || false;
+    const currentItems = this.listDirectory(state.currentPath, showHidden);
 
     // Build flat list with expanded folders
     const processItems = (
@@ -368,7 +372,7 @@ export class FilePickerStateService {
 
         // If directory is expanded, load and process its children
         if (item.isDirectory && item.isExpanded) {
-          const children = this.listDirectory(item.path);
+          const children = this.listDirectory(item.path, showHidden);
           processItems(children, depth + 1, item.path);
         }
       }
@@ -518,6 +522,19 @@ export class FilePickerStateService {
     return {
       ...state,
       searchQuery: searchQuery.trim() || undefined,
+    };
+  }
+
+  /**
+   * Update showHidden setting in state
+   */
+  static updateShowHidden(
+    state: PickerStateData,
+    showHidden: boolean,
+  ): PickerStateData {
+    return {
+      ...state,
+      showHidden,
     };
   }
 }

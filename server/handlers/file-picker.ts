@@ -10,7 +10,8 @@ export type PickerAction =
   | { type: 'toggle-folder-selection'; path: string }
   | { type: 'navigate'; path: string }
   | { type: 'update-config'; config: any }
-  | { type: 'search'; query: string };
+  | { type: 'search'; query: string }
+  | { type: 'update-show-hidden'; showHidden: boolean };
 
 /**
  * GET /api/picker-state?key=xxx
@@ -209,6 +210,24 @@ export async function pickerActionHandler(
           );
         }
         newState = FilePickerStateService.updateSearch(state, action.query);
+        break;
+
+      case 'update-show-hidden':
+        if (action.showHidden === undefined) {
+          return new Response(
+            JSON.stringify({
+              error: 'showHidden is required for update-show-hidden',
+            }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            },
+          );
+        }
+        newState = FilePickerStateService.updateShowHidden(
+          state,
+          action.showHidden,
+        );
         break;
 
       default:

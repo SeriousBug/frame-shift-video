@@ -9,7 +9,7 @@ const HELP_CONTENT = `# File Search Pattern Guide
 
 This search uses **micromatch** pattern matching to filter files.
 
-## Search Modes
+## Filter Options
 
 **Simple Mode (Default)**
 - Your search is automatically wrapped with wildcards: \`charlie\` becomes \`*charlie*\`
@@ -21,6 +21,11 @@ This search uses **micromatch** pattern matching to filter files.
 - **Videos Only** is automatically disabled
 - Full control over your search pattern
 - Use this when you need precise pattern matching
+
+**Show Hidden Files**
+- By default, hidden files (starting with \`.\`) are not shown
+- Enable this option to include hidden files and folders in search results
+- Works in both Simple and Advanced modes
 
 ## Basic Patterns
 
@@ -68,6 +73,7 @@ This search uses **micromatch** pattern matching to filter files.
 - Empty folders (with no matches) are hidden
 - Use **Advanced Mode** when you need exact pattern control
 - **Videos Only** filters common video formats automatically in Simple Mode
+- Enable **Show Hidden Files** to see files starting with a dot (e.g., .env, .gitignore)
 `;
 
 export function SearchHelpModal({ isOpen, onClose }: SearchHelpModalProps) {

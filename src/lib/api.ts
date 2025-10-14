@@ -247,7 +247,8 @@ export type PickerAction =
   | { type: 'toggle-folder-selection'; path: string }
   | { type: 'navigate'; path: string }
   | { type: 'update-config'; config: any }
-  | { type: 'search'; query: string };
+  | { type: 'search'; query: string }
+  | { type: 'update-show-hidden'; showHidden: boolean };
 
 /**
  * Get picker state by key (creates new empty state if no key provided)

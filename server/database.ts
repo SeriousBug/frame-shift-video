@@ -145,6 +145,10 @@ const MIGRATIONS = [
   `
     ALTER TABLE file_selections ADD COLUMN search_query TEXT;
   `,
+  // Migration 9: Consolidate all picker state into data JSON field and clear old states
+  `
+    DELETE FROM file_selections;
+  `,
 ];
 
 /**
