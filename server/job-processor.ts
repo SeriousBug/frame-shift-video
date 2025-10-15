@@ -16,6 +16,7 @@ import { DEFAULT_CONVERSION_OPTIONS } from '../src/types/conversion';
 import { JobService } from './db-service';
 import { notificationService } from './notification-service';
 import { WSBroadcaster } from './websocket';
+import { finalizeTempFile, cleanupTempFile } from './temp-file-service';
 
 /**
  * Job processor configuration
@@ -199,6 +200,8 @@ export class JobProcessor extends EventEmitter {
    * Cancel a specific job
    * If the job is currently processing, kill the FFmpeg process
    * If the job is pending, just update the status
+   * Note: Temp file cleanup is handled by the processJob method when
+   * the FFmpeg process returns after being killed
    */
   cancelJob(jobId: number): void {
     const job = JobService.getById(jobId);
@@ -218,6 +221,8 @@ export class JobProcessor extends EventEmitter {
       if (updatedJob) {
         this.emit('job:fail', updatedJob, 'Job cancelled by user');
       }
+      // Note: Temp file cleanup happens automatically when the killed
+      // FFmpeg process returns in the processJob method
     }
     // If it's a pending job, just update the status
     else if (job.status === 'pending') {
@@ -330,18 +335,44 @@ export class JobProcessor extends EventEmitter {
         if (result.finalProgress && result.finalProgress.frame > maxFrames) {
           maxFrames = result.finalProgress.frame;
         }
-        JobService.complete(job.id, result.outputPath);
-        JobService.update(job.id, {
-          end_time: endTime,
-          total_frames: maxFrames > 0 ? maxFrames : undefined,
-        });
-        console.log(`[JobProcessor] Job ${job.id} completed successfully`);
-        const completedJob = JobService.getById(job.id);
-        if (completedJob) {
-          this.emit('job:complete', completedJob);
+
+        // Rename temporary file to final output path
+        try {
+          await finalizeTempFile(result.tempPath, result.finalPath);
+          JobService.complete(job.id, result.finalPath);
+          JobService.update(job.id, {
+            end_time: endTime,
+            total_frames: maxFrames > 0 ? maxFrames : undefined,
+          });
+          console.log(`[JobProcessor] Job ${job.id} completed successfully`);
+          const completedJob = JobService.getById(job.id);
+          if (completedJob) {
+            this.emit('job:complete', completedJob);
+          }
+        } catch (error) {
+          // Failed to rename - treat as failure and clean up temp file
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          await cleanupTempFile(result.tempPath);
+          JobService.setError(
+            job.id,
+            `Failed to finalize output file: ${errorMessage}`,
+          );
+          JobService.update(job.id, { end_time: endTime });
+          console.error(
+            `[JobProcessor] Job ${job.id} failed to finalize:`,
+            errorMessage,
+          );
+          const failedJob = JobService.getById(job.id);
+          if (failedJob) {
+            this.emit('job:fail', failedJob, errorMessage);
+          }
         }
       } else {
         const endTime = new Date().toISOString();
+        // Clean up temporary file
+        await cleanupTempFile(result.tempPath);
+
         // Check if job was already cancelled (don't override cancelled status)
         const currentJob = JobService.getById(job.id);
         if (currentJob && currentJob.status !== 'cancelled') {

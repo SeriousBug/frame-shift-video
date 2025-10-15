@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import fs from 'fs/promises';
 import { FFmpegCommand, validateFFmpegCommand } from './ffmpeg-command';
+import { getTempFilePath } from '../../server/temp-file-service';
 
 /**
  * Progress information parsed from FFmpeg output
@@ -35,8 +36,12 @@ export interface FFmpegProgress {
  */
 export interface FFmpegSuccess {
   success: true;
-  /** Output file path */
+  /** Output file path (temporary file path that needs to be renamed) */
   outputPath: string;
+  /** Temporary file path (same as outputPath for now, kept for clarity) */
+  tempPath: string;
+  /** Final target path where file should be renamed to */
+  finalPath: string;
   /** Final progress information */
   finalProgress?: FFmpegProgress;
   /** Full stderr output for debugging */
@@ -52,6 +57,8 @@ export interface FFmpegFailure {
   success: false;
   /** Error message */
   error: string;
+  /** Temporary file path that needs to be cleaned up (if it exists) */
+  tempPath: string;
   /** Full stderr output for debugging */
   stderr: string;
   /** Exit code (null if process failed to start) */
@@ -108,25 +115,29 @@ export class FFmpegExecutor extends EventEmitter {
 
     // Input and output paths should already be absolute
     const inputPath = command.inputPath;
-    const outputPath = command.outputPath;
+    const finalOutputPath = command.outputPath;
+
+    // Generate temporary file path for the conversion
+    const tempOutputPath = getTempFilePath(finalOutputPath);
 
     // Get input video duration for accurate progress calculation
     this.inputDuration = await this.getVideoDuration(inputPath);
 
     // Ensure output directory exists
-    const outputDir = path.dirname(outputPath);
+    const outputDir = path.dirname(finalOutputPath);
     await fs.mkdir(outputDir, { recursive: true });
 
     // Prepare command arguments
     const args = [...command.args.slice(1)]; // Remove 'ffmpeg' from start
 
     // Replace relative paths with absolute paths in args
+    // Use tempOutputPath instead of final outputPath
     const processedArgs = args.map((arg, index) => {
       if (args[index - 1] === '-i') {
         return inputPath;
       }
       if (index === args.length - 1 && !arg.startsWith('-')) {
-        return outputPath;
+        return tempOutputPath; // Write to temp file
       }
       return arg;
     });
@@ -164,6 +175,7 @@ export class FFmpegExecutor extends EventEmitter {
             resolve({
               success: false,
               error: 'FFmpeg execution timed out',
+              tempPath: tempOutputPath,
               stderr,
               exitCode: null,
               finalProgress: lastProgress,
@@ -198,6 +210,7 @@ export class FFmpegExecutor extends EventEmitter {
           resolve({
             success: false,
             error: 'FFmpeg execution was cancelled',
+            tempPath: tempOutputPath,
             stderr,
             exitCode: code,
             finalProgress: lastProgress,
@@ -208,7 +221,9 @@ export class FFmpegExecutor extends EventEmitter {
         if (code === 0) {
           resolve({
             success: true,
-            outputPath: this.options.dryRun ? 'dry-run-output' : outputPath,
+            outputPath: this.options.dryRun ? 'dry-run-output' : tempOutputPath,
+            tempPath: tempOutputPath,
+            finalPath: finalOutputPath,
             finalProgress: lastProgress,
             stderr,
             exitCode: code,
@@ -217,6 +232,7 @@ export class FFmpegExecutor extends EventEmitter {
           resolve({
             success: false,
             error: `FFmpeg failed with exit code ${code}`,
+            tempPath: tempOutputPath,
             stderr,
             exitCode: code,
             finalProgress: lastProgress,
@@ -233,6 +249,7 @@ export class FFmpegExecutor extends EventEmitter {
         resolve({
           success: false,
           error: `Failed to start FFmpeg: ${error.message}`,
+          tempPath: tempOutputPath,
           stderr,
           exitCode: null,
           finalProgress: lastProgress,

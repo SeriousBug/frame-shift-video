@@ -7,6 +7,7 @@ import { JobProcessor } from './job-processor';
 import { Job } from '../src/types/database';
 import { serveStatic } from './static';
 import { FileSelectionService, JobService } from './db-service';
+import { cleanupAllTempFiles } from './temp-file-service';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -21,6 +22,19 @@ if (process.env.FFMPEG_THREADS) {
     process.exit(1);
   }
   console.log(`[Config] FFmpeg will use ${threads} threads for encoding`);
+}
+
+// Clean up temporary files from previous runs BEFORE starting job processor
+// This must happen before the processor starts to avoid deleting files from new conversions
+const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
+try {
+  const deletedCount = await cleanupAllTempFiles(baseDir);
+  console.log(
+    `[Startup] Temporary file cleanup complete: ${deletedCount} file(s) deleted`,
+  );
+} catch (error) {
+  console.error('[Startup] Failed to clean up temporary files:', error);
+  // Don't exit - continue with startup even if cleanup fails
 }
 
 // Initialize job processor
