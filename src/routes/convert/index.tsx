@@ -223,7 +223,10 @@ function ConvertPage() {
 
   // Get the icon for a file/folder
   const getItemIcon = (item: FilePickerItem): string => {
-    if (item.isDirectory) return '📁';
+    if (item.isDirectory) {
+      if (item.allConverted) return '✅'; // Checkbox icon for fully converted folders
+      return '📁';
+    }
     if (isConvertedFile(item.name)) return '🎬'; // Converted files get a movie camera icon
     if (item.hasConvertedVersion) return '✅'; // Server computed this
     return '📄';

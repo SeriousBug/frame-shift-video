@@ -19,6 +19,7 @@ export interface FilePickerItem {
   isExpanded?: boolean; // Only for directories
   selectionState: 'none' | 'partial' | 'full'; // Selection state
   hasConvertedVersion?: boolean; // True if this file has a _converted version
+  allConverted?: boolean; // True if all video files in this folder are converted
 }
 
 /**

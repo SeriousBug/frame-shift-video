@@ -438,7 +438,6 @@ export class FilePickerStateService {
    * Build the flat list of items to render based on current state
    */
   static buildItemsList(state: PickerStateData): FilePickerItem[] {
-    const items: FilePickerItem[] = [];
     const basePath = this.getBasePath();
     const hideConverted =
       state.hideConverted !== undefined ? state.hideConverted : true;
@@ -454,6 +453,7 @@ export class FilePickerStateService {
       );
 
       // Calculate depths and selection states
+      const items: FilePickerItem[] = [];
       const itemsByPath = new Map<string, FilePickerItem>();
       searchResults.forEach((item) => itemsByPath.set(item.path, item));
 
@@ -503,56 +503,74 @@ export class FilePickerStateService {
       videosOnly,
     );
 
-    // Build flat list with expanded folders
-    const processItems = (
-      itemList: FilePickerItem[],
-      depth: number,
-      parentPath: string,
-    ) => {
-      for (const item of itemList) {
-        // Set depth
-        item.depth = depth;
+    // Build tree and compute allConverted recursively, then flatten for UI
+    function buildTree(dirPath: string, depth: number): FilePickerItem[] {
+      const showHidden = state.showHidden || false;
+      const videosOnly = state.videosOnly || false;
+      const entries = FilePickerStateService.listDirectory(
+        dirPath,
+        showHidden,
+        videosOnly,
+      );
+      const result: FilePickerItem[] = [];
 
-        // Calculate selection state
-        if (item.isDirectory) {
-          item.selectionState = this.calculateFolderSelectionState(
-            item.path,
-            state.selectedFiles,
+      for (const entry of entries) {
+        entry.depth = depth;
+        if (entry.isDirectory) {
+          entry.isExpanded = state.expandedFolders.has(entry.path);
+          entry.selectionState =
+            FilePickerStateService.calculateFolderSelectionState(
+              entry.path,
+              state.selectedFiles,
+            );
+          // Recursively build children
+          const children = buildTree(entry.path, depth + 1);
+          // Compute allConverted for children first
+          const childFolders = children.filter((child) => child.isDirectory);
+          const childFoldersConverted = childFolders.every(
+            (child) => child.allConverted,
           );
-          item.isExpanded = state.expandedFolders.has(item.path);
+          // Check all video files in this folder
+          const videoFiles = entries.filter(
+            (child) =>
+              !child.isDirectory &&
+              FilePickerStateService.isVideoFile(child.name) &&
+              !FilePickerStateService.isConvertedFile(child.name),
+          );
+          const allFilesConverted =
+            videoFiles.length === 0 ||
+            videoFiles.every((file) =>
+              FilePickerStateService.hasConvertedVersion(file, entries),
+            );
+          entry.allConverted = allFilesConverted && childFoldersConverted;
+          result.push(entry);
+          // If expanded, flatten children into result
+          if (entry.isExpanded) {
+            result.push(...children);
+          }
         } else {
-          item.selectionState = state.selectedFiles.has(item.path)
+          entry.selectionState = state.selectedFiles.has(entry.path)
             ? 'full'
             : 'none';
-        }
-
-        items.push(item);
-
-        // If directory is expanded, load and process its children
-        if (item.isDirectory && item.isExpanded) {
-          const children = this.listDirectory(
-            item.path,
-            showHidden,
-            videosOnly,
-          );
-          processItems(children, depth + 1, item.path);
+          // Mark file as converted if it has a converted version in this folder
+          entry.hasConvertedVersion =
+            FilePickerStateService.hasConvertedVersion(entry, entries);
+          result.push(entry);
         }
       }
-    };
-
-    processItems(currentItems, 0, state.currentPath);
-
-    // Now that all items are collected, compute hasConvertedVersion for each file
-    for (const item of items) {
-      if (!item.isDirectory) {
-        item.hasConvertedVersion = this.hasConvertedVersion(item, items);
-      }
+      return result;
     }
 
+    const items = buildTree(state.currentPath, 0);
+
+    // Now that all items are collected, compute hasConvertedVersion for each file
+    // (tree-based items already have allConverted set)
     // Filter out converted files if hideConverted is enabled
     const filteredItems = hideConverted
       ? items.filter(
-          (item) => item.isDirectory || !this.isConvertedFile(item.name),
+          (item) =>
+            item.isDirectory ||
+            !FilePickerStateService.isConvertedFile(item.name),
         )
       : items;
 
