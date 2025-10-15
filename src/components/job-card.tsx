@@ -178,7 +178,7 @@ export function JobCard({ job, onRetry, onCancel }: JobCardProps) {
         {(job.status === 'processing' || job.status === 'completed') && (
           <div>
             <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              Progress:
+              {job.status === 'completed' ? 'Conversion Stats:' : 'Progress:'}
             </label>
             {job.progress < 0 ? (
               <div className="mt-1 text-sm text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
