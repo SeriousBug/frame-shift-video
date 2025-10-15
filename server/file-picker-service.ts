@@ -438,7 +438,6 @@ export class FilePickerStateService {
    * Build the flat list of items to render based on current state
    */
   static buildItemsList(state: PickerStateData): FilePickerItem[] {
-    const basePath = this.getBasePath();
     const hideConverted =
       state.hideConverted !== undefined ? state.hideConverted : true;
     const videosOnly = state.videosOnly || false;
@@ -494,14 +493,6 @@ export class FilePickerStateService {
 
       return filteredItems;
     }
-
-    // Normal mode: Get items in current directory
-    const showHidden = state.showHidden || false;
-    const currentItems = this.listDirectory(
-      state.currentPath,
-      showHidden,
-      videosOnly,
-    );
 
     // Build tree and compute allConverted recursively, then flatten for UI
     function buildTree(dirPath: string, depth: number): FilePickerItem[] {
