@@ -380,9 +380,6 @@ export async function jobsHandler(
       WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
 
       // Get or initialize job processor
-      const uploadsDir = process.env.UPLOAD_DIR || './uploads';
-      const outputsDir = process.env.OUTPUT_DIR || './outputs';
-
       let processor: JobProcessor;
       try {
         processor = JobProcessor.getInstance();
@@ -391,8 +388,6 @@ export async function jobsHandler(
         // If not initialized, initialize it now
         console.log('[Jobs API] Initializing new job processor');
         processor = JobProcessor.getInstance({
-          uploadsDir,
-          outputsDir,
           checkInterval: 60000, // Check every minute
         });
         await processor.start();

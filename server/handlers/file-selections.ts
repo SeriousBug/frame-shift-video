@@ -80,7 +80,30 @@ export async function fileSelectionByKeyHandler(
       );
     }
 
-    return new Response(JSON.stringify(result), {
+    // Extract selectedFiles from the picker state format
+    // Expected format: { files: { selectedFiles: [...], ... }, config?: {...} }
+    if (
+      !result.files ||
+      typeof result.files !== 'object' ||
+      !('selectedFiles' in result.files) ||
+      !Array.isArray((result.files as any).selectedFiles)
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid file selection format',
+          details: 'Expected picker state with selectedFiles array',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    const files = (result.files as any).selectedFiles;
+    const config = result.config || (result.files as any).config;
+
+    return new Response(JSON.stringify({ files, config }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });

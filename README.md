@@ -37,14 +37,11 @@ services:
     volumes:
       # Mount your media directories
       - /path/to/your/videos:/videos
-      - /path/to/your/outputs:/outputs
       # Persistent database
       - ./data:/app/data
     environment:
       # Server configuration
       - PORT=3001
-      - UPLOAD_DIR=/app/uploads
-      - OUTPUT_DIR=/outputs
 
       # File browser home directory (optional)
       # Defaults to / if not specified
@@ -74,17 +71,14 @@ Access the web interface at `http://localhost:3001`
 
 ### Environment Variables
 
-| Variable              | Required | Default          | Description                               |
-| --------------------- | -------- | ---------------- | ----------------------------------------- |
-| `PORT`                | No       | `3001`           | Port the server listens on                |
-| `DIST_DIR`            | No       | `./dist`         | Directory containing built frontend files |
-| `UPLOAD_DIR`          | No       | `./uploads`      | Directory for uploaded files              |
-| `OUTPUT_DIR`          | No       | `./outputs`      | Directory for converted video outputs     |
-| `FRAME_SHIFT_HOME`    | No       | `/` (or `$HOME`) | Starting directory for file browser       |
-| `FFMPEG_THREADS`      | No       | -                | Number of threads FFmpeg should use       |
-| `DISCORD_WEBHOOK_URL` | No       | -                | Discord webhook URL for notifications     |
-| `PUSHOVER_API_TOKEN`  | No       | -                | Pushover application token                |
-| `PUSHOVER_USER_KEY`   | No       | -                | Pushover user key                         |
+| Variable              | Required | Default          | Description                           |
+| --------------------- | -------- | ---------------- | ------------------------------------- |
+| `PORT`                | No       | `3001`           | Port the server listens on            |
+| `FRAME_SHIFT_HOME`    | No       | `/` (or `$HOME`) | Starting directory for file browser   |
+| `FFMPEG_THREADS`      | No       | -                | Number of threads FFmpeg should use   |
+| `DISCORD_WEBHOOK_URL` | No       | -                | Discord webhook URL for notifications |
+| `PUSHOVER_API_TOKEN`  | No       | -                | Pushover application token            |
+| `PUSHOVER_USER_KEY`   | No       | -                | Pushover user key                     |
 
 ## Development
 

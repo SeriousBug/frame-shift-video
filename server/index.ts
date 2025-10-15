@@ -24,15 +24,10 @@ if (process.env.FFMPEG_THREADS) {
 }
 
 // Initialize job processor
-const uploadsDir = process.env.UPLOAD_DIR || './uploads';
-const outputsDir = process.env.OUTPUT_DIR || './outputs';
-
 let processor: JobProcessor;
 
 try {
   processor = JobProcessor.getInstance({
-    uploadsDir,
-    outputsDir,
     checkInterval: 60000, // Check every minute
   });
 

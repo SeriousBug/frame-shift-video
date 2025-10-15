@@ -69,10 +69,16 @@ export type FFmpegResult = FFmpegSuccess | FFmpegFailure;
  * FFmpeg execution options
  */
 export interface FFmpegExecutionOptions {
-  /** Base directory for uploads */
-  uploadsDir: string;
-  /** Base directory for outputs */
-  outputsDir: string;
+  /**
+   * Base directory for uploads (legacy, not used)
+   * @deprecated No longer used - file paths are absolute
+   */
+  uploadsDir?: string;
+  /**
+   * Base directory for outputs (legacy, not used)
+   * @deprecated No longer used - output paths are absolute
+   */
+  outputsDir?: string;
   /** Enable dry run mode (for testing) */
   dryRun?: boolean;
   /** Timeout in milliseconds (optional, no timeout if not specified) */
@@ -100,16 +106,12 @@ export class FFmpegExecutor extends EventEmitter {
     // Validate command for security
     validateFFmpegCommand(command);
 
-    // Get input video duration for accurate progress calculation
-    const inputPath = path.isAbsolute(command.inputPath)
-      ? command.inputPath
-      : path.join(this.options.uploadsDir, command.inputPath);
-    this.inputDuration = await this.getVideoDuration(inputPath);
+    // Input and output paths should already be absolute
+    const inputPath = command.inputPath;
+    const outputPath = command.outputPath;
 
-    // Resolve output path (handle both absolute and relative paths)
-    const outputPath = path.isAbsolute(command.outputPath)
-      ? command.outputPath
-      : path.join(this.options.outputsDir, command.outputPath);
+    // Get input video duration for accurate progress calculation
+    this.inputDuration = await this.getVideoDuration(inputPath);
 
     // Ensure output directory exists
     const outputDir = path.dirname(outputPath);

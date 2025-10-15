@@ -20,10 +20,16 @@ import { notificationService } from './notification-service';
  * Job processor configuration
  */
 export interface JobProcessorConfig {
-  /** Directory where uploaded files are stored */
-  uploadsDir: string;
-  /** Directory where output files will be saved */
-  outputsDir: string;
+  /**
+   * Directory where uploaded files are stored (legacy, not used)
+   * @deprecated No longer used - file paths are absolute
+   */
+  uploadsDir?: string;
+  /**
+   * Directory where output files will be saved (legacy, not used)
+   * @deprecated No longer used - output paths are absolute
+   */
+  outputsDir?: string;
   /** Interval in milliseconds to check for new jobs (default: 60000 = 1 minute) */
   checkInterval?: number;
 }
