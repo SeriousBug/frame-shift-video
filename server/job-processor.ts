@@ -455,14 +455,23 @@ export class JobProcessor extends EventEmitter {
       const completedJobs = JobService.getByStatus('completed');
       const failedJobs = JobService.getByStatus('failed');
 
+      // Count only uncleared jobs for notification (exclude cleared jobs since user already acknowledged them)
+      // We do this BEFORE auto-clearing to get accurate counts for this batch
+      const unclearedCompletedCount = completedJobs.filter(
+        (job) => !job.cleared,
+      ).length;
+      const unclearedFailedCount = failedJobs.filter(
+        (job) => !job.cleared,
+      ).length;
+
       // Only process if there were actually jobs processed
       if (completedJobs.length > 0 || failedJobs.length > 0) {
-        // Send notification if enabled
+        // Send notification if enabled (using uncleared counts only)
         if (notificationService.isEnabled()) {
           try {
             await notificationService.notifyAllJobsComplete(
-              completedJobs.length,
-              failedJobs.length,
+              unclearedCompletedCount,
+              unclearedFailedCount,
             );
           } catch (error) {
             console.error(
