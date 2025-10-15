@@ -124,6 +124,9 @@ export class FilePickerStateService {
       expandedFolders: new Set(),
       currentPath: '',
       config: undefined,
+      videosOnly: true,
+      hideConverted: true,
+      showHidden: false,
     };
   }
 
@@ -572,6 +575,9 @@ export class FilePickerStateService {
       items,
       selectedCount,
       searchQuery: state.searchQuery,
+      videosOnly: state.videosOnly,
+      showHidden: state.showHidden,
+      hideConverted: state.hideConverted,
     };
   }
 

@@ -30,4 +30,7 @@ export interface FilePickerState {
   items: FilePickerItem[]; // Flat list of items to render
   selectedCount: number; // Total number of selected files
   searchQuery?: string; // Current search query if any
+  videosOnly?: boolean; // Filter to show only video files
+  showHidden?: boolean; // Show hidden files
+  hideConverted?: boolean; // Hide converted videos
 }

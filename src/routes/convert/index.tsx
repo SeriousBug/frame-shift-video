@@ -24,9 +24,11 @@ function ConvertPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchHelpOpen, setIsSearchHelpOpen] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
-  const [videosOnly, setVideosOnly] = useState(true);
-  const [showHidden, setShowHidden] = useState(false);
-  const [hideConverted, setHideConverted] = useState(true);
+  const [videosOnly, setVideosOnly] = useState<boolean | undefined>(undefined);
+  const [showHidden, setShowHidden] = useState<boolean | undefined>(undefined);
+  const [hideConverted, setHideConverted] = useState<boolean | undefined>(
+    undefined,
+  );
 
   // Fetch picker state from server
   const { data: pickerState, isLoading, error } = usePickerState(urlKey);
@@ -60,9 +62,12 @@ function ConvertPage() {
     }
   }, [pickerState, urlKey, navigate]);
 
-  // Sync search query and videosOnly from picker state when loaded
+  // Sync all filter states from picker state when loaded
   useEffect(() => {
-    if (pickerState?.searchQuery !== undefined) {
+    if (!pickerState) return;
+
+    // Sync search query
+    if (pickerState.searchQuery !== undefined) {
       const query = pickerState.searchQuery;
 
       // Check if advanced mode based on wildcards
@@ -76,6 +81,17 @@ function ConvertPage() {
         setSearchQuery('');
         setAdvancedMode(false);
       }
+    }
+
+    // Sync filter states from server
+    if (pickerState.videosOnly !== undefined) {
+      setVideosOnly(pickerState.videosOnly);
+    }
+    if (pickerState.showHidden !== undefined) {
+      setShowHidden(pickerState.showHidden);
+    }
+    if (pickerState.hideConverted !== undefined) {
+      setHideConverted(pickerState.hideConverted);
     }
   }, [pickerState?.key]); // Only run when state key changes (new state loaded)
 
@@ -107,7 +123,8 @@ function ConvertPage() {
 
   // Update showHidden setting immediately
   useEffect(() => {
-    if (pickerAction.isPending || !pickerState) return;
+    if (pickerAction.isPending || !pickerState || showHidden === undefined)
+      return;
 
     pickerAction.mutate({
       action: { type: 'update-show-hidden', showHidden },
@@ -117,7 +134,8 @@ function ConvertPage() {
 
   // Update hideConverted setting immediately
   useEffect(() => {
-    if (pickerAction.isPending || !pickerState) return;
+    if (pickerAction.isPending || !pickerState || hideConverted === undefined)
+      return;
 
     pickerAction.mutate({
       action: { type: 'update-hide-converted', hideConverted },
@@ -127,7 +145,8 @@ function ConvertPage() {
 
   // Update videosOnly setting immediately
   useEffect(() => {
-    if (pickerAction.isPending || !pickerState) return;
+    if (pickerAction.isPending || !pickerState || videosOnly === undefined)
+      return;
 
     pickerAction.mutate({
       action: { type: 'update-videos-only', videosOnly },
