@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   ConversionOptions,
   DEFAULT_CONVERSION_OPTIONS,
@@ -8,7 +8,8 @@ import {
   AudioCodec,
   BitrateMode,
 } from '@/types/conversion';
-import { Virtuoso } from 'react-virtuoso';
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import Highlighter from 'react-highlight-words';
 
 interface ConversionConfigProps {
   /** Selected files with their relative paths */
@@ -21,6 +22,19 @@ interface ConversionConfigProps {
   onStartConversion: (options: ConversionOptions) => void;
   /** Callback when files are removed */
   onFilesChange?: (files: string[]) => void;
+  /** Search query from in-page search */
+  searchQuery?: string;
+  /** Current match index from in-page search */
+  searchCurrentMatch?: number;
+  /** Callback to report total matches found */
+  onSearchMatchesFound?: (count: number) => void;
+}
+
+interface SearchMatch {
+  type: 'file' | 'option';
+  index?: number; // For files
+  ref?: React.RefObject<HTMLDivElement | null>; // For options
+  text: string;
 }
 
 export function ConversionConfig({
@@ -29,6 +43,9 @@ export function ConversionConfig({
   onOptionsChange,
   onStartConversion,
   onFilesChange,
+  searchQuery = '',
+  searchCurrentMatch = 0,
+  onSearchMatchesFound,
 }: ConversionConfigProps) {
   const [options, setOptions] = useState<ConversionOptions>({
     ...DEFAULT_CONVERSION_OPTIONS,
@@ -38,6 +55,14 @@ export function ConversionConfig({
   const [showCustomOptions, setShowCustomOptions] = useState(false);
   const [removedHistory, setRemovedHistory] = useState<string[]>([]);
   const MAX_UNDO_HISTORY = 10;
+
+  // Refs for search
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const videoCodecRef = useRef<HTMLDivElement>(null);
+  const outputFormatRef = useRef<HTMLDivElement>(null);
+  const encodingPresetRef = useRef<HTMLDivElement>(null);
+  const bitrateModeRef = useRef<HTMLDivElement>(null);
+  const audioCodecRef = useRef<HTMLDivElement>(null);
 
   // Load initial config from API or localStorage
   useEffect(() => {
@@ -104,14 +129,6 @@ export function ConversionConfig({
     }));
   };
 
-  const handleStartConversion = () => {
-    console.log(
-      'Starting conversion with options:',
-      JSON.stringify(options, null, 2),
-    );
-    onStartConversion(options);
-  };
-
   const handleRemoveFile = (fileToRemove: string) => {
     const newFiles = selectedFiles.filter((f) => f !== fileToRemove);
     // Add to history, keeping only the last MAX_UNDO_HISTORY items
@@ -166,12 +183,102 @@ export function ConversionConfig({
 
   const qualityRange = getQualityRange(options.basic.videoCodec);
 
+  // Search functionality: find all matches
+  const searchMatches = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+
+    const matches: SearchMatch[] = [];
+    const query = searchQuery.toLowerCase();
+
+    // Search in files
+    selectedFiles.forEach((file, index) => {
+      if (file.toLowerCase().includes(query)) {
+        matches.push({ type: 'file', index, text: file });
+      }
+    });
+
+    // Search in options
+    const optionTexts = [
+      { text: 'video codec h.265 hevc h.264 avc av1 copy', ref: videoCodecRef },
+      { text: 'output format mp4 mkv webm avi mov', ref: outputFormatRef },
+      {
+        text: 'encoding preset ultrafast superfast veryfast faster fast medium slow slower veryslow',
+        ref: encodingPresetRef,
+      },
+      { text: 'bitrate mode crf cbr vbr quality', ref: bitrateModeRef },
+      { text: 'audio codec opus aac fdk ac3 flac copy', ref: audioCodecRef },
+    ];
+
+    optionTexts.forEach(({ text, ref }) => {
+      if (text.toLowerCase().includes(query)) {
+        matches.push({ type: 'option', ref, text });
+      }
+    });
+
+    return matches;
+  }, [searchQuery, selectedFiles]);
+
+  // Report total matches
+  useEffect(() => {
+    onSearchMatchesFound?.(searchMatches.length);
+  }, [searchMatches.length, onSearchMatchesFound]);
+
+  // Scroll to current match
+  useEffect(() => {
+    if (searchQuery.trim() && searchMatches.length > 0) {
+      const currentMatch = searchMatches[searchCurrentMatch];
+      if (currentMatch) {
+        if (currentMatch.type === 'file' && currentMatch.index !== undefined) {
+          // Scroll to file in virtuoso
+          virtuosoRef.current?.scrollToIndex({
+            index: currentMatch.index,
+            align: 'center',
+            behavior: 'smooth',
+          });
+        } else if (currentMatch.type === 'option' && currentMatch.ref) {
+          // Scroll to option
+          currentMatch.ref.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+      }
+    }
+  }, [searchCurrentMatch, searchQuery, searchMatches]);
+
   const renderFileItem = useCallback(
     (index: number) => {
       const file = selectedFiles[index];
+      const isActiveMatch =
+        searchQuery.trim() &&
+        searchMatches.length > 0 &&
+        searchMatches[searchCurrentMatch]?.type === 'file' &&
+        searchMatches[searchCurrentMatch]?.index === index;
+
       return (
-        <div className="flex items-center justify-between text-sm font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1 group mb-1">
-          <span className="truncate flex-1 mr-2">{file}</span>
+        <div
+          className={`flex items-center justify-between text-sm font-mono text-gray-600 dark:text-gray-400 rounded px-2 py-1 group mb-1 ${
+            isActiveMatch
+              ? 'bg-blue-100 dark:bg-blue-800/40 ring-2 ring-blue-500 dark:ring-blue-400'
+              : 'bg-white dark:bg-gray-800'
+          }`}
+        >
+          <span className="truncate flex-1 mr-2">
+            {searchQuery.trim() ? (
+              <Highlighter
+                searchWords={[searchQuery]}
+                autoEscape={true}
+                textToHighlight={file}
+                highlightClassName={
+                  isActiveMatch
+                    ? 'bg-blue-400 dark:bg-blue-600 text-white'
+                    : 'bg-yellow-200 dark:bg-yellow-700'
+                }
+              />
+            ) : (
+              file
+            )}
+          </span>
           <button
             onClick={() => handleRemoveFile(file)}
             className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -183,7 +290,13 @@ export function ConversionConfig({
         </div>
       );
     },
-    [selectedFiles, handleRemoveFile],
+    [
+      selectedFiles,
+      handleRemoveFile,
+      searchQuery,
+      searchMatches,
+      searchCurrentMatch,
+    ],
   );
 
   return (
@@ -212,6 +325,7 @@ export function ConversionConfig({
         </div>
         <div style={{ height: '128px' }}>
           <Virtuoso
+            ref={virtuosoRef}
             style={{ height: '100%' }}
             totalCount={selectedFiles.length}
             itemContent={renderFileItem}
@@ -227,7 +341,7 @@ export function ConversionConfig({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Video Codec */}
-          <div>
+          <div ref={videoCodecRef}>
             <label
               htmlFor="video-codec"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -252,7 +366,7 @@ export function ConversionConfig({
           </div>
 
           {/* Output Format */}
-          <div>
+          <div ref={outputFormatRef}>
             <label
               htmlFor="output-format"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -304,7 +418,7 @@ export function ConversionConfig({
 
           <div className="space-y-6">
             {/* Encoding Preset */}
-            <div>
+            <div ref={encodingPresetRef}>
               <label
                 htmlFor="encoding-preset"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -338,7 +452,7 @@ export function ConversionConfig({
 
             {/* Bitrate Control */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div ref={bitrateModeRef}>
                 <label
                   htmlFor="bitrate-mode"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -414,7 +528,7 @@ export function ConversionConfig({
             </div>
 
             {/* Audio Settings */}
-            <div>
+            <div ref={audioCodecRef}>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Audio Settings
               </label>

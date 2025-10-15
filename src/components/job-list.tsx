@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Job } from '@/types/database';
 import { JobCard } from './job-card';
 import { ConfirmationModal } from './confirmation-modal';
@@ -13,12 +13,14 @@ import {
   useSaveFileSelections,
 } from '@/lib/api-hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Virtuoso } from 'react-virtuoso';
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useNavigate } from '@tanstack/react-router';
 import { Menu } from '@ark-ui/react/menu';
+import { useInPageSearch } from '@/hooks/use-in-page-search';
+import { InPageSearch } from './in-page-search';
 
 export function JobList() {
-  const [showCleared, setShowCleared] = React.useState(false);
+  const [showCleared, setShowCleared] = useState(false);
   const {
     data,
     isLoading: loading,
@@ -35,8 +37,12 @@ export function JobList() {
   const cancelAllJobsMutation = useCancelAllJobs();
   const markAllFailedAsRetriedMutation = useMarkAllFailedAsRetried();
   const clearFinishedJobsMutation = useClearFinishedJobs();
-  const saveFileSelectionsMutation = useSaveFileSelections();
   const queryClient = useQueryClient();
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // In-page search
+  const search = useInPageSearch({ inputRef: searchInputRef });
 
   // Get processing jobs
   const processingJobs = useMemo(() => {
@@ -57,9 +63,52 @@ export function JobList() {
   }, [data, processingJobIds]);
 
   // Combine processing jobs at the top with other jobs
-  const jobs = useMemo(() => {
+  const allJobs = useMemo(() => {
     return [...processingJobs, ...otherJobs];
   }, [processingJobs, otherJobs]);
+
+  // Find matched job indices based on search query
+  const matchedIndices = useMemo(() => {
+    if (!search.query.trim()) {
+      return [];
+    }
+
+    const matched: number[] = [];
+    allJobs.forEach((job, index) => {
+      if (job.name.toLowerCase().includes(search.query.toLowerCase())) {
+        matched.push(index);
+      }
+    });
+
+    return matched;
+  }, [allJobs, search.query]);
+
+  // Don't filter jobs, just show all jobs with highlighting
+  const jobs = allJobs;
+
+  // Update total matches when filtered jobs change
+  useEffect(() => {
+    search.setTotalMatches(matchedIndices.length);
+  }, [matchedIndices.length, search]);
+
+  // Scroll to the current match when it changes
+  useEffect(() => {
+    if (
+      search.isOpen &&
+      search.query.trim() &&
+      matchedIndices.length > 0 &&
+      virtuosoRef.current
+    ) {
+      const actualIndex = matchedIndices[search.currentMatchIndex];
+      if (actualIndex !== undefined) {
+        virtuosoRef.current.scrollToIndex({
+          index: actualIndex,
+          align: 'center',
+          behavior: 'smooth',
+        });
+      }
+    }
+  }, [search.currentMatchIndex, search.isOpen, search.query, matchedIndices]);
 
   // Extract status counts from the first page (they're the same for all pages)
   const statusCounts = useMemo(() => {
@@ -87,12 +136,10 @@ export function JobList() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const [wsConnected, setWsConnected] = React.useState(false);
-  const [showCancelAllModal, setShowCancelAllModal] = React.useState(false);
-  const [showRetryAllFailedModal, setShowRetryAllFailedModal] =
-    React.useState(false);
-  const [showClearFinishedModal, setShowClearFinishedModal] =
-    React.useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [showCancelAllModal, setShowCancelAllModal] = useState(false);
+  const [showRetryAllFailedModal, setShowRetryAllFailedModal] = useState(false);
+  const [showClearFinishedModal, setShowClearFinishedModal] = useState(false);
 
   const connectWebSocket = useCallback(() => {
     // Clear any existing reconnect timeout
@@ -429,6 +476,21 @@ export function JobList() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* In-page search */}
+      {search.isOpen && (
+        <InPageSearch
+          query={search.query}
+          onQueryChange={search.setQuery}
+          currentMatchIndex={search.currentMatchIndex}
+          totalMatches={search.totalMatches}
+          onNext={search.nextMatch}
+          onPrevious={search.previousMatch}
+          onClose={search.closeSearch}
+          showNativeWarning={search.showNativeWarning}
+          inputRef={searchInputRef}
+        />
+      )}
+
       <ConfirmationModal
         isOpen={showCancelAllModal}
         onClose={() => setShowCancelAllModal(false)}
@@ -682,18 +744,29 @@ export function JobList() {
           </div>
         ) : (
           <Virtuoso
+            ref={virtuosoRef}
             data={jobs}
             endReached={loadMore}
-            itemContent={(index, job) => (
-              <div className="mb-6 mx-6">
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  onRetry={handleRetry}
-                  onCancel={handleCancel}
-                />
-              </div>
-            )}
+            itemContent={(index, job) => {
+              const isActiveMatch =
+                search.isOpen &&
+                search.query.trim() &&
+                matchedIndices.length > 0 &&
+                index === matchedIndices[search.currentMatchIndex];
+
+              return (
+                <div className="mb-6 mx-6">
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    onRetry={handleRetry}
+                    onCancel={handleCancel}
+                    searchWords={search.query.trim() ? [search.query] : []}
+                    isActiveMatch={isActiveMatch}
+                  />
+                </div>
+              );
+            }}
             components={{
               Footer: () => {
                 if (isFetchingNextPage) {

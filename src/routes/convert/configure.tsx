@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ConversionConfig } from '@/components/conversion-config';
 import { ConversionOptions } from '@/types/conversion';
 import {
@@ -8,6 +8,8 @@ import {
   useSaveFileSelections,
   useClearPickerState,
 } from '@/lib/api-hooks';
+import { useInPageSearch } from '@/hooks/use-in-page-search';
+import { InPageSearch } from '@/components/in-page-search';
 
 export const Route = createFileRoute('/convert/configure')({
   component: ConfigurePage,
@@ -23,6 +25,10 @@ function ConfigurePage() {
   const { key: urlKey } = Route.useSearch();
   const [currentOptions, setCurrentOptions] =
     useState<ConversionOptions | null>(null);
+
+  // In-page search
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const search = useInPageSearch({ inputRef: searchInputRef });
 
   // Load file selections using TanStack Query
   const {
@@ -93,6 +99,21 @@ function ConfigurePage() {
 
   return (
     <div className="container mx-auto px-6 py-12">
+      {/* In-page search */}
+      {search.isOpen && (
+        <InPageSearch
+          query={search.query}
+          onQueryChange={search.setQuery}
+          currentMatchIndex={search.currentMatchIndex}
+          totalMatches={search.totalMatches}
+          onNext={search.nextMatch}
+          onPrevious={search.previousMatch}
+          onClose={search.closeSearch}
+          showNativeWarning={search.showNativeWarning}
+          inputRef={searchInputRef}
+        />
+      )}
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl mx-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-600">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -113,6 +134,9 @@ function ConfigurePage() {
             onOptionsChange={setCurrentOptions}
             onStartConversion={handleStartConversion}
             onFilesChange={handleFilesChange}
+            searchQuery={search.query}
+            searchCurrentMatch={search.currentMatchIndex}
+            onSearchMatchesFound={search.setTotalMatches}
           />
         </div>
 

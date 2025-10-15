@@ -5,9 +5,12 @@ import {
   useClearPickerState,
 } from '@/lib/api-hooks';
 import { FilePickerItem } from '@/types/files';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { SearchHelpModal } from '@/components/search-help-modal';
 import { Menu } from '@ark-ui/react/menu';
+import { useInPageSearch } from '@/hooks/use-in-page-search';
+import { InPageSearch } from '@/components/in-page-search';
+import Highlighter from 'react-highlight-words';
 
 export const Route = createFileRoute('/convert/')({
   component: ConvertPage,
@@ -29,6 +32,11 @@ function ConvertPage() {
   const [hideConverted, setHideConverted] = useState<boolean | undefined>(
     undefined,
   );
+
+  // In-page search
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const inPageSearch = useInPageSearch({ inputRef: searchInputRef });
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Fetch picker state from server
   const { data: pickerState, isLoading, error } = usePickerState(urlKey);
@@ -215,6 +223,52 @@ function ConvertPage() {
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
+  // Find matched items based on in-page search query
+  const matchedItems = useMemo(() => {
+    if (!inPageSearch.query.trim() || !pickerState?.items) {
+      return [];
+    }
+
+    const matched: FilePickerItem[] = [];
+    pickerState.items.forEach((item) => {
+      if (item.name.toLowerCase().includes(inPageSearch.query.toLowerCase())) {
+        matched.push(item);
+      }
+    });
+
+    return matched;
+  }, [inPageSearch.query, pickerState?.items]);
+
+  // Update total matches when matched items change
+  useEffect(() => {
+    inPageSearch.setTotalMatches(matchedItems.length);
+  }, [matchedItems.length, inPageSearch]);
+
+  // Scroll to the current match when it changes
+  useEffect(() => {
+    if (
+      inPageSearch.isOpen &&
+      inPageSearch.query.trim() &&
+      matchedItems.length > 0
+    ) {
+      const currentMatch = matchedItems[inPageSearch.currentMatchIndex];
+      if (currentMatch) {
+        const element = itemRefs.current.get(currentMatch.path);
+        if (element) {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+      }
+    }
+  }, [
+    inPageSearch.currentMatchIndex,
+    inPageSearch.isOpen,
+    inPageSearch.query,
+    matchedItems,
+  ]);
+
   // Check if a file is a converted video (ends with _converted.ext)
   const isConvertedFile = (name: string): boolean => {
     const nameWithoutExt = name.replace(/\.[^.]+$/, '');
@@ -240,14 +294,32 @@ function ConvertPage() {
     const isExpanding = pickerAction.isPending;
     const isSearching = transformSearchQuery(searchQuery).trim() !== '';
 
+    // Check if this item is the active match in the in-page search
+    const isActiveMatch =
+      inPageSearch.isOpen &&
+      inPageSearch.query.trim() &&
+      matchedItems.length > 0 &&
+      matchedItems[inPageSearch.currentMatchIndex]?.path === item.path;
+
     const extraFileIndent = item.isDirectory ? 0 : 20;
     const paddingLeft = item.depth * 20 + 12 + extraFileIndent;
 
     return (
       <div key={item.path}>
         <div
+          ref={(el) => {
+            if (el) {
+              itemRefs.current.set(item.path, el);
+            } else {
+              itemRefs.current.delete(item.path);
+            }
+          }}
           className={`flex items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 ${
-            isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+            isSelected
+              ? 'bg-blue-50 dark:bg-blue-900/20'
+              : isActiveMatch
+                ? 'bg-blue-100 dark:bg-blue-800/40 ring-2 ring-blue-500 dark:ring-blue-400'
+                : ''
           }`}
           style={{ paddingLeft: `${paddingLeft}px` }}
         >
@@ -331,7 +403,20 @@ function ConvertPage() {
               <span className="mr-2">{getItemIcon(item)}</span>
 
               <span className="text-gray-900 dark:text-white truncate">
-                {item.name}
+                {inPageSearch.query.trim() ? (
+                  <Highlighter
+                    searchWords={[inPageSearch.query]}
+                    autoEscape={true}
+                    textToHighlight={item.name}
+                    highlightClassName={
+                      isActiveMatch
+                        ? 'bg-blue-400 dark:bg-blue-600 text-white'
+                        : 'bg-yellow-200 dark:bg-yellow-700'
+                    }
+                  />
+                ) : (
+                  item.name
+                )}
               </span>
 
               {!item.isDirectory && item.size !== undefined && (
@@ -348,6 +433,21 @@ function ConvertPage() {
 
   return (
     <div className="container mx-auto px-6 py-12">
+      {/* In-page search */}
+      {inPageSearch.isOpen && (
+        <InPageSearch
+          query={inPageSearch.query}
+          onQueryChange={inPageSearch.setQuery}
+          currentMatchIndex={inPageSearch.currentMatchIndex}
+          totalMatches={inPageSearch.totalMatches}
+          onNext={inPageSearch.nextMatch}
+          onPrevious={inPageSearch.previousMatch}
+          onClose={inPageSearch.closeSearch}
+          showNativeWarning={inPageSearch.showNativeWarning}
+          inputRef={searchInputRef}
+        />
+      )}
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl mx-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-600">
           <div className="flex items-center gap-3">

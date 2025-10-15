@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Job } from '@/types/database';
 import { formatDistanceToNow } from 'date-fns';
+import Highlighter from 'react-highlight-words';
 
 interface JobCardProps {
   job: Job & { currentFrame?: number; currentFps?: number };
   onRetry?: (jobId: number) => void;
   onCancel?: (jobId: number) => void;
+  /** Search words to highlight */
+  searchWords?: string[];
+  /** Whether this job is the active search match */
+  isActiveMatch?: boolean;
 }
 
 const statusColors = {
@@ -26,7 +31,13 @@ const statusIcons = {
   cancelled: '⏹️',
 };
 
-export function JobCard({ job, onRetry, onCancel }: JobCardProps) {
+export function JobCard({
+  job,
+  onRetry,
+  onCancel,
+  searchWords = [],
+  isActiveMatch = false,
+}: JobCardProps) {
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -122,11 +133,30 @@ export function JobCard({ job, onRetry, onCancel }: JobCardProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-600 p-6 shadow-lg hover:shadow-xl transition-all duration-200">
+    <div
+      className={`bg-white dark:bg-gray-800 rounded-xl border-2 ${
+        isActiveMatch
+          ? 'border-blue-500 dark:border-blue-400 ring-4 ring-blue-200 dark:ring-blue-900/50'
+          : 'border-gray-200 dark:border-gray-600'
+      } p-6 shadow-lg hover:shadow-xl transition-all duration-200`}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            {job.name}
+            {searchWords.length > 0 ? (
+              <Highlighter
+                searchWords={searchWords}
+                autoEscape={true}
+                textToHighlight={job.name}
+                highlightClassName={
+                  isActiveMatch
+                    ? 'bg-blue-400 dark:bg-blue-600 text-white'
+                    : 'bg-yellow-200 dark:bg-yellow-700'
+                }
+              />
+            ) : (
+              job.name
+            )}
           </h3>
           <div className="flex items-center gap-2 mb-2">
             <span
