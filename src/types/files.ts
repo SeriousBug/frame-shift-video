@@ -18,6 +18,7 @@ export interface FilePickerItem {
   depth: number; // Nesting depth for rendering
   isExpanded?: boolean; // Only for directories
   selectionState: 'none' | 'partial' | 'full'; // Selection state
+  hasConvertedVersion?: boolean; // True if this file has a _converted version
 }
 
 /**

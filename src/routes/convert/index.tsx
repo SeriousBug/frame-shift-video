@@ -22,6 +22,7 @@ function ConvertPage() {
   const [advancedMode, setAdvancedMode] = useState(false);
   const [videosOnly, setVideosOnly] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
+  const [hideConverted, setHideConverted] = useState(true);
 
   // Fetch picker state from server
   const { data: pickerState, isLoading, error } = usePickerState(urlKey);
@@ -126,6 +127,16 @@ function ConvertPage() {
     });
   }, [showHidden]); // Run when showHidden changes
 
+  // Update hideConverted setting immediately
+  useEffect(() => {
+    if (pickerAction.isPending || !pickerState) return;
+
+    pickerAction.mutate({
+      action: { type: 'update-hide-converted', hideConverted },
+      key: pickerState.key,
+    });
+  }, [hideConverted]); // Run when hideConverted changes
+
   const handleToggleFolder = async (folderPath: string) => {
     console.log('[CLIENT] handleToggleFolder called', {
       folderPath,
@@ -185,6 +196,20 @@ function ConvertPage() {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // Check if a file is a converted video (ends with _converted.ext)
+  const isConvertedFile = (name: string): boolean => {
+    const nameWithoutExt = name.replace(/\.[^.]+$/, '');
+    return nameWithoutExt.endsWith('_converted');
+  };
+
+  // Get the icon for a file/folder
+  const getItemIcon = (item: FilePickerItem): string => {
+    if (item.isDirectory) return '📁';
+    if (isConvertedFile(item.name)) return '🎬'; // Converted files get a movie camera icon
+    if (item.hasConvertedVersion) return '✅'; // Server computed this
+    return '📄';
   };
 
   const renderItem = (item: FilePickerItem) => {
@@ -283,7 +308,7 @@ function ConvertPage() {
                 }
               }}
             >
-              <span className="mr-2">{item.isDirectory ? '📁' : '📄'}</span>
+              <span className="mr-2">{getItemIcon(item)}</span>
 
               <span className="text-gray-900 dark:text-white truncate">
                 {item.name}
@@ -446,6 +471,39 @@ function ConvertPage() {
                       </div>
                       <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
                         Show Hidden Files
+                      </Menu.ItemText>
+                    </Menu.CheckboxItem>
+                    <Menu.CheckboxItem
+                      value="hide-converted"
+                      checked={hideConverted}
+                      onCheckedChange={() => setHideConverted(!hideConverted)}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                    >
+                      <div
+                        className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
+                          hideConverted
+                            ? 'bg-orange-600 border-orange-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      >
+                        {hideConverted && (
+                          <svg
+                            className="w-3 h-3 text-white"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                          >
+                            <path
+                              d="M10 3L4.5 8.5L2 6"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                        Hide Converted Videos
                       </Menu.ItemText>
                     </Menu.CheckboxItem>
                   </Menu.Content>

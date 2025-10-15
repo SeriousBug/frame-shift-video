@@ -18,6 +18,7 @@ interface PickerStateData {
   config?: any;
   searchQuery?: string;
   showHidden?: boolean;
+  hideConverted?: boolean;
 }
 
 export class FilePickerStateService {
@@ -31,6 +32,8 @@ export class FilePickerStateService {
       path: state.currentPath,
       search: state.searchQuery || '',
       showHidden: state.showHidden || false,
+      hideConverted:
+        state.hideConverted !== undefined ? state.hideConverted : true,
     };
     const json = JSON.stringify(data);
     return crypto.createHash('sha256').update(json).digest('base64url');
@@ -50,6 +53,8 @@ export class FilePickerStateService {
       config: state.config,
       searchQuery: state.searchQuery,
       showHidden: state.showHidden || false,
+      hideConverted:
+        state.hideConverted !== undefined ? state.hideConverted : true,
     });
 
     execute(`INSERT OR REPLACE INTO file_selections (id, data) VALUES (?, ?)`, [
@@ -81,6 +86,8 @@ export class FilePickerStateService {
         config: data.config,
         searchQuery: data.searchQuery,
         showHidden: data.showHidden || false,
+        hideConverted:
+          data.hideConverted !== undefined ? data.hideConverted : true,
       };
     } catch (error) {
       console.error('Failed to parse picker state:', error);
@@ -205,6 +212,52 @@ export class FilePickerStateService {
   }
 
   /**
+   * Recursively scan a folder to get all file paths, respecting filters
+   */
+  private static scanFolderForFilesWithFilters(
+    folderPath: string,
+    showHidden: boolean,
+    hideConverted: boolean,
+    allFilesForConversionCheck: string[] = [],
+  ): string[] {
+    const basePath = this.getBasePath();
+    const fullPath = path.join(basePath, folderPath);
+    const files: string[] = [];
+
+    try {
+      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        // Skip hidden files if showHidden is false
+        if (!showHidden && entry.name.startsWith('.')) continue;
+
+        const itemPath = path.join(folderPath, entry.name);
+
+        if (entry.isDirectory()) {
+          // Recursively get files from subdirectory
+          files.push(
+            ...this.scanFolderForFilesWithFilters(
+              itemPath,
+              showHidden,
+              hideConverted,
+              allFilesForConversionCheck,
+            ),
+          );
+        } else {
+          // Skip converted files if hideConverted is true
+          if (hideConverted && this.isConvertedFile(entry.name)) continue;
+
+          files.push(itemPath);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to scan folder ${folderPath}:`, error);
+    }
+
+    return files;
+  }
+
+  /**
    * Calculate selection state for a folder
    * Returns 'none', 'partial', or 'full'
    */
@@ -300,11 +353,51 @@ export class FilePickerStateService {
   }
 
   /**
+   * Check if a file is a converted video (ends with _converted.ext)
+   */
+  private static isConvertedFile(name: string): boolean {
+    const nameWithoutExt = name.replace(/\.[^.]+$/, '');
+    return nameWithoutExt.endsWith('_converted');
+  }
+
+  /**
+   * Check if a file has a converted version in the given items list
+   */
+  private static hasConvertedVersion(
+    item: FilePickerItem,
+    allItems: FilePickerItem[],
+  ): boolean {
+    if (item.isDirectory) return false;
+
+    const nameWithoutExt = item.name.replace(/\.[^.]+$/, '');
+    const itemDir = item.path.substring(0, item.path.lastIndexOf('/'));
+
+    // Check if any file with the pattern <name>_converted.<any-ext> exists in the same directory
+    return allItems.some((otherItem) => {
+      if (otherItem.isDirectory || otherItem.path === item.path) return false;
+
+      const otherNameWithoutExt = otherItem.name.replace(/\.[^.]+$/, '');
+      const otherDir = otherItem.path.substring(
+        0,
+        otherItem.path.lastIndexOf('/'),
+      );
+
+      // Check if it's in the same directory and has the _converted suffix
+      return (
+        otherDir === itemDir &&
+        otherNameWithoutExt === `${nameWithoutExt}_converted`
+      );
+    });
+  }
+
+  /**
    * Build the flat list of items to render based on current state
    */
   static buildItemsList(state: PickerStateData): FilePickerItem[] {
     const items: FilePickerItem[] = [];
     const basePath = this.getBasePath();
+    const hideConverted =
+      state.hideConverted !== undefined ? state.hideConverted : true;
 
     // If search query is present, use search mode
     if (state.searchQuery && state.searchQuery.trim()) {
@@ -335,10 +428,25 @@ export class FilePickerStateService {
             : 'none';
         }
 
+        // Check if file has converted version (before filtering)
+        if (!item.isDirectory) {
+          item.hasConvertedVersion = this.hasConvertedVersion(
+            item,
+            searchResults,
+          );
+        }
+
         items.push(item);
       }
 
-      return items;
+      // Filter out converted files if hideConverted is enabled
+      const filteredItems = hideConverted
+        ? items.filter(
+            (item) => item.isDirectory || !this.isConvertedFile(item.name),
+          )
+        : items;
+
+      return filteredItems;
     }
 
     // Normal mode: Get items in current directory
@@ -380,7 +488,21 @@ export class FilePickerStateService {
 
     processItems(currentItems, 0, state.currentPath);
 
-    return items;
+    // Now that all items are collected, compute hasConvertedVersion for each file
+    for (const item of items) {
+      if (!item.isDirectory) {
+        item.hasConvertedVersion = this.hasConvertedVersion(item, items);
+      }
+    }
+
+    // Filter out converted files if hideConverted is enabled
+    const filteredItems = hideConverted
+      ? items.filter(
+          (item) => item.isDirectory || !this.isConvertedFile(item.name),
+        )
+      : items;
+
+    return filteredItems;
   }
 
   /**
@@ -454,8 +576,19 @@ export class FilePickerStateService {
       expandedFolders.add(folderPath);
     }
 
-    // Get all files in the folder (always scan, even if nothing selected)
-    const allFiles = this.scanFolderForFiles(folderPath);
+    // Build items list with current filters to get the actual visible files
+    // This respects all filters: showHidden, hideConverted, search, etc.
+    const tempState = { ...state, expandedFolders };
+    const items = this.buildItemsList(tempState);
+
+    // Get all files in this folder from the filtered items list
+    const allFiles = items
+      .filter(
+        (item) =>
+          !item.isDirectory &&
+          (item.path === folderPath || item.path.startsWith(folderPath + '/')),
+      )
+      .map((item) => item.path);
 
     if (allFiles.length === 0) {
       // No files in folder, just return state with expanded folder
@@ -535,6 +668,19 @@ export class FilePickerStateService {
     return {
       ...state,
       showHidden,
+    };
+  }
+
+  /**
+   * Update hideConverted setting in state
+   */
+  static updateHideConverted(
+    state: PickerStateData,
+    hideConverted: boolean,
+  ): PickerStateData {
+    return {
+      ...state,
+      hideConverted,
     };
   }
 }

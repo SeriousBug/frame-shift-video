@@ -11,7 +11,8 @@ export type PickerAction =
   | { type: 'navigate'; path: string }
   | { type: 'update-config'; config: any }
   | { type: 'search'; query: string }
-  | { type: 'update-show-hidden'; showHidden: boolean };
+  | { type: 'update-show-hidden'; showHidden: boolean }
+  | { type: 'update-hide-converted'; hideConverted: boolean };
 
 /**
  * GET /api/picker-state?key=xxx
@@ -227,6 +228,24 @@ export async function pickerActionHandler(
         newState = FilePickerStateService.updateShowHidden(
           state,
           action.showHidden,
+        );
+        break;
+
+      case 'update-hide-converted':
+        if (action.hideConverted === undefined) {
+          return new Response(
+            JSON.stringify({
+              error: 'hideConverted is required for update-hide-converted',
+            }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            },
+          );
+        }
+        newState = FilePickerStateService.updateHideConverted(
+          state,
+          action.hideConverted,
         );
         break;
 
