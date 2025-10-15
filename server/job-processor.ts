@@ -15,6 +15,7 @@ import { FFmpegCommand } from '../src/lib/ffmpeg-command';
 import { DEFAULT_CONVERSION_OPTIONS } from '../src/types/conversion';
 import { JobService } from './db-service';
 import { notificationService } from './notification-service';
+import { WSBroadcaster } from './websocket';
 
 /**
  * Job processor configuration
@@ -438,49 +439,52 @@ export class JobProcessor extends EventEmitter {
    * Check if all jobs are complete and send notification if enabled
    */
   private async checkAndNotifyIfAllJobsComplete(): Promise<void> {
-    // Skip if notifications are not enabled
-    if (!notificationService.isEnabled()) {
-      return;
-    }
-
     // Check if there are any pending or processing jobs
     const pendingJobs = JobService.getByStatus('pending');
     const processingJobs = JobService.getByStatus('processing');
 
-    // If there are still jobs in the queue, don't send notification
+    // If there are still jobs in the queue, don't process
     if (pendingJobs.length > 0 || processingJobs.length > 0) {
       // Reset the flag since there are still jobs to process
       this.lastCompletionNotificationSent = false;
       return;
     }
 
-    // All jobs are complete - send notification if we haven't already
+    // All jobs are complete - process completion actions if we haven't already
     if (!this.lastCompletionNotificationSent) {
       const completedJobs = JobService.getByStatus('completed');
       const failedJobs = JobService.getByStatus('failed');
 
-      // Only send notification if there were actually jobs processed
+      // Only process if there were actually jobs processed
       if (completedJobs.length > 0 || failedJobs.length > 0) {
-        try {
-          await notificationService.notifyAllJobsComplete(
-            completedJobs.length,
-            failedJobs.length,
-          );
-          this.lastCompletionNotificationSent = true;
-
-          // Auto-clear all successful jobs when queue completes
-          const clearedCount = JobService.clearSuccessfulJobs();
-          if (clearedCount > 0) {
-            console.log(
-              `[JobProcessor] Auto-cleared ${clearedCount} successful job(s)`,
+        // Send notification if enabled
+        if (notificationService.isEnabled()) {
+          try {
+            await notificationService.notifyAllJobsComplete(
+              completedJobs.length,
+              failedJobs.length,
+            );
+          } catch (error) {
+            console.error(
+              '[JobProcessor] Failed to send completion notification:',
+              error,
             );
           }
-        } catch (error) {
-          console.error(
-            '[JobProcessor] Failed to send completion notification:',
-            error,
+        }
+
+        // Auto-clear all successful jobs when queue completes (regardless of notification settings)
+        const clearedCount = JobService.clearSuccessfulJobs();
+        if (clearedCount > 0) {
+          console.log(
+            `[JobProcessor] Auto-cleared ${clearedCount} successful job(s)`,
           );
         }
+
+        // Always trigger UI refresh when queue completes (even if jobs were already cleared)
+        console.log('[JobProcessor] Queue complete, triggering UI refresh');
+        WSBroadcaster.broadcastJobsCleared();
+
+        this.lastCompletionNotificationSent = true;
       }
     }
   }

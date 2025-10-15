@@ -109,6 +109,22 @@ export const WSBroadcaster = {
     });
   },
 
+  broadcastJobsCleared() {
+    const message = JSON.stringify({
+      type: 'jobs:cleared',
+      data: {},
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error('[WebSocket] Error sending to client:', error);
+        clients.delete(client);
+      }
+    });
+  },
+
   getClientCount() {
     return clients.size;
   },

@@ -262,6 +262,10 @@ export function JobList() {
               return { ...oldData, pages: newPages };
             },
           );
+        } else if (message.type === 'jobs:cleared') {
+          // Jobs were auto-cleared, invalidate the cache to refetch
+          console.log('[WebSocket] Jobs cleared, invalidating cache');
+          queryClient.invalidateQueries({ queryKey: ['jobs'] });
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
