@@ -194,8 +194,16 @@ export const JobService = {
 
   getFailedNotRetriedCount(): number {
     const result = queryOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM jobs WHERE status = ? AND retried = 0',
+      'SELECT COUNT(*) as count FROM jobs WHERE status = ? AND retried = 0 AND cleared = 0',
       ['failed'],
+    );
+    return result?.count || 0;
+  },
+
+  getClearableJobsCount(): number {
+    const result = queryOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM jobs WHERE status IN (?, ?, ?) AND cleared = 0',
+      ['completed', 'failed', 'cancelled'],
     );
     return result?.count || 0;
   },

@@ -63,12 +63,14 @@ export async function jobsHandler(
       );
       const statusCounts = JobService.getStatusCounts();
       const failedNotRetriedCount = JobService.getFailedNotRetriedCount();
+      const clearableJobsCount = JobService.getClearableJobsCount();
 
       return new Response(
         JSON.stringify({
           ...result,
           statusCounts,
           failedNotRetriedCount,
+          clearableJobsCount,
         }),
         {
           status: 200,

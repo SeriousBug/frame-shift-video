@@ -15,6 +15,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Virtuoso } from 'react-virtuoso';
 import { useNavigate } from '@tanstack/react-router';
+import { Menu } from '@ark-ui/react/menu';
 
 export function JobList() {
   const [showCleared, setShowCleared] = React.useState(false);
@@ -75,6 +76,10 @@ export function JobList() {
 
   const failedNotRetriedCount = useMemo(() => {
     return data?.pages?.[0]?.failedNotRetriedCount || 0;
+  }, [data]);
+
+  const clearableJobsCount = useMemo(() => {
+    return data?.pages?.[0]?.clearableJobsCount || 0;
   }, [data]);
 
   const error = queryError ? 'Failed to fetch jobs' : null;
@@ -361,10 +366,6 @@ export function JobList() {
   // Calculate total cancellable jobs from status counts
   const cancellableJobsCount = statusCounts.pending + statusCounts.processing;
 
-  // Calculate total clearable jobs (completed, failed, cancelled)
-  const clearableJobsCount =
-    statusCounts.completed + statusCounts.failed + statusCounts.cancelled;
-
   const handleRetryAllFailed = async () => {
     try {
       // Mark all failed jobs as retried and get config key
@@ -495,77 +496,169 @@ export function JobList() {
               <span>no active jobs</span>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showCleared}
-              onChange={(e) => setShowCleared(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-blue-600 focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-gray-700 dark:text-gray-300">
-              Show cleared jobs
-            </span>
-          </label>
-          <button
-            onClick={() => setShowClearFinishedModal(true)}
-            disabled={
-              clearFinishedJobsMutation.isPending || clearableJobsCount === 0
-            }
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              clearFinishedJobsMutation.isPending || clearableJobsCount === 0
-                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
-                : 'bg-orange-600 text-white hover:bg-orange-700'
-            }`}
-            title={
-              clearableJobsCount === 0
-                ? 'No finished jobs to clear'
-                : 'Clear all completed, failed, and cancelled jobs'
-            }
-          >
-            {clearFinishedJobsMutation.isPending
-              ? 'Clearing...'
-              : 'Clear Queue'}
-          </button>
-          <button
-            onClick={() => setShowRetryAllFailedModal(true)}
-            disabled={
-              markAllFailedAsRetriedMutation.isPending ||
-              failedNotRetriedCount === 0
-            }
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              markAllFailedAsRetriedMutation.isPending ||
-              failedNotRetriedCount === 0
-                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            title={
-              failedNotRetriedCount === 0
-                ? 'No failed jobs to retry'
-                : 'Retry all failed jobs that have not been retried'
-            }
-          >
-            {markAllFailedAsRetriedMutation.isPending
-              ? 'Retrying...'
-              : 'Retry All Failed'}
-          </button>
-          <button
-            onClick={() => setShowCancelAllModal(true)}
-            disabled={
-              cancelAllJobsMutation.isPending || cancellableJobsCount === 0
-            }
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              cancelAllJobsMutation.isPending || cancellableJobsCount === 0
-                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
-                : 'bg-red-600 text-white hover:bg-red-700'
-            }`}
-            title={
-              cancellableJobsCount === 0
-                ? 'No jobs to cancel'
-                : 'Cancel all pending and processing jobs'
-            }
-          >
-            {cancelAllJobsMutation.isPending ? 'Cancelling...' : 'Cancel All'}
-          </button>
+          <Menu.Root>
+            <Menu.Trigger className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2">
+              Actions
+              <span className="text-xs">▼</span>
+            </Menu.Trigger>
+            <Menu.Positioner>
+              <Menu.Content className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-1 min-w-[240px] z-50">
+                {/* Show Cleared Jobs Checkbox */}
+                <Menu.CheckboxItem
+                  value="show-cleared"
+                  checked={showCleared}
+                  onCheckedChange={() => setShowCleared(!showCleared)}
+                  className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                >
+                  <div
+                    className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
+                      showCleared
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                  >
+                    {showCleared && (
+                      <svg
+                        className="w-3 h-3 text-white"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path
+                          d="M10 3L4.5 8.5L2 6"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                    Show Cleared Jobs
+                  </Menu.ItemText>
+                </Menu.CheckboxItem>
+
+                <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+
+                {/* Clear Queue */}
+                <Menu.Item
+                  value="clear-queue"
+                  disabled={
+                    clearFinishedJobsMutation.isPending ||
+                    clearableJobsCount === 0
+                  }
+                  onClick={() => {
+                    if (
+                      !clearFinishedJobsMutation.isPending &&
+                      clearableJobsCount > 0
+                    ) {
+                      setShowClearFinishedModal(true);
+                    }
+                  }}
+                  className={`px-3 py-2 rounded cursor-pointer flex items-center gap-3 ${
+                    clearFinishedJobsMutation.isPending ||
+                    clearableJobsCount === 0
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                  }`}
+                >
+                  <span className="text-orange-600 dark:text-orange-400 text-lg">
+                    🗑️
+                  </span>
+                  <Menu.ItemText
+                    className={`text-sm ${
+                      clearFinishedJobsMutation.isPending ||
+                      clearableJobsCount === 0
+                        ? 'text-gray-400 dark:text-gray-600'
+                        : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    {clearFinishedJobsMutation.isPending
+                      ? 'Clearing...'
+                      : 'Clear Queue'}
+                  </Menu.ItemText>
+                </Menu.Item>
+
+                {/* Retry All Failed */}
+                <Menu.Item
+                  value="retry-all-failed"
+                  disabled={
+                    markAllFailedAsRetriedMutation.isPending ||
+                    failedNotRetriedCount === 0
+                  }
+                  onClick={() => {
+                    if (
+                      !markAllFailedAsRetriedMutation.isPending &&
+                      failedNotRetriedCount > 0
+                    ) {
+                      setShowRetryAllFailedModal(true);
+                    }
+                  }}
+                  className={`px-3 py-2 rounded cursor-pointer flex items-center gap-3 ${
+                    markAllFailedAsRetriedMutation.isPending ||
+                    failedNotRetriedCount === 0
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                  }`}
+                >
+                  <span className="text-blue-600 dark:text-blue-400 text-lg">
+                    🔄
+                  </span>
+                  <Menu.ItemText
+                    className={`text-sm ${
+                      markAllFailedAsRetriedMutation.isPending ||
+                      failedNotRetriedCount === 0
+                        ? 'text-gray-400 dark:text-gray-600'
+                        : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    {markAllFailedAsRetriedMutation.isPending
+                      ? 'Retrying...'
+                      : 'Retry All Failed'}
+                  </Menu.ItemText>
+                </Menu.Item>
+
+                {/* Cancel All */}
+                <Menu.Item
+                  value="cancel-all"
+                  disabled={
+                    cancelAllJobsMutation.isPending ||
+                    cancellableJobsCount === 0
+                  }
+                  onClick={() => {
+                    if (
+                      !cancelAllJobsMutation.isPending &&
+                      cancellableJobsCount > 0
+                    ) {
+                      setShowCancelAllModal(true);
+                    }
+                  }}
+                  className={`px-3 py-2 rounded cursor-pointer flex items-center gap-3 ${
+                    cancelAllJobsMutation.isPending ||
+                    cancellableJobsCount === 0
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-red-50 dark:hover:bg-red-900/20'
+                  }`}
+                >
+                  <span className="text-red-600 dark:text-red-400 text-lg">
+                    ✕
+                  </span>
+                  <Menu.ItemText
+                    className={`text-sm ${
+                      cancelAllJobsMutation.isPending ||
+                      cancellableJobsCount === 0
+                        ? 'text-gray-400 dark:text-gray-600'
+                        : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    {cancelAllJobsMutation.isPending
+                      ? 'Cancelling...'
+                      : 'Cancel All'}
+                  </Menu.ItemText>
+                </Menu.Item>
+              </Menu.Content>
+            </Menu.Positioner>
+          </Menu.Root>
         </div>
       </div>
 
