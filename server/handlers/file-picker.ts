@@ -12,7 +12,8 @@ export type PickerAction =
   | { type: 'update-config'; config: any }
   | { type: 'search'; query: string }
   | { type: 'update-show-hidden'; showHidden: boolean }
-  | { type: 'update-hide-converted'; hideConverted: boolean };
+  | { type: 'update-hide-converted'; hideConverted: boolean }
+  | { type: 'update-videos-only'; videosOnly: boolean };
 
 /**
  * GET /api/picker-state?key=xxx
@@ -246,6 +247,24 @@ export async function pickerActionHandler(
         newState = FilePickerStateService.updateHideConverted(
           state,
           action.hideConverted,
+        );
+        break;
+
+      case 'update-videos-only':
+        if (action.videosOnly === undefined) {
+          return new Response(
+            JSON.stringify({
+              error: 'videosOnly is required for update-videos-only',
+            }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            },
+          );
+        }
+        newState = FilePickerStateService.updateVideosOnly(
+          state,
+          action.videosOnly,
         );
         break;
 

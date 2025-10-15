@@ -11,6 +11,22 @@ import fs from 'fs';
 import path from 'path';
 import micromatch from 'micromatch';
 
+const VIDEO_EXTENSIONS = [
+  '.mp4',
+  '.mkv',
+  '.avi',
+  '.mov',
+  '.wmv',
+  '.flv',
+  '.webm',
+  '.m4v',
+  '.mpg',
+  '.mpeg',
+  '.3gp',
+  '.mts',
+  '.m2ts',
+];
+
 interface PickerStateData {
   selectedFiles: Set<string>;
   expandedFolders: Set<string>;
@@ -19,6 +35,7 @@ interface PickerStateData {
   searchQuery?: string;
   showHidden?: boolean;
   hideConverted?: boolean;
+  videosOnly?: boolean;
 }
 
 export class FilePickerStateService {
@@ -34,6 +51,7 @@ export class FilePickerStateService {
       showHidden: state.showHidden || false,
       hideConverted:
         state.hideConverted !== undefined ? state.hideConverted : true,
+      videosOnly: state.videosOnly || false,
     };
     const json = JSON.stringify(data);
     return crypto.createHash('sha256').update(json).digest('base64url');
@@ -55,6 +73,7 @@ export class FilePickerStateService {
       showHidden: state.showHidden || false,
       hideConverted:
         state.hideConverted !== undefined ? state.hideConverted : true,
+      videosOnly: state.videosOnly || false,
     });
 
     execute(`INSERT OR REPLACE INTO file_selections (id, data) VALUES (?, ?)`, [
@@ -88,6 +107,7 @@ export class FilePickerStateService {
         showHidden: data.showHidden || false,
         hideConverted:
           data.hideConverted !== undefined ? data.hideConverted : true,
+        videosOnly: data.videosOnly || false,
       };
     } catch (error) {
       console.error('Failed to parse picker state:', error);
@@ -120,6 +140,7 @@ export class FilePickerStateService {
   private static listDirectory(
     dirPath: string,
     showHidden: boolean = false,
+    videosOnly: boolean = false,
   ): FilePickerItem[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
@@ -134,7 +155,14 @@ export class FilePickerStateService {
     try {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
       return entries
-        .filter((entry) => showHidden || !entry.name.startsWith('.'))
+        .filter((entry) => {
+          // Filter hidden files
+          if (!showHidden && entry.name.startsWith('.')) return false;
+          // Filter non-video files if videosOnly is enabled
+          if (videosOnly && entry.isFile() && !this.isVideoFile(entry.name))
+            return false;
+          return true;
+        })
         .map((entry) => {
           const itemPath = path.join(dirPath, entry.name);
           const fullItemPath = path.join(fullPath, entry.name);
@@ -285,6 +313,7 @@ export class FilePickerStateService {
     dirPath: string,
     searchPattern: string,
     showHidden: boolean = false,
+    videosOnly: boolean = false,
   ): FilePickerItem[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
@@ -309,6 +338,7 @@ export class FilePickerStateService {
               itemPath,
               searchPattern,
               showHidden,
+              videosOnly,
             );
 
             // Only include directory if it has matching descendants
@@ -325,6 +355,9 @@ export class FilePickerStateService {
               results.push(...subResults);
             }
           } else {
+            // Skip non-video files if videosOnly is enabled
+            if (videosOnly && !this.isVideoFile(entry.name)) continue;
+
             // Check if file matches the search pattern (case insensitive)
             if (
               micromatch.isMatch(entry.name, searchPattern, { nocase: true })
@@ -350,6 +383,14 @@ export class FilePickerStateService {
     }
 
     return results;
+  }
+
+  /**
+   * Check if a file is a video based on extension
+   */
+  private static isVideoFile(name: string): boolean {
+    const ext = path.extname(name).toLowerCase();
+    return VIDEO_EXTENSIONS.includes(ext);
   }
 
   /**
@@ -398,6 +439,7 @@ export class FilePickerStateService {
     const basePath = this.getBasePath();
     const hideConverted =
       state.hideConverted !== undefined ? state.hideConverted : true;
+    const videosOnly = state.videosOnly || false;
 
     // If search query is present, use search mode
     if (state.searchQuery && state.searchQuery.trim()) {
@@ -405,6 +447,7 @@ export class FilePickerStateService {
         '',
         state.searchQuery,
         state.showHidden || false,
+        videosOnly,
       );
 
       // Calculate depths and selection states
@@ -451,7 +494,11 @@ export class FilePickerStateService {
 
     // Normal mode: Get items in current directory
     const showHidden = state.showHidden || false;
-    const currentItems = this.listDirectory(state.currentPath, showHidden);
+    const currentItems = this.listDirectory(
+      state.currentPath,
+      showHidden,
+      videosOnly,
+    );
 
     // Build flat list with expanded folders
     const processItems = (
@@ -480,7 +527,11 @@ export class FilePickerStateService {
 
         // If directory is expanded, load and process its children
         if (item.isDirectory && item.isExpanded) {
-          const children = this.listDirectory(item.path, showHidden);
+          const children = this.listDirectory(
+            item.path,
+            showHidden,
+            videosOnly,
+          );
           processItems(children, depth + 1, item.path);
         }
       }
@@ -681,6 +732,19 @@ export class FilePickerStateService {
     return {
       ...state,
       hideConverted,
+    };
+  }
+
+  /**
+   * Update videosOnly setting in state
+   */
+  static updateVideosOnly(
+    state: PickerStateData,
+    videosOnly: boolean,
+  ): PickerStateData {
+    return {
+      ...state,
+      videosOnly,
     };
   }
 }

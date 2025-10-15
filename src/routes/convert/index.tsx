@@ -48,38 +48,22 @@ function ConvertPage() {
     }
   }, [pickerState, urlKey, navigate]);
 
-  // Sync search query from picker state when loaded
+  // Sync search query and videosOnly from picker state when loaded
   useEffect(() => {
     if (pickerState?.searchQuery !== undefined) {
-      // Extract the user's original query from the transformed query
-      const transformed = pickerState.searchQuery;
+      const query = pickerState.searchQuery;
 
-      // Try to reverse the transformation
-      let original = transformed;
-
-      // Remove video extensions if present
-      const videoExtPattern =
-        '.{mp4,mkv,avi,mov,wmv,flv,webm,m4v,mpg,mpeg,3gp,mts,m2ts}';
-      if (original.endsWith(videoExtPattern)) {
-        original = original.slice(0, -videoExtPattern.length);
-        setVideosOnly(true);
-      } else {
-        setVideosOnly(false);
-      }
-
-      // Remove wildcards if wrapped
-      if (
-        original.startsWith('*') &&
-        original.endsWith('*') &&
-        original.length > 2
-      ) {
-        original = original.slice(1, -1);
+      // Check if advanced mode based on wildcards
+      if (query.startsWith('*') && query.endsWith('*') && query.length > 2) {
+        setSearchQuery(query.slice(1, -1));
         setAdvancedMode(false);
-      } else {
+      } else if (query.trim()) {
+        setSearchQuery(query);
         setAdvancedMode(true);
+      } else {
+        setSearchQuery('');
+        setAdvancedMode(false);
       }
-
-      setSearchQuery(original);
     }
   }, [pickerState?.key]); // Only run when state key changes (new state loaded)
 
@@ -91,15 +75,7 @@ function ConvertPage() {
     if (advancedMode) return query;
 
     // Simple mode: wrap with wildcards
-    let transformed = `*${query}*`;
-
-    // Add video extensions if Videos Only is enabled
-    if (videosOnly) {
-      transformed +=
-        '.{mp4,mkv,avi,mov,wmv,flv,webm,m4v,mpg,mpeg,3gp,mts,m2ts}';
-    }
-
-    return transformed;
+    return `*${query}*`;
   };
 
   // Debounced search effect
@@ -112,10 +88,10 @@ function ConvertPage() {
         action: { type: 'search', query: transformedQuery },
         key: pickerState?.key,
       });
-    }, 300); // 300ms debounce
+    }, 500); // 500ms debounce
 
     return () => clearTimeout(timer);
-  }, [searchQuery, advancedMode, videosOnly]); // Run when any of these change
+  }, [searchQuery, advancedMode]); // Run when search query or advanced mode changes
 
   // Update showHidden setting immediately
   useEffect(() => {
@@ -136,6 +112,16 @@ function ConvertPage() {
       key: pickerState.key,
     });
   }, [hideConverted]); // Run when hideConverted changes
+
+  // Update videosOnly setting immediately
+  useEffect(() => {
+    if (pickerAction.isPending || !pickerState) return;
+
+    pickerAction.mutate({
+      action: { type: 'update-videos-only', videosOnly },
+      key: pickerState.key,
+    });
+  }, [videosOnly]); // Run when videosOnly changes
 
   const handleToggleFolder = async (folderPath: string) => {
     console.log('[CLIENT] handleToggleFolder called', {
@@ -314,7 +300,7 @@ function ConvertPage() {
                 {item.name}
               </span>
 
-              {!item.isDirectory && item.size && (
+              {!item.isDirectory && item.size !== undefined && (
                 <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
                   {formatFileSize(item.size)}
                 </span>
@@ -372,12 +358,11 @@ function ConvertPage() {
                       value="advanced-mode"
                       checked={advancedMode}
                       onCheckedChange={() => {
-                        setAdvancedMode(!advancedMode);
-                        if (!advancedMode) {
-                          setVideosOnly(false);
+                        if (!videosOnly) {
+                          setAdvancedMode(!advancedMode);
                         }
                       }}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                      className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 ${videosOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <div
                         className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
@@ -409,8 +394,11 @@ function ConvertPage() {
                     <Menu.CheckboxItem
                       value="videos-only"
                       checked={videosOnly && !advancedMode}
-                      disabled={advancedMode}
-                      onCheckedChange={() => setVideosOnly(!videosOnly)}
+                      onCheckedChange={() => {
+                        if (!advancedMode) {
+                          setVideosOnly(!videosOnly);
+                        }
+                      }}
                       className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 ${advancedMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <div
@@ -515,6 +503,7 @@ function ConvertPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                disabled={pickerAction.isPending}
                 placeholder={
                   advancedMode
                     ? 'Search files (e.g., *.mp4, 2024-*.{mp4,mkv})'
@@ -522,7 +511,7 @@ function ConvertPage() {
                       ? 'Search video files (e.g., charlie, 2024-)'
                       : 'Search files (e.g., charlie, 2024-)'
                 }
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 onClick={() => setIsSearchHelpOpen(true)}
