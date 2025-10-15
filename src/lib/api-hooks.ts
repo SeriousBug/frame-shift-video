@@ -62,7 +62,7 @@ export function useJobs() {
  * Hook to fetch jobs with infinite scroll pagination
  */
 export function useJobsInfinite(
-  limit: number = 20,
+  limit: number = 100,
   includeCleared: boolean = false,
 ) {
   return useInfiniteQuery({

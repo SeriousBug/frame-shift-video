@@ -154,6 +154,10 @@ const MIGRATIONS = [
     ALTER TABLE jobs ADD COLUMN cleared INTEGER DEFAULT 0;
     CREATE INDEX IF NOT EXISTS idx_jobs_cleared ON jobs(cleared);
   `,
+  // Migration 11: Add config_json to store full configuration on job
+  `
+    ALTER TABLE jobs ADD COLUMN config_json TEXT;
+  `,
 ];
 
 /**

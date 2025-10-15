@@ -28,7 +28,7 @@ export function JobList() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useJobsInfinite(20, showCleared);
+  } = useJobsInfinite(100, showCleared);
   const { data: processingJobsData, isLoading: loadingProcessingJobs } =
     useJobsByStatus('processing');
   const navigate = useNavigate();
@@ -175,7 +175,7 @@ export function JobList() {
           // Update the job in the infinite query cache
           const job = message.data;
           queryClient.setQueryData(
-            ['jobs', 'infinite', 20, showCleared],
+            ['jobs', 'infinite', 100, showCleared],
             (oldData: any) => {
               if (!oldData?.pages) return oldData;
 
@@ -247,7 +247,7 @@ export function JobList() {
           // Update job progress in the infinite query cache
           const { jobId, progress, frame, fps } = message.data;
           queryClient.setQueryData(
-            ['jobs', 'infinite', 20, showCleared],
+            ['jobs', 'infinite', 100, showCleared],
             (oldData: any) => {
               if (!oldData?.pages) return oldData;
 
@@ -301,7 +301,7 @@ export function JobList() {
           // Update status counts in all pages of the infinite query cache
           const statusCounts = message.data;
           queryClient.setQueryData(
-            ['jobs', 'infinite', 20, showCleared],
+            ['jobs', 'infinite', 100, showCleared],
             (oldData: any) => {
               if (!oldData?.pages) return oldData;
 

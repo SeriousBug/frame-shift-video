@@ -25,6 +25,7 @@ export interface Job {
   retried?: number; // SQLite boolean: 0 = false, 1 = true
   config_key?: string; // Key to file_selections table for configuration
   cleared?: number; // SQLite boolean: 0 = false, 1 = true - whether job is hidden from UI
+  config_json?: string; // JSON-encoded ConversionOptions for this specific job
 }
 
 export interface CreateJobInput {
@@ -34,6 +35,7 @@ export interface CreateJobInput {
   ffmpeg_command_json?: string;
   queue_position?: number;
   config_key?: string;
+  config_json?: string;
 }
 
 export interface UpdateJobInput {
@@ -49,6 +51,7 @@ export interface UpdateJobInput {
   retried?: number;
   config_key?: string;
   cleared?: number;
+  config_json?: string;
 }
 
 export interface FileSelection {

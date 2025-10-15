@@ -51,7 +51,7 @@ export async function fetchJobs(): Promise<{ jobs: Job[] }> {
  */
 export async function fetchJobsPaginated(
   cursor?: string,
-  limit: number = 20,
+  limit: number = 100,
   includeCleared: boolean = false,
 ): Promise<{
   jobs: Job[];

@@ -74,7 +74,7 @@ function normalizeJobTimestamps(job: Job): Job {
 export const JobService = {
   create(input: CreateJobInput): number {
     const result = execute(
-      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command_json, queue_position, config_key) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO jobs (name, input_file, output_file, ffmpeg_command_json, queue_position, config_key, config_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         input.name,
         input.input_file,
@@ -82,6 +82,7 @@ export const JobService = {
         input.ffmpeg_command_json || null,
         input.queue_position || null,
         input.config_key || null,
+        input.config_json || null,
       ],
     );
     return Number(result.lastInsertRowid);
@@ -259,6 +260,10 @@ export const JobService = {
     if (input.cleared !== undefined) {
       updates.push('cleared = ?');
       params.push(input.cleared);
+    }
+    if (input.config_json !== undefined) {
+      updates.push('config_json = ?');
+      params.push(input.config_json);
     }
 
     if (updates.length === 0) return;

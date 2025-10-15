@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Job } from '@/types/database';
+import { ConversionOptions } from '@/types/conversion';
 import { formatDistanceToNow } from 'date-fns';
 import Highlighter from 'react-highlight-words';
 
@@ -41,6 +42,19 @@ export function JobCard({
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showStats, setShowStats] = useState(false);
+  const [showError, setShowError] = useState(false);
+
+  // Parse config if available
+  const config: ConversionOptions | null = job.config_json
+    ? (() => {
+        try {
+          return JSON.parse(job.config_json);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
   // Update current time every second for ETA calculation
   useEffect(() => {
@@ -134,20 +148,28 @@ export function JobCard({
 
   return (
     <div
-      className={`bg-white dark:bg-gray-800 rounded-xl border-2 ${
+      className={`bg-white dark:bg-gray-800 rounded-lg border ${
         isActiveMatch
-          ? 'border-blue-500 dark:border-blue-400 ring-4 ring-blue-200 dark:ring-blue-900/50'
-          : 'border-gray-200 dark:border-gray-600'
-      } p-6 shadow-lg hover:shadow-xl transition-all duration-200`}
+          ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-200 dark:ring-blue-900/50'
+          : 'border-gray-200 dark:border-gray-700'
+      } p-4 shadow hover:shadow-md transition-all duration-200`}
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+      {/* Header: Status, File Path, and Config */}
+      <div className="flex items-start gap-3 mb-2">
+        <span
+          className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${statusColors[job.status]} flex-shrink-0`}
+        >
+          <span className="mr-1">{statusIcons[job.status]}</span>
+          {getDisplayStatus()}
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-mono text-gray-900 dark:text-white break-all">
             {searchWords.length > 0 ? (
               <Highlighter
                 searchWords={searchWords}
                 autoEscape={true}
-                textToHighlight={job.name}
+                textToHighlight={job.input_file}
                 highlightClassName={
                   isActiveMatch
                     ? 'bg-blue-400 dark:bg-blue-600 text-white'
@@ -155,134 +177,147 @@ export function JobCard({
                 }
               />
             ) : (
-              job.name
+              job.input_file
             )}
-          </h3>
-          <div className="flex items-center gap-2 mb-2">
-            <span
-              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[job.status]}`}
-            >
-              <span className="mr-1">{statusIcons[job.status]}</span>
-              {getDisplayStatus()}
-            </span>
-            {job.queue_position !== null && job.status === 'pending' && (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Queue position: {job.queue_position}
+          </p>
+
+          {/* Configuration display */}
+          {config && (
+            <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-600 dark:text-gray-400">
+              <span className="inline-flex items-center gap-1">
+                <span className="font-medium">Codec:</span>
+                {config.basic.videoCodec}
               </span>
+              <span className="text-gray-400 dark:text-gray-600">•</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="font-medium">Quality:</span>
+                {config.basic.quality}
+              </span>
+              <span className="text-gray-400 dark:text-gray-600">•</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="font-medium">Format:</span>
+                {config.basic.outputFormat}
+              </span>
+              <span className="text-gray-400 dark:text-gray-600">•</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="font-medium">Preset:</span>
+                {config.advanced.preset}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {job.queue_position !== null && job.status === 'pending' && (
+            <span className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">
+              #{job.queue_position}
+            </span>
+          )}
+          {(job.status === 'failed' || job.status === 'cancelled') &&
+            !job.retried &&
+            onRetry && (
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+              >
+                {retrying ? 'Retrying...' : 'Retry'}
+              </button>
             )}
-            {(job.status === 'failed' || job.status === 'cancelled') &&
-              !job.retried &&
-              onRetry && (
-                <button
-                  onClick={handleRetry}
-                  disabled={retrying}
-                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
-                >
-                  {retrying ? 'Retrying...' : 'Retry'}
-                </button>
-              )}
-            {(job.status === 'pending' || job.status === 'processing') &&
-              onCancel && (
-                <button
-                  onClick={handleCancel}
-                  disabled={cancelling}
-                  className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition-colors"
-                >
-                  {cancelling ? 'Cancelling...' : 'Cancel'}
-                </button>
-              )}
-          </div>
+          {(job.status === 'pending' || job.status === 'processing') &&
+            onCancel && (
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel'}
+              </button>
+            )}
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1">
-            File
-          </label>
-          <p className="text-gray-900 dark:text-white font-mono text-sm break-all">
-            {job.input_file}
-          </p>
+      {/* Progress bar for processing jobs */}
+      {job.status === 'processing' && (
+        <div className="mb-2">
+          {job.progress < 0 ? (
+            <div className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
+              Unable to calculate progress
+            </div>
+          ) : (
+            <div>
+              <div className="flex gap-3 mb-1 text-xs text-gray-600 dark:text-gray-400">
+                <span>{job.progress.toFixed(1)}%</span>
+                {calculateETA() !== null && (
+                  <span>ETA: {formatDuration(calculateETA()!)}</span>
+                )}
+                {job.currentFps !== undefined && job.currentFps > 0 && (
+                  <span>{job.currentFps.toFixed(1)} fps</span>
+                )}
+              </div>
+              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${job.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
+      )}
 
-        {(job.status === 'processing' || job.status === 'completed') && (
-          <div>
-            <label className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              {job.status === 'completed' ? 'Conversion Stats:' : 'Progress:'}
-            </label>
-            {job.progress < 0 ? (
-              <div className="mt-1 text-sm text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
-                Unable to calculate progress (video duration unavailable)
-              </div>
-            ) : (
-              <div className="mt-1">
-                {/* Show ETA and FPS for processing jobs */}
-                {job.status === 'processing' && (
-                  <div className="flex gap-4 mb-2 text-sm">
-                    {calculateETA() !== null && (
-                      <div className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">ETA:</span>{' '}
-                        {formatDuration(calculateETA()!)}
-                      </div>
-                    )}
-                    {job.currentFps !== undefined && job.currentFps > 0 && (
-                      <div className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Processing:</span>{' '}
-                        {job.currentFps.toFixed(1)} fps
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Show elapsed time and average FPS for completed jobs */}
-                {job.status === 'completed' && (
-                  <div className="flex gap-4 mb-2 text-sm">
-                    {getElapsedTime() !== null && (
-                      <div className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Time:</span>{' '}
-                        {formatDuration(getElapsedTime()!)}
-                      </div>
-                    )}
-                    {getAverageFps() !== null && (
-                      <div className="text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Average:</span>{' '}
-                        {getAverageFps()!.toFixed(1)} fps
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                  <div
-                    className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                    style={{ width: `${job.progress}%` }}
-                  />
-                </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400 mt-1 block">
-                  {job.status === 'completed'
-                    ? 'Completed'
-                    : `${job.progress.toFixed(1)}%`}
+      {/* Collapsible stats for completed jobs */}
+      {job.status === 'completed' && job.progress >= 0 && (
+        <div className="mb-2">
+          <button
+            onClick={() => setShowStats(!showStats)}
+            className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1"
+          >
+            <span>{showStats ? '▼' : '▶'}</span>
+            <span>Conversion Stats</span>
+          </button>
+          {showStats && (
+            <div className="flex gap-3 mt-1 text-xs text-gray-600 dark:text-gray-400 pl-4">
+              {getElapsedTime() !== null && (
+                <span>
+                  <span className="font-medium">Time:</span>{' '}
+                  {formatDuration(getElapsedTime()!)}
                 </span>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+              {getAverageFps() !== null && (
+                <span>
+                  <span className="font-medium">Avg:</span>{' '}
+                  {getAverageFps()!.toFixed(1)} fps
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-        {job.error_message && (
-          <div>
-            <label className="text-sm font-medium text-red-600 dark:text-red-400">
-              Error:
-            </label>
-            <p className="text-red-700 dark:text-red-300 text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded">
+      {/* Collapsible error for failed jobs */}
+      {job.error_message && (
+        <div className="mb-2">
+          <button
+            onClick={() => setShowError(!showError)}
+            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+          >
+            <span>{showError ? '▼' : '▶'}</span>
+            <span>Error Details</span>
+          </button>
+          {showError && (
+            <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded mt-1">
               {job.error_message}
             </p>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-600">
-          <span>Created {formatDate(job.created_at)}</span>
-          <span>Updated {formatDate(job.updated_at)}</span>
+          )}
         </div>
+      )}
+
+      {/* Footer: timestamps */}
+      <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-500 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <span>{formatDate(job.created_at)}</span>
+        <span>{formatDate(job.updated_at)}</span>
       </div>
     </div>
   );

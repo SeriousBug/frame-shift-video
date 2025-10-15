@@ -366,6 +366,7 @@ export async function jobsHandler(
           }),
           queue_position: null, // Auto-assigned by database
           config_key: configKey,
+          config_json: configJson, // Store the full config on the job
         });
 
         console.log(`[Jobs API] Created job ${jobId}: ${config.jobName}`);
