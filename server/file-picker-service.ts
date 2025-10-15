@@ -194,55 +194,6 @@ export class FilePickerStateService {
   }
 
   /**
-   * Recursively scan a folder to get all file paths
-   * Only scans if the folder or its descendants have selections
-   */
-  private static getAllFilesInFolder(
-    folderPath: string,
-    selectedFiles: Set<string>,
-  ): string[] {
-    // Check if this folder or any descendant has selections
-    const hasSelections = Array.from(selectedFiles).some((file) =>
-      file.startsWith(folderPath + '/'),
-    );
-
-    if (!hasSelections) {
-      // No selections in this folder, skip scanning
-      return [];
-    }
-
-    return this.scanFolderForFiles(folderPath);
-  }
-
-  /**
-   * Recursively scan a folder to get all file paths (always scans)
-   */
-  private static scanFolderForFiles(folderPath: string): string[] {
-    const basePath = this.getBasePath();
-    const fullPath = path.join(basePath, folderPath);
-    const files: string[] = [];
-
-    try {
-      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const itemPath = path.join(folderPath, entry.name);
-
-        if (entry.isDirectory()) {
-          // Recursively get files from subdirectory
-          files.push(...this.scanFolderForFiles(itemPath));
-        } else {
-          files.push(itemPath);
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to scan folder ${folderPath}:`, error);
-    }
-
-    return files;
-  }
-
-  /**
    * Recursively scan a folder to get all file paths, respecting filters
    */
   private static scanFolderForFilesWithFilters(
@@ -286,27 +237,6 @@ export class FilePickerStateService {
     }
 
     return files;
-  }
-
-  /**
-   * Calculate selection state for a folder
-   * Returns 'none', 'partial', or 'full'
-   */
-  private static calculateFolderSelectionState(
-    folderPath: string,
-    selectedFiles: Set<string>,
-  ): 'none' | 'partial' | 'full' {
-    const allFiles = this.getAllFilesInFolder(folderPath, selectedFiles);
-
-    if (allFiles.length === 0) return 'none';
-
-    const selectedCount = allFiles.filter((file) =>
-      selectedFiles.has(file),
-    ).length;
-
-    if (selectedCount === 0) return 'none';
-    if (selectedCount === allFiles.length) return 'full';
-    return 'partial';
   }
 
   /**
@@ -451,6 +381,24 @@ export class FilePickerStateService {
         videosOnly,
       );
 
+      // Build a map of folder -> all descendant files for efficient selection state calculation
+      // This avoids rescanning the same folders multiple times
+      const folderToFiles = new Map<string, string[]>();
+
+      for (const item of searchResults) {
+        if (!item.isDirectory) {
+          // Add this file to all ancestor folders in the map
+          const parts = item.path.split('/');
+          for (let i = 0; i < parts.length; i++) {
+            const folderPath = i === 0 ? '' : parts.slice(0, i).join('/');
+            if (!folderToFiles.has(folderPath)) {
+              folderToFiles.set(folderPath, []);
+            }
+            folderToFiles.get(folderPath)!.push(item.path);
+          }
+        }
+      }
+
       // Calculate depths and selection states
       const items: FilePickerItem[] = [];
       const itemsByPath = new Map<string, FilePickerItem>();
@@ -462,10 +410,22 @@ export class FilePickerStateService {
 
         // Calculate selection state
         if (item.isDirectory) {
-          item.selectionState = this.calculateFolderSelectionState(
-            item.path,
-            state.selectedFiles,
-          );
+          // Use the pre-built map instead of rescanning
+          const filesInFolder = folderToFiles.get(item.path) || [];
+          if (filesInFolder.length === 0) {
+            item.selectionState = 'none';
+          } else {
+            const selectedCount = filesInFolder.filter((f) =>
+              state.selectedFiles.has(f),
+            ).length;
+            if (selectedCount === 0) {
+              item.selectionState = 'none';
+            } else if (selectedCount === filesInFolder.length) {
+              item.selectionState = 'full';
+            } else {
+              item.selectionState = 'partial';
+            }
+          }
           item.isExpanded = false;
         } else {
           item.selectionState = state.selectedFiles.has(item.path)
@@ -495,7 +455,13 @@ export class FilePickerStateService {
     }
 
     // Build tree and compute allConverted recursively, then flatten for UI
-    function buildTree(dirPath: string, depth: number): FilePickerItem[] {
+    // Use bottom-up approach to avoid redundant scans
+    interface TreeBuildResult {
+      items: FilePickerItem[];
+      allFiles: string[]; // All file paths in this subtree (for selection state calculation)
+    }
+
+    function buildTree(dirPath: string, depth: number): TreeBuildResult {
       const showHidden = state.showHidden || false;
       const videosOnly = state.videosOnly || false;
       const entries = FilePickerStateService.listDirectory(
@@ -504,20 +470,41 @@ export class FilePickerStateService {
         videosOnly,
       );
       const result: FilePickerItem[] = [];
+      const allFilesInSubtree: string[] = [];
 
       for (const entry of entries) {
         entry.depth = depth;
         if (entry.isDirectory) {
           entry.isExpanded = state.expandedFolders.has(entry.path);
-          entry.selectionState =
-            FilePickerStateService.calculateFolderSelectionState(
-              entry.path,
-              state.selectedFiles,
-            );
-          // Recursively build children
-          const children = buildTree(entry.path, depth + 1);
+
+          // Recursively build children and get file list
+          // This single recursion gives us both the UI items AND the file list
+          const childResult = buildTree(entry.path, depth + 1);
+          const childFiles = childResult.allFiles;
+
+          // Add all child files to this subtree's file list
+          allFilesInSubtree.push(...childFiles);
+
+          // Calculate selection state from child files (bottom-up, no rescan needed!)
+          if (childFiles.length === 0) {
+            entry.selectionState = 'none';
+          } else {
+            const selectedCount = childFiles.filter((f) =>
+              state.selectedFiles.has(f),
+            ).length;
+            if (selectedCount === 0) {
+              entry.selectionState = 'none';
+            } else if (selectedCount === childFiles.length) {
+              entry.selectionState = 'full';
+            } else {
+              entry.selectionState = 'partial';
+            }
+          }
+
           // Compute allConverted for children first
-          const childFolders = children.filter((child) => child.isDirectory);
+          const childFolders = childResult.items.filter(
+            (child) => child.isDirectory,
+          );
           const childFoldersConverted = childFolders.every(
             (child) => child.allConverted,
           );
@@ -537,7 +524,7 @@ export class FilePickerStateService {
           result.push(entry);
           // If expanded, flatten children into result
           if (entry.isExpanded) {
-            result.push(...children);
+            result.push(...childResult.items);
           }
         } else {
           entry.selectionState = state.selectedFiles.has(entry.path)
@@ -546,24 +533,26 @@ export class FilePickerStateService {
           // Mark file as converted if it has a converted version in this folder
           entry.hasConvertedVersion =
             FilePickerStateService.hasConvertedVersion(entry, entries);
+          // Add this file to the subtree's file list
+          allFilesInSubtree.push(entry.path);
           result.push(entry);
         }
       }
-      return result;
+      return { items: result, allFiles: allFilesInSubtree };
     }
 
-    const items = buildTree(state.currentPath, 0);
+    const treeResult = buildTree(state.currentPath, 0);
 
     // Now that all items are collected, compute hasConvertedVersion for each file
     // (tree-based items already have allConverted set)
     // Filter out converted files if hideConverted is enabled
     const filteredItems = hideConverted
-      ? items.filter(
+      ? treeResult.items.filter(
           (item) =>
             item.isDirectory ||
             !FilePickerStateService.isConvertedFile(item.name),
         )
-      : items;
+      : treeResult.items;
 
     return filteredItems;
   }
