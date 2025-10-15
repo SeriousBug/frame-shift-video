@@ -6,6 +6,7 @@ import {
   useFileSelections,
   useCreateJobs,
   useSaveFileSelections,
+  useClearPickerState,
 } from '@/lib/api-hooks';
 
 export const Route = createFileRoute('/convert/configure')({
@@ -34,6 +35,12 @@ function ConfigurePage() {
   const savedConfig = fileSelectionsData?.config;
   const createJobsMutation = useCreateJobs();
   const saveFileSelectionsMutation = useSaveFileSelections();
+  const clearPickerState = useClearPickerState();
+
+  const handleCancel = () => {
+    clearPickerState();
+    navigate({ to: '/', search: {} });
+  };
 
   const handleStartConversion = async (options: ConversionOptions) => {
     console.log('[Configure Page] Starting conversion with options:', options);
@@ -41,8 +48,9 @@ function ConfigurePage() {
       const result = await createJobsMutation.mutateAsync(options);
       console.log('[Configure Page] Jobs created successfully:', result);
 
-      // Navigate back to home on success
-      navigate({ to: '/' });
+      // Clear picker state and navigate back to home on success
+      clearPickerState();
+      navigate({ to: '/', search: {} });
     } catch (error) {
       console.error('[Configure Page] Error starting conversion:', error);
       alert(
@@ -91,7 +99,7 @@ function ConfigurePage() {
             Configure Conversion
           </h1>
           <button
-            onClick={() => navigate({ to: '/' })}
+            onClick={handleCancel}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
             <span className="text-2xl">×</span>
@@ -124,7 +132,7 @@ function ConfigurePage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => navigate({ to: '/' })}
+                onClick={handleCancel}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
                 Cancel

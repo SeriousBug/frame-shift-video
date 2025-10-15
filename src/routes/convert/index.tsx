@@ -1,5 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { usePickerState, usePickerAction } from '@/lib/api-hooks';
+import {
+  usePickerState,
+  usePickerAction,
+  useClearPickerState,
+} from '@/lib/api-hooks';
 import { FilePickerItem } from '@/types/files';
 import { useEffect, useState } from 'react';
 import { SearchHelpModal } from '@/components/search-help-modal';
@@ -36,6 +40,14 @@ function ConvertPage() {
 
   // Mutation for performing actions
   const pickerAction = usePickerAction();
+
+  // Helper to clear picker state
+  const clearPickerState = useClearPickerState();
+
+  const handleCancel = () => {
+    clearPickerState();
+    navigate({ to: '/', search: {} });
+  };
 
   // Update URL when picker state key changes
   useEffect(() => {
@@ -327,7 +339,7 @@ function ConvertPage() {
             )}
           </div>
           <button
-            onClick={() => navigate({ to: '/' })}
+            onClick={handleCancel}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
             <span className="text-2xl">×</span>
@@ -562,7 +574,7 @@ function ConvertPage() {
               </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => navigate({ to: '/' })}
+                  onClick={handleCancel}
                   className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                 >
                   Cancel

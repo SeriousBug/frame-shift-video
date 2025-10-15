@@ -246,3 +246,15 @@ export function usePickerAction() {
     },
   });
 }
+
+/**
+ * Hook to clear all picker state from cache
+ */
+export function useClearPickerState() {
+  const queryClient = useQueryClient();
+
+  return () => {
+    // Remove all picker-state queries from cache
+    queryClient.removeQueries({ queryKey: ['picker-state'] });
+  };
+}
