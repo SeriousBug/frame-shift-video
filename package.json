@@ -27,6 +27,7 @@
     "@tanstack/react-router-devtools": "^1.132.51",
     "date-fns": "^4.1.0",
     "micromatch": "^4.0.8",
+    "natural-orderby": "^5.0.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-highlight-words": "^0.21.0",

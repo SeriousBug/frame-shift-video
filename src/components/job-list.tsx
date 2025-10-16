@@ -174,6 +174,25 @@ export function JobList() {
         if (message.type === 'job:updated' || message.type === 'job:created') {
           // Update the job in the infinite query cache
           const job = message.data;
+
+          // Check if this is a status transition to a finished state
+          // In these cases, we need to refetch to get proper ordering
+          const isFinishedTransition =
+            job.status === 'completed' ||
+            job.status === 'failed' ||
+            job.status === 'cancelled';
+
+          if (isFinishedTransition) {
+            // Job moved to finished state - invalidate to trigger re-sort
+            queryClient.invalidateQueries({
+              queryKey: ['jobs', 'infinite', 100, showCleared],
+            });
+            queryClient.invalidateQueries({
+              queryKey: ['jobs', 'status', 'processing'],
+            });
+            return; // Skip in-place update, let the refetch handle it
+          }
+
           queryClient.setQueryData(
             ['jobs', 'infinite', 100, showCleared],
             (oldData: any) => {

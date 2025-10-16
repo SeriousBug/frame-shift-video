@@ -1,6 +1,7 @@
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import micromatch from 'micromatch';
+import { orderBy } from 'natural-orderby';
 import { FileSystemItem } from '../../src/types/files';
 
 /**
@@ -96,13 +97,19 @@ function buildTreeStructure(items: FileSystemItem[]): FileSystemItem[] {
     }
   }
 
-  // Sort function
+  // Sort function - directories first, then natural sort by name
   const sortItems = (items: FileSystemItem[]) => {
-    items.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // Separate directories and files
+    const directories = items.filter((item) => item.isDirectory);
+    const files = items.filter((item) => !item.isDirectory);
+
+    // Sort each group naturally
+    const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
+    const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
+
+    // Replace items array contents (in-place mutation)
+    items.length = 0;
+    items.push(...sortedDirs, ...sortedFiles);
   };
 
   sortItems(rootItems);
@@ -171,12 +178,14 @@ export async function filesHandler(
         }
       }
 
-      // Sort directories first, then files, alphabetically
-      fileSystemItems.sort((a, b) => {
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
-        return a.name.localeCompare(b.name);
-      });
+      // Sort directories first, then files, naturally
+      const directories = fileSystemItems.filter((item) => item.isDirectory);
+      const files = fileSystemItems.filter((item) => !item.isDirectory);
+
+      const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
+      const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
+
+      fileSystemItems = [...sortedDirs, ...sortedFiles];
     }
 
     return new Response(

@@ -1,3 +1,4 @@
+import { orderBy } from 'natural-orderby';
 import { FileSelectionService } from '../db-service';
 
 /**
@@ -23,9 +24,12 @@ export async function fileSelectionsHandler(
         );
       }
 
+      // Sort files naturally before saving
+      const sortedFiles = orderBy(files, [(file) => file], ['asc']);
+
       // Serialize config if provided
       const configJson = config ? JSON.stringify(config) : undefined;
-      const key = FileSelectionService.save(files, configJson);
+      const key = FileSelectionService.save(sortedFiles, configJson);
 
       return new Response(JSON.stringify({ key }), {
         status: 200,
@@ -103,7 +107,10 @@ export async function fileSelectionByKeyHandler(
     const files = (result.files as any).selectedFiles;
     const config = result.config || (result.files as any).config;
 
-    return new Response(JSON.stringify({ files, config }), {
+    // Sort files naturally before returning
+    const sortedFiles = orderBy(files, [(file) => file], ['asc']);
+
+    return new Response(JSON.stringify({ files: sortedFiles, config }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });

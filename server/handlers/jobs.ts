@@ -1,4 +1,5 @@
 import path from 'path';
+import { orderBy } from 'natural-orderby';
 import { ConversionOptions } from '../../src/types/conversion';
 import {
   createFFmpegJobs,
@@ -39,28 +40,20 @@ export async function jobsHandler(
       const limit = limitParam ? parseInt(limitParam, 10) : 20;
       const includeCleared = includeClearedParam === 'true';
 
-      let cursorId: number | undefined;
-      let cursorCreatedAt: string | undefined;
+      let cursor: any = undefined;
 
       if (cursorParam) {
         const decodedCursor = decodeCursor(cursorParam);
-        if (decodedCursor) {
-          cursorId = decodedCursor.id;
-          cursorCreatedAt = decodedCursor.created_at;
-        } else {
+        if (!decodedCursor) {
           return new Response(JSON.stringify({ error: 'Invalid cursor' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        cursor = decodedCursor;
       }
 
-      const result = JobService.getPaginated(
-        limit,
-        cursorId,
-        cursorCreatedAt,
-        includeCleared,
-      );
+      const result = JobService.getPaginated(limit, cursor, includeCleared);
       const statusCounts = JobService.getStatusCounts();
       const failedNotRetriedCount = JobService.getFailedNotRetriedCount();
       const clearableJobsCount = JobService.getClearableJobsCount();
@@ -336,7 +329,11 @@ export async function jobsHandler(
       };
 
       // Create job configs from conversion options
-      const jobConfigs = createFFmpegJobs(resolvedOptions);
+      let jobConfigs = createFFmpegJobs(resolvedOptions);
+
+      // Sort job configs naturally by input file path
+      // This ensures "Episode 9" comes before "Episode 10"
+      jobConfigs = orderBy(jobConfigs, [(config) => config.inputFile], ['asc']);
 
       // Save the configuration with file selections
       const configJson = JSON.stringify(resolvedOptions);
@@ -344,6 +341,10 @@ export async function jobsHandler(
         resolvedOptions.selectedFiles,
         configJson,
       );
+
+      // Get the current maximum queue_position to append new jobs to the end of the queue
+      const maxQueuePosition = JobService.getMaxQueuePosition();
+      let nextQueuePosition = (maxQueuePosition || 0) + 1;
 
       // Create database entries for each job
       const createdJobIds: number[] = [];
@@ -364,7 +365,7 @@ export async function jobsHandler(
             inputPath: ffmpegCommand.inputPath,
             outputPath: ffmpegCommand.outputPath,
           }),
-          queue_position: null, // Auto-assigned by database
+          queue_position: nextQueuePosition++, // Explicit position based on sort order
           config_key: configKey,
           config_json: configJson, // Store the full config on the job
         });

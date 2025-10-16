@@ -100,62 +100,207 @@ export const JobService = {
 
   /**
    * Get jobs with cursor-based pagination
-   * @param limit Number of jobs to return
-   * @param cursor Optional cursor for pagination (encoded job id and created_at)
+   * Jobs are returned in this order:
+   * 1. Pending jobs (oldest first: queue_position ASC, created_at ASC)
+   * 2. Finished jobs (newest first: updated_at DESC, id DESC)
+   *
+   * @param limit Number of jobs to return per page
+   * @param cursor Optional cursor from previous page
    * @param includeCleared Whether to include cleared jobs (default: false)
    * @returns Jobs and optional next cursor
    */
   getPaginated(
     limit: number = 20,
-    cursorId?: number,
-    cursorCreatedAt?: string,
+    cursor?: any, // Can be new format or legacy format
     includeCleared: boolean = false,
   ): { jobs: Job[]; nextCursor?: string; hasMore: boolean } {
-    let jobs: Job[];
     const clearedFilter = includeCleared ? '' : 'AND cleared = 0';
+    let jobs: Job[] = [];
+    let hasMore = false;
+    let nextCursor: string | undefined;
 
-    if (cursorId !== undefined && cursorCreatedAt !== undefined) {
-      // Fetch jobs after the cursor
-      // We use created_at and id for stable sorting
+    // Determine which section we're paginating
+    const isLegacyCursor = cursor && !cursor.section;
+    const section = cursor?.section || 'pending';
+
+    if (!cursor || isLegacyCursor) {
+      // First page or legacy cursor: start with pending jobs
       jobs = query<Job>(
         `SELECT * FROM jobs
-         WHERE (created_at, id) < (?, ?) ${clearedFilter}
-         ORDER BY created_at DESC, id DESC
-         LIMIT ?`,
-        [cursorCreatedAt, cursorId, limit + 1],
-      );
-    } else {
-      // First page
-      jobs = query<Job>(
-        `SELECT * FROM jobs
-         WHERE 1=1 ${clearedFilter}
-         ORDER BY created_at DESC, id DESC
+         WHERE status = 'pending' ${clearedFilter}
+         ORDER BY queue_position ASC, created_at ASC, id ASC
          LIMIT ?`,
         [limit + 1],
       );
-    }
 
-    const hasMore = jobs.length > limit;
-    const result = hasMore ? jobs.slice(0, limit) : jobs;
+      if (jobs.length > limit) {
+        // More pending jobs exist
+        hasMore = true;
+        const result = jobs.slice(0, limit);
+        const lastJob = result[result.length - 1];
+        nextCursor = Buffer.from(
+          JSON.stringify({
+            section: 'pending',
+            queue_position: lastJob.queue_position,
+            created_at: lastJob.created_at,
+            id: lastJob.id,
+          }),
+        ).toString('base64url');
+        return {
+          jobs: result.map(normalizeJobTimestamps),
+          nextCursor,
+          hasMore,
+        };
+      }
 
-    // Generate next cursor if there are more results
-    let nextCursor: string | undefined;
-    if (hasMore && result.length > 0) {
-      const lastJob = result[result.length - 1];
-      const cursorData = {
-        id: lastJob.id,
-        created_at: lastJob.created_at,
-      };
-      // Inline encoding to avoid circular dependency
-      nextCursor = Buffer.from(JSON.stringify(cursorData)).toString(
-        'base64url',
+      // Not enough pending jobs to fill the page, fetch finished jobs too
+      const remainingLimit = limit - jobs.length + 1; // +1 to check for more
+      const finishedJobs = query<Job>(
+        `SELECT * FROM jobs
+         WHERE status IN ('completed', 'failed', 'cancelled') ${clearedFilter}
+         ORDER BY updated_at DESC, id DESC
+         LIMIT ?`,
+        [remainingLimit],
       );
+
+      jobs = [...jobs, ...finishedJobs];
+
+      if (jobs.length > limit) {
+        hasMore = true;
+        const result = jobs.slice(0, limit);
+        const lastJob = result[result.length - 1];
+        nextCursor = Buffer.from(
+          JSON.stringify({
+            section: 'finished',
+            updated_at: lastJob.updated_at,
+            id: lastJob.id,
+          }),
+        ).toString('base64url');
+        return {
+          jobs: result.map(normalizeJobTimestamps),
+          nextCursor,
+          hasMore,
+        };
+      }
+
+      return {
+        jobs: jobs.map(normalizeJobTimestamps),
+        nextCursor: undefined,
+        hasMore: false,
+      };
     }
 
+    if (section === 'pending') {
+      // Continue paginating pending jobs
+      jobs = query<Job>(
+        `SELECT * FROM jobs
+         WHERE status = 'pending'
+           AND (queue_position, created_at, id) > (?, ?, ?)
+           ${clearedFilter}
+         ORDER BY queue_position ASC, created_at ASC, id ASC
+         LIMIT ?`,
+        [cursor.queue_position, cursor.created_at, cursor.id, limit + 1],
+      );
+
+      if (jobs.length > limit) {
+        // More pending jobs exist
+        hasMore = true;
+        const result = jobs.slice(0, limit);
+        const lastJob = result[result.length - 1];
+        nextCursor = Buffer.from(
+          JSON.stringify({
+            section: 'pending',
+            queue_position: lastJob.queue_position,
+            created_at: lastJob.created_at,
+            id: lastJob.id,
+          }),
+        ).toString('base64url');
+        return {
+          jobs: result.map(normalizeJobTimestamps),
+          nextCursor,
+          hasMore,
+        };
+      }
+
+      // Pending jobs exhausted, switch to finished jobs
+      const remainingLimit = limit - jobs.length + 1;
+      const finishedJobs = query<Job>(
+        `SELECT * FROM jobs
+         WHERE status IN ('completed', 'failed', 'cancelled') ${clearedFilter}
+         ORDER BY updated_at DESC, id DESC
+         LIMIT ?`,
+        [remainingLimit],
+      );
+
+      jobs = [...jobs, ...finishedJobs];
+
+      if (jobs.length > limit) {
+        hasMore = true;
+        const result = jobs.slice(0, limit);
+        const lastJob = result[result.length - 1];
+        nextCursor = Buffer.from(
+          JSON.stringify({
+            section: 'finished',
+            updated_at: lastJob.updated_at,
+            id: lastJob.id,
+          }),
+        ).toString('base64url');
+        return {
+          jobs: result.map(normalizeJobTimestamps),
+          nextCursor,
+          hasMore,
+        };
+      }
+
+      return {
+        jobs: jobs.map(normalizeJobTimestamps),
+        nextCursor: undefined,
+        hasMore: false,
+      };
+    }
+
+    if (section === 'finished') {
+      // Continue paginating finished jobs
+      jobs = query<Job>(
+        `SELECT * FROM jobs
+         WHERE status IN ('completed', 'failed', 'cancelled')
+           AND (updated_at, id) < (?, ?)
+           ${clearedFilter}
+         ORDER BY updated_at DESC, id DESC
+         LIMIT ?`,
+        [cursor.updated_at, cursor.id, limit + 1],
+      );
+
+      if (jobs.length > limit) {
+        hasMore = true;
+        const result = jobs.slice(0, limit);
+        const lastJob = result[result.length - 1];
+        nextCursor = Buffer.from(
+          JSON.stringify({
+            section: 'finished',
+            updated_at: lastJob.updated_at,
+            id: lastJob.id,
+          }),
+        ).toString('base64url');
+        return {
+          jobs: result.map(normalizeJobTimestamps),
+          nextCursor,
+          hasMore,
+        };
+      }
+
+      return {
+        jobs: jobs.map(normalizeJobTimestamps),
+        nextCursor: undefined,
+        hasMore: false,
+      };
+    }
+
+    // Shouldn't reach here, but return empty result as fallback
     return {
-      jobs: result.map(normalizeJobTimestamps),
-      nextCursor,
-      hasMore,
+      jobs: [],
+      nextCursor: undefined,
+      hasMore: false,
     };
   },
 
@@ -323,6 +468,17 @@ export const JobService = {
        LIMIT 1`,
     );
     return result ? normalizeJobTimestamps(result) : undefined;
+  },
+
+  /**
+   * Get the maximum queue_position value across all jobs
+   * Returns null if no jobs exist
+   */
+  getMaxQueuePosition(): number | null {
+    const result = queryOne<{ max_position: number | null }>(
+      'SELECT MAX(queue_position) as max_position FROM jobs',
+    );
+    return result?.max_position ?? null;
   },
 
   /**

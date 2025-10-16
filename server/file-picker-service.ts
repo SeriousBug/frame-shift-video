@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import micromatch from 'micromatch';
+import { orderBy } from 'natural-orderby';
 
 const VIDEO_EXTENSIONS = [
   '.mp4',
@@ -180,13 +181,16 @@ export class FilePickerStateService {
             depth: 0,
             selectionState: 'none' as const,
           };
-        })
-        .sort((a, b) => {
-          // Directories first, then alphabetical
-          if (a.isDirectory && !b.isDirectory) return -1;
-          if (!a.isDirectory && b.isDirectory) return 1;
-          return a.name.localeCompare(b.name);
         });
+
+      // Sort directories first, then files, using natural sort
+      const directories = entries.filter((item) => item.isDirectory);
+      const files = entries.filter((item) => !item.isDirectory);
+
+      const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
+      const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
+
+      return [...sortedDirs, ...sortedFiles];
     } catch (error) {
       console.error(`Failed to list directory ${dirPath}:`, error);
       return [];
