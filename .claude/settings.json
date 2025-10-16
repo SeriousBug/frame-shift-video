@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(bun run test:*)",
+      "Bash(bun run format:*)",
+      "Bash(bun run test:run:*)",
+      "Bash(bun run lint)",
+      "Bash(bun run build:*)",
+      "Bash(docker build:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enabledMcpjsonServers": ["playwright", "ark-ui"]
+}
