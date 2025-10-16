@@ -2,9 +2,9 @@
  * Database functionality tests
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { MetaService, JobService } from '../lib/db-service';
-import { getDatabase } from '../lib/database';
+import { describe, it, expect, beforeEach } from 'bun:test';
+import { MetaService, JobService } from '../../server/db-service';
+import { getDatabase } from '../../server/database';
 
 describe('Database', () => {
   beforeEach(() => {

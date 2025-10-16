@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { render, screen } from '@testing-library/react';
 import { JobService } from '../lib/db-service';
 import { getDatabase } from '../lib/database';

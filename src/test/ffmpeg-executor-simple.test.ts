@@ -2,7 +2,7 @@
  * Basic tests for FFmpeg executor functionality
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { FFmpegExecutor } from '@/lib/ffmpeg-executor';
 import {
   generateFFmpegCommand,

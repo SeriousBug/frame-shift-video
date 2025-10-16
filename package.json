@@ -11,9 +11,9 @@
     "build:server": "bun build server/index.ts --target=bun --outfile=dist/server.js --format=esm",
     "preview": "vite preview",
     "start": "NODE_ENV=production bun run dist/server.js",
-    "test": "NODE_OPTIONS=\"--disable-warning=ExperimentalWarning\" vitest",
-    "test:run": "NODE_OPTIONS=\"--disable-warning=ExperimentalWarning\" vitest run",
-    "test:ui": "NODE_OPTIONS=\"--disable-warning=ExperimentalWarning\" vitest --ui",
+    "test": "bun test",
+    "test:run": "bun test",
+    "test:ui": "bun test --watch",
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@happy-dom/global-registrator": "^20.0.2",
     "@tailwindcss/postcss": "^4",
     "@tanstack/router-plugin": "^1.132.51",
     "@testing-library/jest-dom": "^6.9.1",
@@ -46,15 +47,12 @@
     "@types/react-dom": "^19",
     "@types/react-highlight-words": "^0.20.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/ui": "^3.2.4",
     "concurrently": "^9.0.1",
     "eslint": "^9",
     "husky": "^9.1.7",
-    "jsdom": "^27.0.0",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite": "^6.0.3",
-    "vitest": "^3.2.4"
+    "vite": "^6.0.3"
   }
 }

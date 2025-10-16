@@ -2,7 +2,7 @@
  * Tests for FFmpeg command execution using mock ffmpeg script
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -59,10 +59,10 @@ describe('FFmpegExecutor', () => {
 
     executor = new FFmpegExecutor(options);
 
-    // Create a test command
+    // Create a test command with absolute paths
     const jobConfig: FFmpegJobConfig = {
-      inputFile: testInputFile,
-      outputFile: 'test-output.mp4',
+      inputFile: path.join(uploadsDir, testInputFile),
+      outputFile: path.join(outputsDir, 'test-output.mp4'),
       options: {
         ...DEFAULT_CONVERSION_OPTIONS,
         selectedFiles: [testInputFile],
@@ -107,8 +107,8 @@ describe('FFmpegExecutor', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.outputPath).toContain(outputsDir);
-        expect(result.outputPath).toContain('test-output.mp4');
+        expect(result.finalPath).toContain(outputsDir);
+        expect(result.finalPath).toContain('test-output.mp4');
         expect(result.exitCode).toBe(0);
         expect(result.stderr).toContain('ffmpeg version mock-test-1.0');
       }
@@ -223,8 +223,8 @@ describe('executeFFmpegCommand', () => {
 
   it('should execute single command with mock ffmpeg', async () => {
     const jobConfig: FFmpegJobConfig = {
-      inputFile: testInputFile,
-      outputFile: 'output.mp4',
+      inputFile: path.join(uploadsDir, testInputFile),
+      outputFile: path.join(outputsDir, 'output.mp4'),
       options: {
         ...DEFAULT_CONVERSION_OPTIONS,
         selectedFiles: [testInputFile],
@@ -246,8 +246,8 @@ describe('executeFFmpegCommand', () => {
 
   it('should execute single command in dry run mode', async () => {
     const jobConfig: FFmpegJobConfig = {
-      inputFile: testInputFile,
-      outputFile: 'output.mp4',
+      inputFile: path.join(uploadsDir, testInputFile),
+      outputFile: path.join(outputsDir, 'output.mp4'),
       options: {
         ...DEFAULT_CONVERSION_OPTIONS,
         selectedFiles: [testInputFile],
@@ -310,8 +310,8 @@ describe('executeFFmpegCommands', () => {
 
     const commands = [
       generateFFmpegCommand({
-        inputFile: 'test1.mp4',
-        outputFile: 'output1.mp4',
+        inputFile: path.join(uploadsDir, 'test1.mp4'),
+        outputFile: path.join(outputsDir, 'output1.mp4'),
         options: {
           ...DEFAULT_CONVERSION_OPTIONS,
           selectedFiles: ['test1.mp4'],
@@ -319,8 +319,8 @@ describe('executeFFmpegCommands', () => {
         jobName: 'Test 1',
       }),
       generateFFmpegCommand({
-        inputFile: 'test2.mp4',
-        outputFile: 'output2.mp4',
+        inputFile: path.join(uploadsDir, 'test2.mp4'),
+        outputFile: path.join(outputsDir, 'output2.mp4'),
         options: {
           ...DEFAULT_CONVERSION_OPTIONS,
           selectedFiles: ['test2.mp4'],
@@ -342,8 +342,8 @@ describe('executeFFmpegCommands', () => {
   it('should execute multiple commands in dry run mode', async () => {
     const commands = [
       generateFFmpegCommand({
-        inputFile: 'test1.mp4',
-        outputFile: 'output1.mp4',
+        inputFile: path.join(uploadsDir, 'test1.mp4'),
+        outputFile: path.join(outputsDir, 'output1.mp4'),
         options: {
           ...DEFAULT_CONVERSION_OPTIONS,
           selectedFiles: ['test1.mp4'],
@@ -351,8 +351,8 @@ describe('executeFFmpegCommands', () => {
         jobName: 'Test 1',
       }),
       generateFFmpegCommand({
-        inputFile: 'test2.mp4',
-        outputFile: 'output2.mp4',
+        inputFile: path.join(uploadsDir, 'test2.mp4'),
+        outputFile: path.join(outputsDir, 'output2.mp4'),
         options: {
           ...DEFAULT_CONVERSION_OPTIONS,
           selectedFiles: ['test2.mp4'],

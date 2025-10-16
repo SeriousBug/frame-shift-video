@@ -3,14 +3,14 @@
  */
 
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, mock } from 'bun:test';
 import { render, screen } from '@testing-library/react';
 import { JobCard } from '../components/job-card';
 import { Job } from '../types/database';
 
 // Mock date-fns to have predictable date formatting
-vi.mock('date-fns', () => ({
-  formatDistanceToNow: vi.fn(() => '2 minutes ago'),
+mock.module('date-fns', () => ({
+  formatDistanceToNow: mock(() => '2 minutes ago'),
 }));
 
 describe('JobCard', () => {

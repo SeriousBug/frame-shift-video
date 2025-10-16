@@ -3,7 +3,7 @@
  * Uses real file system operations and mock ffmpeg script
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -75,8 +75,8 @@ describe('FFmpeg Executor Integration Tests', () => {
       executor = new FFmpegExecutor(options);
 
       const jobConfig: FFmpegJobConfig = {
-        inputFile: testInputFile,
-        outputFile: 'test-output.mp4',
+        inputFile: path.join(uploadsDir, testInputFile),
+        outputFile: path.join(outputsDir, 'test-output.mp4'),
         options: {
           ...DEFAULT_CONVERSION_OPTIONS,
           selectedFiles: [testInputFile],
@@ -101,8 +101,8 @@ describe('FFmpeg Executor Integration Tests', () => {
 
     it('should create output directories as needed', async () => {
       const jobConfig: FFmpegJobConfig = {
-        inputFile: testInputFile,
-        outputFile: 'subfolder/deep/test-output.mp4',
+        inputFile: path.join(uploadsDir, testInputFile),
+        outputFile: path.join(outputsDir, 'subfolder/deep/test-output.mp4'),
         options: {
           ...DEFAULT_CONVERSION_OPTIONS,
           selectedFiles: [testInputFile],

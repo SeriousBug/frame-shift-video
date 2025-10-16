@@ -2,7 +2,7 @@
  * Job processor tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { JobProcessor } from '@/lib/job-processor';
 import { JobService } from '@/lib/db-service';
 import { getDatabase } from '@/lib/database';

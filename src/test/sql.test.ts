@@ -2,7 +2,7 @@
  * SQL template utility tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { SQL, SQLNAMED } from '../lib/sql';
 
 describe('SQL Template Utilities', () => {

@@ -1,0 +1,5 @@
+# Bun configuration file
+
+[test]
+# Preload happy-dom and testing library setup
+preload = ["./happydom.ts", "./testing-library.ts", "./src/test/setup.ts"]

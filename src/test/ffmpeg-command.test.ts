@@ -2,7 +2,7 @@
  * Tests for FFmpeg command generation utility
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import {
   createFFmpegJobs,
   generateFFmpegCommand,

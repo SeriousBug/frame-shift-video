@@ -2,7 +2,7 @@
  * Unit tests for conversion types and defaults
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import {
   DEFAULT_CONVERSION_OPTIONS,
   VideoCodec,
