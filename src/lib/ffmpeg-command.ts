@@ -110,6 +110,10 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
   if (options.customCommand) {
     const customArgs = options.customCommand.trim().split(/\s+/);
     customArgs.forEach((arg) => args.push(escapeArgument(arg)));
+    // Add progress reporting for custom commands too
+    args.push('-progress', 'pipe:1');
+    // Overwrite output files
+    args.push('-y');
     args.push(escapeFilePath(config.outputFile));
     return args;
   }

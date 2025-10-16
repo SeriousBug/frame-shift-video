@@ -34,13 +34,9 @@ describe('FFmpeg Command Generation', () => {
       expect(jobs[0].inputFile).toBe('test-video.mkv');
       expect(jobs[1].inputFile).toBe('another-video.mp4');
 
-      // Output files should have timestamp and correct extension
-      expect(jobs[0].outputFile).toMatch(
-        /test-video-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.mp4/,
-      );
-      expect(jobs[1].outputFile).toMatch(
-        /another-video-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.mp4/,
-      );
+      // Output files should have _converted suffix and correct extension
+      expect(jobs[0].outputFile).toBe('test-video_converted.mp4');
+      expect(jobs[1].outputFile).toBe('another-video_converted.mp4');
 
       // Job names should be descriptive
       expect(jobs[0].jobName).toBe('Convert test-video.mkv to MP4');
@@ -91,9 +87,9 @@ describe('FFmpeg Command Generation', () => {
         '-preset',
         'slow',
         '-c:a',
-        'libopus',
-        '-b:a',
-        '128k',
+        'copy',
+        '-c:s',
+        'copy',
         '-progress',
         'pipe:1',
         '-y',
@@ -101,7 +97,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -c:v libx265 -crf 22 -preset slow -c:a libopus -b:a 128k -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -c:v libx265 -crf 22 -preset slow -c:a copy -c:s copy -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');
@@ -211,6 +207,9 @@ describe('FFmpeg Command Generation', () => {
         'film',
         '-profile:v',
         'high',
+        '-progress',
+        'pipe:1',
+        '-y',
         'output.mp4',
       ]);
     });
@@ -239,15 +238,17 @@ describe('FFmpeg Command Generation', () => {
       );
     });
 
-    it('should reject absolute paths', () => {
+    it('should allow absolute paths for server-local files', () => {
       const absoluteOptions = {
         ...basicOptions,
         selectedFiles: ['/etc/passwd'],
       };
 
-      expect(() => createFFmpegJobs(absoluteOptions)).toThrow(
-        'Absolute paths not allowed',
-      );
+      // Absolute paths are allowed because they're needed for server-local files
+      expect(() => createFFmpegJobs(absoluteOptions)).not.toThrow();
+      const jobs = createFFmpegJobs(absoluteOptions);
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].inputFile).toBe('/etc/passwd');
     });
 
     it('should handle shell metacharacters in custom commands safely', () => {

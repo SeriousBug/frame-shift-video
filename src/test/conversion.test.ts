@@ -21,7 +21,7 @@ describe('Conversion Types', () => {
         basic: {
           videoCodec: 'libx265',
           quality: 22,
-          outputFormat: 'mp4',
+          outputFormat: 'mkv',
         },
         advanced: {
           preset: 'slow',
@@ -35,7 +35,7 @@ describe('Conversion Types', () => {
             copyOriginal: true,
           },
           audio: {
-            codec: 'libopus',
+            codec: 'copy',
             bitrate: 128,
           },
         },
@@ -57,8 +57,8 @@ describe('Conversion Types', () => {
       // Should use CRF mode (quality-based)
       expect(defaults.advanced.bitrate.mode).toBe('crf');
 
-      // Audio should be Opus (best quality/size ratio)
-      expect(defaults.advanced.audio.codec).toBe('libopus');
+      // Audio should be copy (preserve original)
+      expect(defaults.advanced.audio.codec).toBe('copy');
       expect(defaults.advanced.audio.bitrate).toBe(128);
     });
   });

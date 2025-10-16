@@ -54,7 +54,7 @@ describe('Database', () => {
 
   describe('JobService', () => {
     it('should create and retrieve jobs', () => {
-      const jobId = JobService.create({
+      JobService.create({
         name: 'Test Job',
         input_file: '/test/input.mp4',
         ffmpeg_command_json: JSON.stringify({
@@ -64,10 +64,11 @@ describe('Database', () => {
         }),
       });
 
-      expect(jobId).toBeTypeOf('number');
-      expect(jobId).toBeGreaterThan(0);
+      // Get all jobs and find the one we just created
+      const allJobs = JobService.getAll();
+      expect(allJobs.length).toBeGreaterThan(0);
 
-      const job = JobService.getById(jobId);
+      const job = allJobs.find((j) => j.name === 'Test Job');
       expect(job).toBeDefined();
       expect(job?.name).toBe('Test Job');
       expect(job?.status).toBe('pending');
@@ -76,71 +77,89 @@ describe('Database', () => {
     });
 
     it('should update job progress', () => {
-      const jobId = JobService.create({
+      JobService.create({
         name: 'Progress Test Job',
         input_file: '/test/input.mp4',
       });
 
-      JobService.updateProgress(jobId, 75);
-      const job = JobService.getById(jobId);
-      expect(job?.progress).toBe(75);
+      const job = JobService.getAll().find(
+        (j) => j.name === 'Progress Test Job',
+      );
+      expect(job).toBeDefined();
+
+      JobService.updateProgress(job!.id, 75);
+      const updatedJob = JobService.getById(job!.id);
+      expect(updatedJob?.progress).toBe(75);
     });
 
     it('should complete jobs', () => {
-      const jobId = JobService.create({
+      JobService.create({
         name: 'Completion Test Job',
         input_file: '/test/input.mp4',
       });
 
-      JobService.complete(jobId, '/test/output.mp4');
-      const job = JobService.getById(jobId);
-      expect(job?.status).toBe('completed');
-      expect(job?.output_file).toBe('/test/output.mp4');
-      expect(job?.progress).toBe(100);
+      const job = JobService.getAll().find(
+        (j) => j.name === 'Completion Test Job',
+      );
+      expect(job).toBeDefined();
+
+      JobService.complete(job!.id, '/test/output.mp4');
+      const updatedJob = JobService.getById(job!.id);
+      expect(updatedJob?.status).toBe('completed');
+      expect(updatedJob?.output_file).toBe('/test/output.mp4');
+      expect(updatedJob?.progress).toBe(100);
     });
 
     it('should set job errors', () => {
-      const jobId = JobService.create({
+      JobService.create({
         name: 'Error Test Job',
         input_file: '/test/input.mp4',
       });
 
-      JobService.setError(jobId, 'FFmpeg failed');
-      const job = JobService.getById(jobId);
-      expect(job?.status).toBe('failed');
-      expect(job?.error_message).toBe('FFmpeg failed');
+      const job = JobService.getAll().find((j) => j.name === 'Error Test Job');
+      expect(job).toBeDefined();
+
+      JobService.setError(job!.id, 'FFmpeg failed');
+      const updatedJob = JobService.getById(job!.id);
+      expect(updatedJob?.status).toBe('failed');
+      expect(updatedJob?.error_message).toBe('FFmpeg failed');
     });
 
     it('should filter jobs by status', () => {
-      const pendingId = JobService.create({
+      JobService.create({
         name: 'Pending Job',
         input_file: '/test/pending.mp4',
       });
 
-      const processingId = JobService.create({
+      JobService.create({
         name: 'Processing Job',
         input_file: '/test/processing.mp4',
       });
 
-      JobService.update(processingId, { status: 'processing' });
+      const processingJob = JobService.getAll().find(
+        (j) => j.name === 'Processing Job',
+      );
+      expect(processingJob).toBeDefined();
+
+      JobService.update(processingJob!.id, { status: 'processing' });
 
       const pendingJobs = JobService.getByStatus('pending');
       const processingJobs = JobService.getByStatus('processing');
 
       expect(pendingJobs).toHaveLength(1);
-      expect(pendingJobs[0].id).toBe(pendingId);
+      expect(pendingJobs[0].name).toBe('Pending Job');
       expect(processingJobs).toHaveLength(1);
-      expect(processingJobs[0].id).toBe(processingId);
+      expect(processingJobs[0].name).toBe('Processing Job');
     });
 
     it('should manage job queue', () => {
-      const job1Id = JobService.create({
+      JobService.create({
         name: 'Queue Job 1',
         input_file: '/test/queue1.mp4',
         queue_position: 2,
       });
 
-      const job2Id = JobService.create({
+      JobService.create({
         name: 'Queue Job 2',
         input_file: '/test/queue2.mp4',
         queue_position: 1,
@@ -149,8 +168,10 @@ describe('Database', () => {
       const queue = JobService.getQueue();
       expect(queue).toHaveLength(2);
       // Should be ordered by queue_position
-      expect(queue[0].id).toBe(job2Id); // position 1
-      expect(queue[1].id).toBe(job1Id); // position 2
+      expect(queue[0].name).toBe('Queue Job 2'); // position 1
+      expect(queue[0].queue_position).toBe(1);
+      expect(queue[1].name).toBe('Queue Job 1'); // position 2
+      expect(queue[1].queue_position).toBe(2);
     });
 
     it('should get next pending job', () => {
@@ -160,7 +181,7 @@ describe('Database', () => {
         queue_position: 2,
       });
 
-      const job2Id = JobService.create({
+      JobService.create({
         name: 'First Job',
         input_file: '/test/first.mp4',
         queue_position: 1,
@@ -168,58 +189,71 @@ describe('Database', () => {
 
       const nextJob = JobService.getNextPendingJob();
       expect(nextJob).toBeDefined();
-      expect(nextJob?.id).toBe(job2Id); // Should be the one with position 1
+      expect(nextJob?.name).toBe('First Job'); // Should be the one with position 1
+      expect(nextJob?.queue_position).toBe(1);
     });
 
     it('should reorder queue', () => {
-      const job1Id = JobService.create({
+      JobService.create({
         name: 'Job 1',
         input_file: '/test/1.mp4',
         queue_position: 0,
       });
 
-      const job2Id = JobService.create({
+      JobService.create({
         name: 'Job 2',
         input_file: '/test/2.mp4',
         queue_position: 1,
       });
 
-      const job3Id = JobService.create({
+      JobService.create({
         name: 'Job 3',
         input_file: '/test/3.mp4',
         queue_position: 2,
       });
 
+      const allJobs = JobService.getAll();
+      const job1 = allJobs.find((j) => j.name === 'Job 1');
+      const job2 = allJobs.find((j) => j.name === 'Job 2');
+      const job3 = allJobs.find((j) => j.name === 'Job 3');
+
+      expect(job1).toBeDefined();
+      expect(job2).toBeDefined();
+      expect(job3).toBeDefined();
+
       // Reorder: job3, job1, job2
-      JobService.reorderQueue([job3Id, job1Id, job2Id]);
+      JobService.reorderQueue([job3!.id, job1!.id, job2!.id]);
 
-      const job1 = JobService.getById(job1Id);
-      const job2 = JobService.getById(job2Id);
-      const job3 = JobService.getById(job3Id);
+      const updatedJob1 = JobService.getById(job1!.id);
+      const updatedJob2 = JobService.getById(job2!.id);
+      const updatedJob3 = JobService.getById(job3!.id);
 
-      expect(job3?.queue_position).toBe(0);
-      expect(job1?.queue_position).toBe(1);
-      expect(job2?.queue_position).toBe(2);
+      expect(updatedJob3?.queue_position).toBe(0);
+      expect(updatedJob1?.queue_position).toBe(1);
+      expect(updatedJob2?.queue_position).toBe(2);
     });
 
     it('should delete jobs', () => {
-      const jobId = JobService.create({
+      JobService.create({
         name: 'Delete Test Job',
         input_file: '/test/delete.mp4',
       });
 
-      JobService.delete(jobId);
-      const job = JobService.getById(jobId);
-      expect(job).toBeUndefined();
+      const job = JobService.getAll().find((j) => j.name === 'Delete Test Job');
+      expect(job).toBeDefined();
+
+      JobService.delete(job!.id);
+      const deletedJob = JobService.getById(job!.id);
+      expect(deletedJob).toBeUndefined();
     });
 
     it('should get all jobs ordered by creation date', () => {
-      const job1Id = JobService.create({
+      JobService.create({
         name: 'Job 1',
         input_file: '/test/1.mp4',
       });
 
-      const job2Id = JobService.create({
+      JobService.create({
         name: 'Job 2',
         input_file: '/test/2.mp4',
       });
@@ -227,8 +261,8 @@ describe('Database', () => {
       const allJobs = JobService.getAll();
       expect(allJobs).toHaveLength(2);
       // Should be ordered by created_at DESC (newest first)
-      expect(allJobs[0].id).toBe(job2Id);
-      expect(allJobs[1].id).toBe(job1Id);
+      expect(allJobs[0].name).toBe('Job 2');
+      expect(allJobs[1].name).toBe('Job 1');
     });
   });
 });

@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Mock ffprobe script for testing
+# This script simulates ffprobe behavior for tests
+
+# Check if help was requested
+if [[ "$*" == *"-h"* ]] || [[ "$*" == *"--help"* ]] || [[ "$*" == *"-help"* ]]; then
+    echo "Mock FFprobe for testing"
+    echo "frame-shift-video test version"
+    exit 0
+fi
+
+# Check if version was requested
+if [[ "$*" == *"-version"* ]]; then
+    echo "ffprobe version mock-test-1.0"
+    echo "Mock FFprobe for frame-shift-video tests"
+    exit 0
+fi
+
+# For duration requests, return a mock duration of 7.66 seconds (matching our mock ffmpeg output)
+if [[ "$*" == *"format=duration"* ]]; then
+    echo "7.66"
+    exit 0
+fi
+
+# Default: return empty (probe failed gracefully)
+exit 0

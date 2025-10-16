@@ -83,6 +83,8 @@ Choose between:
 
 ```bash
 git tag -a vX.Y.Z -m "$(cat <<'EOF'
+<one line summary of tag here>
+
 <changelog content here>
 EOF
 )"
