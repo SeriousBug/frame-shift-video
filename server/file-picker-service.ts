@@ -158,7 +158,7 @@ export class FilePickerStateService {
 
     try {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
-      return entries
+      const items = entries
         .filter((entry) => {
           // Filter hidden files
           if (!showHidden && entry.name.startsWith('.')) return false;
@@ -184,8 +184,8 @@ export class FilePickerStateService {
         });
 
       // Sort directories first, then files, using natural sort
-      const directories = entries.filter((item) => item.isDirectory);
-      const files = entries.filter((item) => !item.isDirectory);
+      const directories = items.filter((item) => item.isDirectory);
+      const files = items.filter((item) => !item.isDirectory);
 
       const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
       const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
@@ -259,7 +259,14 @@ export class FilePickerStateService {
     try {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
 
-      for (const entry of entries) {
+      // Sort entries naturally: directories first, then files
+      const directories = entries.filter((entry) => entry.isDirectory());
+      const files = entries.filter((entry) => entry.isFile());
+      const sortedDirs = orderBy(directories, [(entry) => entry.name], ['asc']);
+      const sortedFiles = orderBy(files, [(entry) => entry.name], ['asc']);
+      const sortedEntries = [...sortedDirs, ...sortedFiles];
+
+      for (const entry of sortedEntries) {
         // Skip hidden files unless showHidden is true
         if (!showHidden && entry.name.startsWith('.')) continue;
 
