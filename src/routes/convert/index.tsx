@@ -538,12 +538,8 @@ function ConvertPage() {
                     <Menu.CheckboxItem
                       value="advanced-mode"
                       checked={advancedMode}
-                      onCheckedChange={() => {
-                        if (!videosOnly) {
-                          setAdvancedMode(!advancedMode);
-                        }
-                      }}
-                      className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 ${videosOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onCheckedChange={() => setAdvancedMode(!advancedMode)}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
                     >
                       <div
                         className={`w-4 h-4 flex items-center justify-center border-2 rounded ${

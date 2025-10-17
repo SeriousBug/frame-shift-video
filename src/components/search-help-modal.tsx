@@ -18,8 +18,8 @@ This search uses **micromatch** pattern matching to filter files.
 
 **Advanced Mode**
 - Use exact pattern matching without modifications
-- **Videos Only** is automatically disabled
 - Full control over your search pattern
+- Can be combined with all other filters
 - Use this when you need precise pattern matching
 
 **Show Hidden Files**
