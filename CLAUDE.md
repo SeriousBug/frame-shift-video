@@ -4,142 +4,90 @@
 
 Self-hosted web service for queueing and managing FFmpeg video conversion jobs. Users can browse the server filesystem to select source files and receive notifications when jobs complete.
 
-## Technologies
-
-- **Runtime**: Bun (backend server, SQLite, WebSocket)
-- **Frontend**: Vite, React 19, TypeScript, TanStack Router, TanStack Query
-- **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui
-- **Backend**: Bun HTTP server, integrated WebSocket, built-in SQLite
-- **Video Processing**: FFmpeg (external dependency)
-- **Notifications**: Pushover API, Discord Webhooks
-- **Testing**: Vitest
-- **Code Quality**: ESLint, Prettier, Husky
-
-## Architecture
+## Architecture Overview
 
 **Separated frontend-backend architecture:**
 
-- **Vite dev server (port 3000)**: Serves React UI during development with HMR
-- **Bun server (port 3001)**: HTTP API, WebSocket, SQLite database, FFmpeg job processor
+- **Vite dev server**: Serves React UI during development with HMR
+- **Bun server**: HTTP API, WebSocket, SQLite database, FFmpeg job processor
 - **Production**: Bun server serves pre-built static files from `dist/` and handles all requests
 
-The Bun server is the single source of truth for job state and queue management, eliminating synchronization issues between the API and WebSocket.
+The Bun server is the single source of truth for job state and queue management.
 
-## Codebase Layout
+## Key Components (Terminology)
+
+- **File picker**: The page with "Select Files for Conversion" text (`/src/routes/convert/index.tsx`)
+- **Conversion page** / **Config page**: The page with "Configure Conversion" text (`/src/routes/convert/configure.tsx`)
+- **Job queue**: The "Video jobs" list on the home page (`/src/components/job-list.tsx`)
+- **File picker cursor**: The `key` parameter used for pagination on the file picker page
+
+## Important Architectural Patterns
+
+### File Picker State (Server-Side)
+
+The file picker state is **entirely server-side**. The client acts as a thin client—it just sends requests like "expand this folder" or "select this file", and the backend responds with the entire contents of what the file picker should display.
+
+The file picker renders as a tree visually, but **it's internally flattened**. The server returns a flat list; nested items are rendered with padding. This allows efficient rendering with `react-virtuoso`.
+
+### Pagination & Cursors
+
+Any list of files or jobs can be **unbounded in length**, so we use `react-virtuoso` and pagination.
+
+Pagination is done using **opaque cursors**. The server responds with a cursor that the client must include in the next request. Internally, cursors contain JSON-encoded data for flexibility.
+
+### Database Patterns
+
+- **JSON fields**: Anything stored in the database that we won't need to query by can go into a JSON-encoded string stored in a TEXT field.
+- **Indexes**: Database operations should make good use of indexes.
+- **No SKIP/OFFSET**: Avoid expensive & non-scalable options like `SKIP` or `OFFSET`. Use cursor-based pagination instead.
+
+Database schema is defined in `/server/database.ts`. Migrations run automatically on startup via `/server/db-service.ts`.
+
+## Technology Stack
+
+- **Runtime**: Bun (backend server, SQLite, WebSocket, testing)
+- **Frontend**: Vite, React 19, TypeScript, TanStack Router, TanStack Query
+- **Styling**: Tailwind CSS
+- **Backend**: Bun HTTP server, integrated WebSocket, built-in SQLite
+- **Video Processing**: FFmpeg (external dependency)
+- **Notifications**: See `/server/notification-service.ts`
+
+## Directory Structure
 
 ### Frontend (`/src`)
 
-- **`/src/routes/`**: TanStack Router pages
-  - `index.tsx`: Job list/dashboard
-  - `convert/index.tsx`: File selection
-  - `convert/configure.tsx`: FFmpeg configuration
-- **`/src/components/`**: React components
-  - `job-list.tsx`: Main job queue display
-  - `job-card.tsx`: Individual job display
-  - `file-browser-modal.tsx`: Server file browser
-  - `conversion-config.tsx`: FFmpeg preset/command configuration
-- **`/src/lib/`**: Frontend utilities
-  - `api.ts`: API client functions
-  - `api-hooks.ts`: TanStack Query hooks
-  - `ffmpeg-command.ts`: FFmpeg command builder
-  - `ffmpeg-executor.ts`: FFmpeg process execution
+- **`/src/routes/`**: TanStack Router pages (file picker, config page, job queue)
+- **`/src/components/`**: React components (job cards, file browser, conversion config)
+- **`/src/lib/`**: Frontend utilities (API client, TanStack Query hooks, FFmpeg command builder)
 
 ### Backend (`/server`)
 
 - **`index.ts`**: Main server entry point, HTTP + WebSocket setup
-- **`routes.ts`**: API route handlers
+- **`routes.ts`**: API route definitions (see here for endpoint list)
 - **`websocket.ts`**: WebSocket server for real-time updates
 - **`database.ts`**: SQLite connection and schema
 - **`db-service.ts`**: Database query layer
 - **`job-processor.ts`**: Job queue manager, processes FFmpeg jobs
-- **`notification-service.ts`**: Pushover and Discord integrations
-- **`static.ts`**: Static file serving for production
-- **`/server/handlers/`**: API endpoint implementations
-  - `jobs.ts`: Job CRUD and retry endpoints
-  - `files.ts`: File system browsing
-  - `file-selections.ts`: File selection state
-
-### Configuration
-
-- **`package.json`**: Scripts and dependencies
-- **`vite.config.ts`**: Vite dev server config with proxy to Bun server
-- **`tsconfig.json`**: TypeScript compiler options
-- **`Dockerfile`**: Production container image
-- **`.env.example`**: Environment variable documentation
+- **`notification-service.ts`**: Notification integrations
+- **`/server/handlers/`**: API endpoint implementations (jobs, files, file selections)
 
 ### Tests
 
-- **`/src/test/`**: Test files (Vitest)
-  - `ffmpeg-executor.test.ts`: Unit tests for FFmpeg execution
-  - `job-processor.test.ts`: Job queue processor tests
-  - Integration tests for FFmpeg progress parsing
-
-## Database Schema
-
-SQLite database in `/data/jobs.db`:
-
-- **`jobs`**: Conversion job records (id, filename, paths, status, progress, FFmpeg command, order)
-- **`settings`**: Key-value configuration store (notifications, etc.)
-
-Migrations run automatically on server startup via `db-service.ts`.
-
-## Job Processing Flow
-
-1. User creates job via web UI
-2. Job saved to database with `pending` status
-3. Job processor picks up next pending job
-4. FFmpeg process spawned with progress parsing
-5. Progress updates broadcast via WebSocket
-6. On completion, notifications sent (if configured)
-7. Job marked `completed` or `failed` in database
+- **`/src/test/`**: Test files using Bun's built-in test runner
 
 ## WebSocket Events
 
-- `job-update`: Real-time job status and progress changes
-- `job-created`: New job added to queue
-- `job-deleted`: Job removed from queue
-- `active-jobs-count`: Number of currently processing jobs
+See `/server/websocket.ts` for event definitions. Websocket events update page as conversions make progress or complete.
 
 ## Development Workflow
 
 ```bash
 # Start both Vite and Bun servers (recommended)
-npm run dev
-
-# Or start individually:
-npm run dev:client  # Vite only (port 3000)
-npm run dev:server  # Bun only (port 3001)
+bun run dev
 
 # Run tests
-npm run test        # Watch mode
-npm run test:run    # Single run
-npm run test:ui     # With Vitest UI
+bun test
 
-# Linting and formatting
-npm run lint
-npm run format
-
-# Production build
-npm run build       # Builds frontend to dist/
-npm run start       # Starts Bun server (serves from dist/)
+# Linting
+bun run lint
 ```
-
-## Docker Build
-
-The Dockerfile uses a multi-stage build:
-
-1. **Builder stage**: Installs dependencies, builds frontend
-2. **Production stage**: Alpine Linux, copies built artifacts, installs FFmpeg
-3. Final image: ~200MB
-
-## API Endpoints
-
-- `GET /api/jobs` - List all jobs with counts by status
-- `POST /api/jobs` - Create new job
-- `DELETE /api/jobs/:id` - Delete job
-- `POST /api/jobs/:id/retry` - Retry failed job
-- `GET /api/files?path=...` - Browse filesystem
-- `GET /api/file-selections` - Get selected files for conversion
-- `POST /api/file-selections` - Save file selections
-- `DELETE /api/file-selections` - Clear selections
