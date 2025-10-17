@@ -20,7 +20,7 @@ export function VersionMismatchBanner({
             <div className="text-white">
               <p className="font-semibold">New version available</p>
               <p className="text-sm text-white/90">
-                Server has been updated (v{serverVersion}). You're running v
+                Server has been updated ({serverVersion}). You're running{' '}
                 {clientVersion}. Please reload to get the latest version.
               </p>
             </div>
