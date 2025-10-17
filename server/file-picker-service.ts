@@ -543,26 +543,48 @@ export class FilePickerStateService {
             }
           }
 
-          // Compute allConverted for children first
-          const childFolders = childResult.items.filter(
+          // Compute allConverted by checking immediate children only
+          // Get immediate children (depth = current depth + 1)
+          const immediateChildren = childResult.items.filter(
+            (child) => child.depth === depth + 1,
+          );
+
+          // Check immediate child folders for their allConverted status
+          const childFolders = immediateChildren.filter(
             (child) => child.isDirectory,
           );
           const childFoldersConverted = childFolders.every(
             (child) => child.allConverted,
           );
-          // Check all video files in this folder
-          const videoFiles = entries.filter(
+
+          // Check immediate child video files (exclude _converted files)
+          const videoFiles = immediateChildren.filter(
             (child) =>
               !child.isDirectory &&
               FilePickerStateService.isVideoFile(child.name) &&
               !FilePickerStateService.isConvertedFile(child.name),
           );
+
+          // All immediate video files must be converted
           const allFilesConverted =
             videoFiles.length === 0 ||
             videoFiles.every((file) =>
-              FilePickerStateService.hasConvertedVersion(file, entries),
+              FilePickerStateService.hasConvertedVersion(
+                file,
+                immediateChildren,
+              ),
             );
-          entry.allConverted = allFilesConverted && childFoldersConverted;
+
+          // Check if this folder has any video content at all (direct files or in subfolders)
+          const hasVideoFiles = videoFiles.length > 0;
+          const hasVideoFolders = childFolders.some(
+            (f) => f.allConverted === true,
+          );
+          const hasVideoContent = hasVideoFiles || hasVideoFolders;
+
+          // Only mark as allConverted if there's video content AND it's all converted
+          entry.allConverted =
+            hasVideoContent && allFilesConverted && childFoldersConverted;
           result.push(entry);
           // If expanded, flatten children into result
           if (entry.isExpanded) {
