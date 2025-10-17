@@ -3,6 +3,13 @@ import { Job } from '@/types/database';
 import { ConversionOptions } from '@/types/conversion';
 import { formatDistanceToNow } from 'date-fns';
 import Highlighter from 'react-highlight-words';
+import {
+  Circle,
+  CircleDashed,
+  CircleCheck,
+  CircleX,
+  CircleSlash,
+} from 'lucide-react';
 
 interface JobCardProps {
   job: Job & { currentFrame?: number; currentFps?: number };
@@ -24,12 +31,12 @@ const statusColors = {
   cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
-const statusIcons = {
-  pending: '⏳',
-  processing: '⚡',
-  completed: '✅',
-  failed: '❌',
-  cancelled: '⏹️',
+const statusIcons: Record<Job['status'], React.ReactNode> = {
+  pending: <Circle size={14} />,
+  processing: <CircleDashed size={14} className="animate-spin-slow" />,
+  completed: <CircleCheck size={14} />,
+  failed: <CircleX size={14} />,
+  cancelled: <CircleSlash size={14} />,
 };
 
 export function JobCard({

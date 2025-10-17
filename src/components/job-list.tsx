@@ -18,6 +18,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Menu } from '@ark-ui/react/menu';
 import { useInPageSearch } from '@/hooks/use-in-page-search';
 import { InPageSearch } from './in-page-search';
+import { Trash, ListRestart, X } from 'lucide-react';
 
 export function JobList() {
   const [showCleared, setShowCleared] = useState(false);
@@ -643,9 +644,10 @@ export function JobList() {
                       : 'hover:bg-orange-50 dark:hover:bg-orange-900/20'
                   }`}
                 >
-                  <span className="text-orange-600 dark:text-orange-400 text-lg">
-                    🗑️
-                  </span>
+                  <Trash
+                    size={16}
+                    className="text-orange-600 dark:text-orange-400"
+                  />
                   <Menu.ItemText
                     className={`text-sm ${
                       clearFinishedJobsMutation.isPending ||
@@ -682,9 +684,10 @@ export function JobList() {
                       : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
                   }`}
                 >
-                  <span className="text-blue-600 dark:text-blue-400 text-lg">
-                    🔄
-                  </span>
+                  <ListRestart
+                    size={16}
+                    className="text-blue-600 dark:text-blue-400"
+                  />
                   <Menu.ItemText
                     className={`text-sm ${
                       markAllFailedAsRetriedMutation.isPending ||
@@ -721,9 +724,7 @@ export function JobList() {
                       : 'hover:bg-red-50 dark:hover:bg-red-900/20'
                   }`}
                 >
-                  <span className="text-red-600 dark:text-red-400 text-lg">
-                    ✕
-                  </span>
+                  <X size={16} className="text-red-600 dark:text-red-400" />
                   <Menu.ItemText
                     className={`text-sm ${
                       cancelAllJobsMutation.isPending ||

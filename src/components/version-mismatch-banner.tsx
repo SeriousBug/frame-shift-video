@@ -1,4 +1,5 @@
 import React from 'react';
+import { TriangleAlert } from 'lucide-react';
 
 interface VersionMismatchBannerProps {
   clientVersion: string;
@@ -16,7 +17,7 @@ export function VersionMismatchBanner({
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-white text-xl flex-shrink-0">⚠️</span>
+            <TriangleAlert className="text-white flex-shrink-0" size={20} />
             <div className="text-white">
               <p className="font-semibold">New version available</p>
               <p className="text-sm text-white/90">

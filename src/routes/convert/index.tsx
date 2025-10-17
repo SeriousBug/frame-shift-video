@@ -12,6 +12,14 @@ import { useInPageSearch } from '@/hooks/use-in-page-search';
 import { InPageSearch } from '@/components/in-page-search';
 import Highlighter from 'react-highlight-words';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
+import {
+  Folder,
+  FolderCheck,
+  FileVideo,
+  FileCheck,
+  HelpCircle,
+  File,
+} from 'lucide-react';
 
 export const Route = createFileRoute('/convert/')({
   component: ConvertPage,
@@ -276,15 +284,53 @@ function ConvertPage() {
     return nameWithoutExt.endsWith('_converted');
   };
 
+  // Check if a file is a video file based on extension
+  const isVideoFile = (name: string): boolean => {
+    const videoExtensions = [
+      '.mp4',
+      '.mkv',
+      '.avi',
+      '.mov',
+      '.wmv',
+      '.flv',
+      '.webm',
+      '.m4v',
+      '.mpg',
+      '.mpeg',
+      '.3gp',
+      '.ogv',
+      '.ts',
+      '.m2ts',
+    ];
+    const ext = name.toLowerCase().match(/\.[^.]+$/)?.[0];
+    return ext ? videoExtensions.includes(ext) : false;
+  };
+
   // Get the icon for a file/folder
-  const getItemIcon = (item: FilePickerItem): string => {
+  const getItemIcon = (item: FilePickerItem): React.ReactNode => {
     if (item.isDirectory) {
-      if (item.allConverted) return '✅'; // Checkbox icon for fully converted folders
-      return '📁';
+      if (item.allConverted)
+        return (
+          <FolderCheck
+            size={16}
+            className="text-green-600 dark:text-green-400"
+          />
+        ); // Fully converted folders
+      return <Folder size={16} className="text-gray-600 dark:text-gray-400" />;
     }
-    if (isConvertedFile(item.name)) return '🎬'; // Converted files get a movie camera icon
-    if (item.hasConvertedVersion) return '✅'; // Server computed this
-    return '📄';
+    if (isConvertedFile(item.name))
+      return (
+        <FileCheck size={16} className="text-green-600 dark:text-green-400" />
+      ); // Converted files
+    if (item.hasConvertedVersion)
+      return (
+        <FileCheck size={16} className="text-green-600 dark:text-green-400" />
+      ); // Server computed this
+    if (isVideoFile(item.name))
+      return (
+        <FileVideo size={16} className="text-gray-600 dark:text-gray-400" />
+      ); // Video files
+    return <File size={16} className="text-gray-600 dark:text-gray-400" />; // Other files
   };
 
   const renderItem = (item: FilePickerItem) => {
@@ -653,7 +699,7 @@ function ConvertPage() {
                 className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
                 title="Search pattern help"
               >
-                <span className="text-lg">❓</span>
+                <HelpCircle size={18} />
                 <span className="hidden sm:inline">Help</span>
               </button>
               {searchQuery && (

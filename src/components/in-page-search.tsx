@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { TriangleAlert } from 'lucide-react';
 
 export interface InPageSearchProps {
   /** The current search query */
@@ -111,7 +112,7 @@ export function InPageSearch({
         }`}
       >
         <div className="flex items-center gap-2">
-          {showNativeWarning && <span className="text-sm">⚠️</span>}
+          {showNativeWarning && <TriangleAlert size={14} />}
           <span>
             {showNativeWarning
               ? "Native search won't find items not currently visible."
