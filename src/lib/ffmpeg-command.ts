@@ -57,6 +57,10 @@ function escapeFilePath(filePath: string): string {
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(cleaned)) {
+      console.error(
+        '[FFmpeg Command] Invalid file path - dangerous characters detected:',
+        filePath,
+      );
       throw new Error(
         `Invalid file path contains dangerous characters: ${filePath}`,
       );
@@ -65,6 +69,10 @@ function escapeFilePath(filePath: string): string {
 
   // Validate path structure
   if (cleaned.includes('..')) {
+    console.error(
+      '[FFmpeg Command] Invalid file path - path traversal detected:',
+      filePath,
+    );
     throw new Error(`Path traversal not allowed: ${filePath}`);
   }
 
@@ -227,21 +235,38 @@ export function createFFmpegJobs(
 ): FFmpegJobConfig[] {
   const jobs: FFmpegJobConfig[] = [];
 
-  for (const inputFile of options.selectedFiles) {
-    const outputFile = generateOutputFileName(
-      inputFile,
-      options.basic.outputFormat,
-    );
-    const jobName = `Convert ${path.basename(inputFile)} to ${options.basic.outputFormat.toUpperCase()}`;
+  console.log(
+    `[FFmpeg Command] Creating jobs for ${options.selectedFiles.length} file(s)`,
+  );
 
-    jobs.push({
-      inputFile: escapeFilePath(inputFile),
-      outputFile: escapeFilePath(outputFile),
-      options,
-      jobName,
-    });
+  for (const inputFile of options.selectedFiles) {
+    try {
+      const outputFile = generateOutputFileName(
+        inputFile,
+        options.basic.outputFormat,
+      );
+      const jobName = `Convert ${path.basename(inputFile)} to ${options.basic.outputFormat.toUpperCase()}`;
+
+      jobs.push({
+        inputFile: escapeFilePath(inputFile),
+        outputFile: escapeFilePath(outputFile),
+        options,
+        jobName,
+      });
+    } catch (error) {
+      console.error(
+        `[FFmpeg Command] Failed to create job config for file: ${inputFile}`,
+        error,
+      );
+      throw new Error(
+        `Failed to create job config for ${inputFile}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
+  console.log(
+    `[FFmpeg Command] Successfully created ${jobs.length} job config(s)`,
+  );
   return jobs;
 }
 
@@ -249,18 +274,28 @@ export function createFFmpegJobs(
  * Generate FFmpeg command for a single job
  */
 export function generateFFmpegCommand(config: FFmpegJobConfig): FFmpegCommand {
-  const args = buildFFmpegArgs(config);
+  try {
+    const args = buildFFmpegArgs(config);
 
-  // Create display-friendly command string
-  const displayCommand = `ffmpeg ${args.join(' ')}`;
+    // Create display-friendly command string
+    const displayCommand = `ffmpeg ${args.join(' ')}`;
 
-  return {
-    args: ['ffmpeg', ...args],
-    displayCommand,
-    inputPath: config.inputFile,
-    outputPath: config.outputFile,
-    config,
-  };
+    return {
+      args: ['ffmpeg', ...args],
+      displayCommand,
+      inputPath: config.inputFile,
+      outputPath: config.outputFile,
+      config,
+    };
+  } catch (error) {
+    console.error(
+      `[FFmpeg Command] Failed to generate command for ${config.inputFile}:`,
+      error,
+    );
+    throw new Error(
+      `Failed to generate FFmpeg command for ${config.inputFile}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /**

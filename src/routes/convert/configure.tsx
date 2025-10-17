@@ -49,7 +49,16 @@ function ConfigurePage() {
   };
 
   const handleStartConversion = async (options: ConversionOptions) => {
-    console.log('[Configure Page] Starting conversion with options:', options);
+    console.log('[Configure Page] Starting conversion with options:', {
+      fileCount: options.selectedFiles?.length || 0,
+      outputDir: options.outputDirectory,
+      format: options.format,
+      videoCodec: options.videoCodec,
+      audioCodec: options.audioCodec,
+      quality: options.quality,
+    });
+    console.log('[Configure Page] Selected files:', options.selectedFiles);
+
     try {
       const result = await createJobsMutation.mutateAsync(options);
       console.log('[Configure Page] Jobs created successfully:', result);
@@ -58,7 +67,22 @@ function ConfigurePage() {
       clearPickerState();
       navigate({ to: '/', search: {} });
     } catch (error) {
-      console.error('[Configure Page] Error starting conversion:', error);
+      console.error('[Configure Page] ERROR: Failed to create conversion jobs');
+      console.error('[Configure Page] Error details:', error);
+      console.error(
+        '[Configure Page] Error message:',
+        error instanceof Error ? error.message : String(error),
+      );
+      console.error(
+        '[Configure Page] Error stack:',
+        error instanceof Error ? error.stack : 'No stack trace',
+      );
+      console.error('[Configure Page] Options that failed:', {
+        fileCount: options.selectedFiles?.length || 0,
+        outputDir: options.outputDirectory,
+        format: options.format,
+      });
+
       alert(
         `Failed to create conversion jobs: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );

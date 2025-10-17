@@ -283,10 +283,17 @@ export async function jobsHandler(
    */
   if (req.method === 'POST') {
     try {
+      console.log('[Jobs API] Received job creation request');
       const options: ConversionOptions = await req.json();
+      console.log('[Jobs API] Parsed conversion options:', {
+        fileCount: options.selectedFiles?.length || 0,
+        outputDir: options.outputDirectory,
+        format: options.format,
+      });
 
       // Validate that files are selected
       if (!options.selectedFiles || options.selectedFiles.length === 0) {
+        console.warn('[Jobs API] No files selected for conversion');
         return new Response(
           JSON.stringify({ error: 'No files selected for conversion' }),
           {
@@ -299,6 +306,7 @@ export async function jobsHandler(
       // Convert file paths to absolute paths and validate they're within base directory
       // File browser returns paths relative to HOME, so resolve them
       const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
+      console.log(`[Jobs API] Base directory: ${baseDir}`);
       const resolvedFiles: string[] = [];
 
       for (const file of options.selectedFiles) {
@@ -308,6 +316,9 @@ export async function jobsHandler(
 
         // Security check: ensure the resolved path is within the base directory
         if (!absolutePath.startsWith(baseDir)) {
+          console.error(
+            `[Jobs API] Security violation: File ${file} resolves to ${absolutePath}, outside base dir ${baseDir}`,
+          );
           return new Response(
             JSON.stringify({
               error: 'Access denied',
@@ -322,6 +333,9 @@ export async function jobsHandler(
 
         resolvedFiles.push(absolutePath);
       }
+      console.log(
+        `[Jobs API] Resolved ${resolvedFiles.length} file path(s) successfully`,
+      );
 
       const resolvedOptions: ConversionOptions = {
         ...options,
@@ -329,59 +343,109 @@ export async function jobsHandler(
       };
 
       // Create job configs from conversion options
-      let jobConfigs = createFFmpegJobs(resolvedOptions);
+      console.log('[Jobs API] Creating FFmpeg job configurations...');
+      let jobConfigs;
+      try {
+        jobConfigs = createFFmpegJobs(resolvedOptions);
+        console.log(
+          `[Jobs API] Created ${jobConfigs.length} FFmpeg job config(s)`,
+        );
+      } catch (error) {
+        console.error('[Jobs API] Failed to create FFmpeg job configs:', error);
+        throw new Error(
+          `Failed to create FFmpeg configurations: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
       // Sort job configs naturally by input file path
       // This ensures "Episode 9" comes before "Episode 10"
       jobConfigs = orderBy(jobConfigs, [(config) => config.inputFile], ['asc']);
+      console.log('[Jobs API] Sorted job configs by input file path');
 
       // Save the configuration with file selections
+      console.log('[Jobs API] Saving file selection configuration...');
       const configJson = JSON.stringify(resolvedOptions);
-      const configKey = FileSelectionService.save(
-        resolvedOptions.selectedFiles,
-        configJson,
-      );
+      let configKey;
+      try {
+        configKey = FileSelectionService.save(
+          resolvedOptions.selectedFiles,
+          configJson,
+        );
+        console.log(`[Jobs API] Saved configuration with key: ${configKey}`);
+      } catch (error) {
+        console.error('[Jobs API] Failed to save configuration:', error);
+        throw new Error(
+          `Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
       // Get the current maximum queue_position to append new jobs to the end of the queue
       const maxQueuePosition = JobService.getMaxQueuePosition();
       let nextQueuePosition = (maxQueuePosition || 0) + 1;
+      console.log(
+        `[Jobs API] Starting queue position: ${nextQueuePosition} (max was ${maxQueuePosition})`,
+      );
 
       // Create database entries for each job
       const createdJobIds: number[] = [];
 
-      console.log(`[Jobs API] Creating ${jobConfigs.length} job(s)`);
+      console.log(
+        `[Jobs API] Creating ${jobConfigs.length} job(s) in database`,
+      );
 
       for (const config of jobConfigs) {
-        // Generate FFmpeg command for storage
-        const ffmpegCommand = generateFFmpegCommand(config);
+        try {
+          // Generate FFmpeg command for storage
+          const ffmpegCommand = generateFFmpegCommand(config);
 
-        // Create job in database with JSON-encoded command and config key
-        const jobId = JobService.create({
-          name: config.jobName,
-          input_file: config.inputFile,
-          output_file: config.outputFile,
-          ffmpeg_command_json: JSON.stringify({
-            args: ffmpegCommand.args,
-            inputPath: ffmpegCommand.inputPath,
-            outputPath: ffmpegCommand.outputPath,
-          }),
-          queue_position: nextQueuePosition++, // Explicit position based on sort order
-          config_key: configKey,
-          config_json: configJson, // Store the full config on the job
-        });
+          // Create job in database with JSON-encoded command and config key
+          const jobId = JobService.create({
+            name: config.jobName,
+            input_file: config.inputFile,
+            output_file: config.outputFile,
+            ffmpeg_command_json: JSON.stringify({
+              args: ffmpegCommand.args,
+              inputPath: ffmpegCommand.inputPath,
+              outputPath: ffmpegCommand.outputPath,
+            }),
+            queue_position: nextQueuePosition++, // Explicit position based on sort order
+            config_key: configKey,
+            config_json: configJson, // Store the full config on the job
+          });
 
-        console.log(`[Jobs API] Created job ${jobId}: ${config.jobName}`);
-        createdJobIds.push(jobId);
+          console.log(
+            `[Jobs API] Created job ${jobId}: ${config.jobName} (queue: ${nextQueuePosition - 1})`,
+          );
+          createdJobIds.push(jobId);
 
-        // Broadcast new job to WebSocket clients
-        const job = JobService.getById(jobId);
-        if (job) {
-          WSBroadcaster.broadcastJobCreated(job);
+          // Broadcast new job to WebSocket clients
+          const job = JobService.getById(jobId);
+          if (job) {
+            WSBroadcaster.broadcastJobCreated(job);
+          }
+        } catch (error) {
+          console.error(
+            `[Jobs API] Failed to create job for ${config.inputFile}:`,
+            error,
+          );
+          throw new Error(
+            `Failed to create job for ${config.inputFile}: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 
+      console.log(
+        `[Jobs API] Successfully created ${createdJobIds.length} job(s): [${createdJobIds.join(', ')}]`,
+      );
+
       // Broadcast updated status counts
-      WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+      try {
+        WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+        console.log('[Jobs API] Broadcasted updated status counts');
+      } catch (error) {
+        console.error('[Jobs API] Failed to broadcast status counts:', error);
+        // Non-fatal, continue
+      }
 
       // Get or initialize job processor
       let processor: JobProcessor;
@@ -391,16 +455,33 @@ export async function jobsHandler(
       } catch {
         // If not initialized, initialize it now
         console.log('[Jobs API] Initializing new job processor');
-        processor = JobProcessor.getInstance({
-          checkInterval: 60000, // Check every minute
-        });
-        await processor.start();
+        try {
+          processor = JobProcessor.getInstance({
+            checkInterval: 60000, // Check every minute
+          });
+          await processor.start();
+          console.log('[Jobs API] Job processor started successfully');
+        } catch (error) {
+          console.error('[Jobs API] Failed to start job processor:', error);
+          throw new Error(
+            `Failed to start job processor: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
 
       // Trigger immediate job processing
       console.log('[Jobs API] Triggering job processor');
-      processor.trigger();
+      try {
+        processor.trigger();
+        console.log('[Jobs API] Job processor triggered successfully');
+      } catch (error) {
+        console.error('[Jobs API] Failed to trigger job processor:', error);
+        // Non-fatal, jobs will be picked up on next interval
+      }
 
+      console.log(
+        `[Jobs API] Job creation completed successfully. Created ${createdJobIds.length} job(s)`,
+      );
       return new Response(
         JSON.stringify({
           success: true,
@@ -413,7 +494,12 @@ export async function jobsHandler(
         },
       );
     } catch (error) {
-      console.error('Error creating jobs:', error);
+      console.error('[Jobs API] ERROR creating jobs:', error);
+      console.error(
+        '[Jobs API] Error stack:',
+        error instanceof Error ? error.stack : 'No stack trace',
+      );
+      console.error('[Jobs API] Error type:', error?.constructor?.name);
       return new Response(
         JSON.stringify({
           error: 'Failed to create conversion jobs',
