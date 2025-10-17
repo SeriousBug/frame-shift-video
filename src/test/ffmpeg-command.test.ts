@@ -216,17 +216,6 @@ describe('FFmpeg Command Generation', () => {
   });
 
   describe('Security and Validation', () => {
-    it('should reject dangerous file paths', () => {
-      const dangerousOptions = {
-        ...basicOptions,
-        selectedFiles: ['file; rm -rf /'],
-      };
-
-      expect(() => createFFmpegJobs(dangerousOptions)).toThrow(
-        'Invalid file path contains dangerous characters',
-      );
-    });
-
     it('should reject path traversal attempts', () => {
       const traversalOptions = {
         ...basicOptions,
@@ -284,6 +273,29 @@ describe('FFmpeg Command Generation', () => {
       };
 
       expect(() => createFFmpegJobs(legitimateOptions)).not.toThrow();
+    });
+
+    it('should allow file names with shell metacharacters', () => {
+      // Since we use spawn() with array args, these characters are safe
+      const shellCharOptions = {
+        ...basicOptions,
+        selectedFiles: [
+          'My Video & More.mp4',
+          'Episode 1|2.mkv',
+          'File;Name.avi',
+          'Test$File.mov',
+          'Back`tick.mp4',
+        ],
+      };
+
+      expect(() => createFFmpegJobs(shellCharOptions)).not.toThrow();
+      const jobs = createFFmpegJobs(shellCharOptions);
+      expect(jobs).toHaveLength(5);
+      expect(jobs[0].inputFile).toBe('My Video & More.mp4');
+      expect(jobs[1].inputFile).toBe('Episode 1|2.mkv');
+      expect(jobs[2].inputFile).toBe('File;Name.avi');
+      expect(jobs[3].inputFile).toBe('Test$File.mov');
+      expect(jobs[4].inputFile).toBe('Back`tick.mp4');
     });
 
     it('should validate generated commands', () => {

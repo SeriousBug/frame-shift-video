@@ -36,38 +36,19 @@ export interface FFmpegCommand {
 }
 
 /**
- * Securely escape and validate a file path argument
- * Prevents command injection while allowing legitimate file names
+ * Validate and sanitize a file path argument
+ *
+ * Since we use spawn() with an array of arguments (not shell execution),
+ * shell metacharacters are inherently safe and don't need to be blocked.
+ * We only need to prevent:
+ * - Null bytes (can cause issues with C string handling)
+ * - Path traversal (security concern for filesystem access)
  */
 function escapeFilePath(filePath: string): string {
   // Remove any null bytes (security)
   const cleaned = filePath.replace(/\0/g, '');
 
-  // Check for dangerous patterns that could break out of arguments
-  // Note: We allow () and [] as they're common in filenames, but not in shell injection contexts
-  const dangerousPatterns = [
-    /[;&|`$]/, // Core shell metacharacters
-    /\s*;/, // Command separators
-    /\|\s*\w/, // Pipe attempts
-    /&&|\|\|/, // Logic operators
-    /`.*`/, // Command substitution
-    /\$\(/, // Command substitution
-    /\${/, // Variable substitution
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(cleaned)) {
-      console.error(
-        '[FFmpeg Command] Invalid file path - dangerous characters detected:',
-        filePath,
-      );
-      throw new Error(
-        `Invalid file path contains dangerous characters: ${filePath}`,
-      );
-    }
-  }
-
-  // Validate path structure
+  // Validate path structure - prevent path traversal
   if (cleaned.includes('..')) {
     console.error(
       '[FFmpeg Command] Invalid file path - path traversal detected:',
