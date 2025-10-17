@@ -1,5 +1,6 @@
 import { orderBy } from 'natural-orderby';
 import { FileSelectionService } from '../db-service';
+import { logger, captureException } from '../../src/lib/sentry';
 
 /**
  * POST /api/file-selections - Save file selections and return key
@@ -36,7 +37,8 @@ export async function fileSelectionsHandler(
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     } catch (error) {
-      console.error('Error saving file selections:', error);
+      logger.error('Error saving file selections', { error });
+      captureException(error);
       return new Response(
         JSON.stringify({
           error: 'Failed to save file selections',
@@ -115,7 +117,8 @@ export async function fileSelectionByKeyHandler(
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   } catch (error) {
-    console.error('Error retrieving file selections:', error);
+    logger.error('Error retrieving file selections', { error });
+    captureException(error);
     return new Response(
       JSON.stringify({
         error: 'Failed to retrieve file selections',

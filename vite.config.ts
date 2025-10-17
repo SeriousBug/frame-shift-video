@@ -10,6 +10,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      external: [
+        // Externalize server-only Sentry package to prevent bundling in client
+        '@sentry/bun',
+      ],
+    },
+  },
   server: {
     port: 3000,
     proxy: {

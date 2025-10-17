@@ -58,6 +58,13 @@ services:
       # Get credentials from https://pushover.net/
       - PUSHOVER_API_TOKEN=your_app_token_here
       - PUSHOVER_USER_KEY=your_user_key_here
+
+      # Sentry error tracking (optional)
+      # Get DSN from https://sentry.io/ - you can use separate DSNs for client and server
+      # - SENTRY_CLIENT_DSN=https://your-client-sentry-dsn@sentry.io/project-id
+      # - SENTRY_SERVER_DSN=https://your-server-sentry-dsn@sentry.io/project-id
+      # - SENTRY_ENVIRONMENT=production
+      # - SENTRY_SEND_DEFAULT_PII=true
     restart: unless-stopped
 ```
 
@@ -71,14 +78,18 @@ Access the web interface at `http://localhost:3001`
 
 ### Environment Variables
 
-| Variable              | Required | Default          | Description                           |
-| --------------------- | -------- | ---------------- | ------------------------------------- |
-| `PORT`                | No       | `3001`           | Port the server listens on            |
-| `FRAME_SHIFT_HOME`    | No       | `/` (or `$HOME`) | Starting directory for file browser   |
-| `FFMPEG_THREADS`      | No       | -                | Number of threads FFmpeg should use   |
-| `DISCORD_WEBHOOK_URL` | No       | -                | Discord webhook URL for notifications |
-| `PUSHOVER_API_TOKEN`  | No       | -                | Pushover application token            |
-| `PUSHOVER_USER_KEY`   | No       | -                | Pushover user key                     |
+| Variable                  | Required | Default          | Description                                 |
+| ------------------------- | -------- | ---------------- | ------------------------------------------- |
+| `PORT`                    | No       | `3001`           | Port the server listens on                  |
+| `FRAME_SHIFT_HOME`        | No       | `/` (or `$HOME`) | Starting directory for file browser         |
+| `FFMPEG_THREADS`          | No       | -                | Number of threads FFmpeg should use         |
+| `DISCORD_WEBHOOK_URL`     | No       | -                | Discord webhook URL for notifications       |
+| `PUSHOVER_API_TOKEN`      | No       | -                | Pushover application token                  |
+| `PUSHOVER_USER_KEY`       | No       | -                | Pushover user key                           |
+| `SENTRY_CLIENT_DSN`       | No       | -                | Sentry DSN for client-side error tracking   |
+| `SENTRY_SERVER_DSN`       | No       | -                | Sentry DSN for server-side error tracking   |
+| `SENTRY_ENVIRONMENT`      | No       | `production`     | Sentry environment name                     |
+| `SENTRY_SEND_DEFAULT_PII` | No       | -                | Send personally identifiable info to Sentry |
 
 ## Development
 

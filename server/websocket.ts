@@ -1,5 +1,6 @@
 import { ServerWebSocket } from 'bun';
 import { Job } from '../src/types/database';
+import { logger, captureException } from '../src/lib/sentry';
 
 interface WebSocketData {
   id: string;
@@ -11,29 +12,42 @@ const clients = new Set<ServerWebSocket<WebSocketData>>();
 export function setupWebSocket() {
   return {
     open(ws: ServerWebSocket<WebSocketData>) {
-      console.log('[WebSocket] Client connected');
+      logger.debug('[WebSocket] Client connected');
       clients.add(ws);
 
       // Send initial connection confirmation
-      ws.send(
-        JSON.stringify({
-          type: 'connected',
-          message: 'WebSocket connected',
-        }),
-      );
+      try {
+        ws.send(
+          JSON.stringify({
+            type: 'connected',
+            message: 'WebSocket connected',
+          }),
+        );
+      } catch (error) {
+        logger.error('[WebSocket] Error sending connection confirmation', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        captureException(error);
+      }
     },
 
     message(ws: ServerWebSocket<WebSocketData>, message: string | Buffer) {
-      console.log('[WebSocket] Received message:', message);
+      logger.debug('[WebSocket] Received message', {
+        message: message.toString().substring(0, 100),
+      });
     },
 
     close(ws: ServerWebSocket<WebSocketData>) {
-      console.log('[WebSocket] Client disconnected');
+      logger.debug('[WebSocket] Client disconnected');
       clients.delete(ws);
     },
 
     error(ws: ServerWebSocket<WebSocketData>, error: Error) {
-      console.error('[WebSocket] Error:', error);
+      logger.error('[WebSocket] Error', {
+        error: error.message,
+        stack: error.stack,
+      });
+      captureException(error);
       clients.delete(ws);
     },
   };
@@ -51,7 +65,11 @@ export const WSBroadcaster = {
       try {
         client.send(message);
       } catch (error) {
-        console.error('[WebSocket] Error sending to client:', error);
+        logger.error('[WebSocket] Error sending job:created to client', {
+          error: error instanceof Error ? error.message : String(error),
+          jobId: job.id,
+        });
+        captureException(error);
         clients.delete(client);
       }
     });
@@ -67,7 +85,11 @@ export const WSBroadcaster = {
       try {
         client.send(message);
       } catch (error) {
-        console.error('[WebSocket] Error sending to client:', error);
+        logger.error('[WebSocket] Error sending job:updated to client', {
+          error: error instanceof Error ? error.message : String(error),
+          jobId: job.id,
+        });
+        captureException(error);
         clients.delete(client);
       }
     });
@@ -87,7 +109,10 @@ export const WSBroadcaster = {
       try {
         client.send(message);
       } catch (error) {
-        console.error('[WebSocket] Error sending to client:', error);
+        logger.debug('[WebSocket] Error sending job:progress to client', {
+          error: error instanceof Error ? error.message : String(error),
+          jobId,
+        });
         clients.delete(client);
       }
     });
@@ -103,7 +128,10 @@ export const WSBroadcaster = {
       try {
         client.send(message);
       } catch (error) {
-        console.error('[WebSocket] Error sending to client:', error);
+        logger.error('[WebSocket] Error sending status-counts to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        captureException(error);
         clients.delete(client);
       }
     });
@@ -119,7 +147,10 @@ export const WSBroadcaster = {
       try {
         client.send(message);
       } catch (error) {
-        console.error('[WebSocket] Error sending to client:', error);
+        logger.error('[WebSocket] Error sending jobs:cleared to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        captureException(error);
         clients.delete(client);
       }
     });

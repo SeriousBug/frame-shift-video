@@ -9,6 +9,7 @@ import { JobService, FileSelectionService } from '../db-service';
 import { JobProcessor } from '../job-processor';
 import { WSBroadcaster } from '../websocket';
 import { decodeCursor } from '../cursor-utils';
+import { logger, captureException } from '../../src/lib/sentry';
 
 /**
  * GET /api/jobs - Fetch jobs with cursor-based pagination
@@ -71,7 +72,8 @@ export async function jobsHandler(
         },
       );
     } catch (error) {
-      console.error('Error fetching jobs:', error);
+      logger.error('Error fetching jobs', { error });
+      captureException(error);
       return new Response(
         JSON.stringify({
           error: 'Failed to fetch jobs',
@@ -200,7 +202,8 @@ export async function jobsHandler(
         },
       );
     } catch (error) {
-      console.error('Error handling batch operation:', error);
+      logger.error('Error handling batch operation', { error });
+      captureException(error);
       return new Response(
         JSON.stringify({
           error: 'Failed to perform batch operation',
@@ -229,7 +232,7 @@ export async function jobsHandler(
           const processor = JobProcessor.getInstance();
           processor.cancelJob(job.id);
         } catch (error) {
-          console.error(`Failed to cancel job ${job.id}:`, error);
+          logger.error(`Failed to cancel job ${job.id}`, { error });
         }
       }
 
@@ -264,7 +267,8 @@ export async function jobsHandler(
         },
       );
     } catch (error) {
-      console.error('Error cancelling all jobs:', error);
+      logger.error('Error cancelling all jobs', { error });
+      captureException(error);
       return new Response(
         JSON.stringify({
           error: 'Failed to cancel all jobs',
@@ -283,9 +287,9 @@ export async function jobsHandler(
    */
   if (req.method === 'POST') {
     try {
-      console.log('[Jobs API] Received job creation request');
+      logger.info('[Jobs API] Received job creation request');
       const options: ConversionOptions = await req.json();
-      console.log('[Jobs API] Parsed conversion options:', {
+      logger.info('[Jobs API] Parsed conversion options', {
         fileCount: options.selectedFiles?.length || 0,
         outputDir: options.outputDirectory,
         format: options.format,
@@ -293,7 +297,7 @@ export async function jobsHandler(
 
       // Validate that files are selected
       if (!options.selectedFiles || options.selectedFiles.length === 0) {
-        console.warn('[Jobs API] No files selected for conversion');
+        logger.warn('[Jobs API] No files selected for conversion');
         return new Response(
           JSON.stringify({ error: 'No files selected for conversion' }),
           {
@@ -306,7 +310,7 @@ export async function jobsHandler(
       // Convert file paths to absolute paths and validate they're within base directory
       // File browser returns paths relative to HOME, so resolve them
       const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
-      console.log(`[Jobs API] Base directory: ${baseDir}`);
+      logger.info('[Jobs API] Base directory', { baseDir });
       const resolvedFiles: string[] = [];
 
       for (const file of options.selectedFiles) {
@@ -316,9 +320,11 @@ export async function jobsHandler(
 
         // Security check: ensure the resolved path is within the base directory
         if (!absolutePath.startsWith(baseDir)) {
-          console.error(
-            `[Jobs API] Security violation: File ${file} resolves to ${absolutePath}, outside base dir ${baseDir}`,
-          );
+          logger.error('[Jobs API] Security violation', {
+            file,
+            absolutePath,
+            baseDir,
+          });
           return new Response(
             JSON.stringify({
               error: 'Access denied',
@@ -333,9 +339,9 @@ export async function jobsHandler(
 
         resolvedFiles.push(absolutePath);
       }
-      console.log(
-        `[Jobs API] Resolved ${resolvedFiles.length} file path(s) successfully`,
-      );
+      logger.info('[Jobs API] Resolved file paths successfully', {
+        count: resolvedFiles.length,
+      });
 
       const resolvedOptions: ConversionOptions = {
         ...options,
@@ -343,15 +349,18 @@ export async function jobsHandler(
       };
 
       // Create job configs from conversion options
-      console.log('[Jobs API] Creating FFmpeg job configurations...');
+      logger.info('[Jobs API] Creating FFmpeg job configurations...');
       let jobConfigs;
       try {
         jobConfigs = createFFmpegJobs(resolvedOptions);
-        console.log(
-          `[Jobs API] Created ${jobConfigs.length} FFmpeg job config(s)`,
-        );
+        logger.info('[Jobs API] Created FFmpeg job configs', {
+          count: jobConfigs.length,
+        });
       } catch (error) {
-        console.error('[Jobs API] Failed to create FFmpeg job configs:', error);
+        logger.error('[Jobs API] Failed to create FFmpeg job configs', {
+          error,
+        });
+        captureException(error);
         throw new Error(
           `Failed to create FFmpeg configurations: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -360,10 +369,10 @@ export async function jobsHandler(
       // Sort job configs naturally by input file path
       // This ensures "Episode 9" comes before "Episode 10"
       jobConfigs = orderBy(jobConfigs, [(config) => config.inputFile], ['asc']);
-      console.log('[Jobs API] Sorted job configs by input file path');
+      logger.info('[Jobs API] Sorted job configs by input file path');
 
       // Save the configuration with file selections
-      console.log('[Jobs API] Saving file selection configuration...');
+      logger.info('[Jobs API] Saving file selection configuration...');
       const configJson = JSON.stringify(resolvedOptions);
       let configKey;
       try {
@@ -371,9 +380,9 @@ export async function jobsHandler(
           resolvedOptions.selectedFiles,
           configJson,
         );
-        console.log(`[Jobs API] Saved configuration with key: ${configKey}`);
+        logger.info('[Jobs API] Saved configuration with key', { configKey });
       } catch (error) {
-        console.error('[Jobs API] Failed to save configuration:', error);
+        logger.error('[Jobs API] Failed to save configuration', { error });
         throw new Error(
           `Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -382,16 +391,17 @@ export async function jobsHandler(
       // Get the current maximum queue_position to append new jobs to the end of the queue
       const maxQueuePosition = JobService.getMaxQueuePosition();
       let nextQueuePosition = (maxQueuePosition || 0) + 1;
-      console.log(
-        `[Jobs API] Starting queue position: ${nextQueuePosition} (max was ${maxQueuePosition})`,
-      );
+      logger.info('[Jobs API] Starting queue position', {
+        nextQueuePosition,
+        maxQueuePosition,
+      });
 
       // Create database entries for each job
       const createdJobIds: number[] = [];
 
-      console.log(
-        `[Jobs API] Creating ${jobConfigs.length} job(s) in database`,
-      );
+      logger.info('[Jobs API] Creating jobs in database', {
+        count: jobConfigs.length,
+      });
 
       for (const config of jobConfigs) {
         try {
@@ -413,9 +423,11 @@ export async function jobsHandler(
             config_json: configJson, // Store the full config on the job
           });
 
-          console.log(
-            `[Jobs API] Created job ${jobId}: ${config.jobName} (queue: ${nextQueuePosition - 1})`,
-          );
+          logger.info('[Jobs API] Created job', {
+            jobId,
+            jobName: config.jobName,
+            queuePosition: nextQueuePosition - 1,
+          });
           createdJobIds.push(jobId);
 
           // Broadcast new job to WebSocket clients
@@ -424,26 +436,27 @@ export async function jobsHandler(
             WSBroadcaster.broadcastJobCreated(job);
           }
         } catch (error) {
-          console.error(
-            `[Jobs API] Failed to create job for ${config.inputFile}:`,
+          logger.error('[Jobs API] Failed to create job', {
+            inputFile: config.inputFile,
             error,
-          );
+          });
           throw new Error(
             `Failed to create job for ${config.inputFile}: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
 
-      console.log(
-        `[Jobs API] Successfully created ${createdJobIds.length} job(s): [${createdJobIds.join(', ')}]`,
-      );
+      logger.info('[Jobs API] Successfully created jobs', {
+        count: createdJobIds.length,
+        jobIds: createdJobIds,
+      });
 
       // Broadcast updated status counts
       try {
         WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
-        console.log('[Jobs API] Broadcasted updated status counts');
+        logger.info('[Jobs API] Broadcasted updated status counts');
       } catch (error) {
-        console.error('[Jobs API] Failed to broadcast status counts:', error);
+        logger.error('[Jobs API] Failed to broadcast status counts', { error });
         // Non-fatal, continue
       }
 
@@ -451,18 +464,18 @@ export async function jobsHandler(
       let processor: JobProcessor;
       try {
         processor = JobProcessor.getInstance();
-        console.log('[Jobs API] Got existing job processor instance');
+        logger.info('[Jobs API] Got existing job processor instance');
       } catch {
         // If not initialized, initialize it now
-        console.log('[Jobs API] Initializing new job processor');
+        logger.info('[Jobs API] Initializing new job processor');
         try {
           processor = JobProcessor.getInstance({
             checkInterval: 60000, // Check every minute
           });
           await processor.start();
-          console.log('[Jobs API] Job processor started successfully');
+          logger.info('[Jobs API] Job processor started successfully');
         } catch (error) {
-          console.error('[Jobs API] Failed to start job processor:', error);
+          logger.error('[Jobs API] Failed to start job processor', { error });
           throw new Error(
             `Failed to start job processor: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -470,18 +483,18 @@ export async function jobsHandler(
       }
 
       // Trigger immediate job processing
-      console.log('[Jobs API] Triggering job processor');
+      logger.info('[Jobs API] Triggering job processor');
       try {
         processor.trigger();
-        console.log('[Jobs API] Job processor triggered successfully');
+        logger.info('[Jobs API] Job processor triggered successfully');
       } catch (error) {
-        console.error('[Jobs API] Failed to trigger job processor:', error);
+        logger.error('[Jobs API] Failed to trigger job processor', { error });
         // Non-fatal, jobs will be picked up on next interval
       }
 
-      console.log(
-        `[Jobs API] Job creation completed successfully. Created ${createdJobIds.length} job(s)`,
-      );
+      logger.info('[Jobs API] Job creation completed successfully', {
+        count: createdJobIds.length,
+      });
       return new Response(
         JSON.stringify({
           success: true,
@@ -494,12 +507,12 @@ export async function jobsHandler(
         },
       );
     } catch (error) {
-      console.error('[Jobs API] ERROR creating jobs:', error);
-      console.error(
-        '[Jobs API] Error stack:',
-        error instanceof Error ? error.stack : 'No stack trace',
-      );
-      console.error('[Jobs API] Error type:', error?.constructor?.name);
+      logger.error('[Jobs API] ERROR creating jobs', {
+        error,
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        errorType: error?.constructor?.name,
+      });
+      captureException(error);
       return new Response(
         JSON.stringify({
           error: 'Failed to create conversion jobs',
@@ -647,7 +660,7 @@ export async function jobByIdHandler(
           const processor = JobProcessor.getInstance();
           processor.cancelJob(jobId);
         } catch (error) {
-          console.error('Failed to cancel job in processor:', error);
+          logger.error('Failed to cancel job in processor', { error });
         }
       } else {
         // If pending, just update the status
@@ -688,7 +701,8 @@ export async function jobByIdHandler(
       },
     );
   } catch (error) {
-    console.error('Error updating job:', error);
+    logger.error('Error updating job', { error });
+    captureException(error);
     return new Response(
       JSON.stringify({
         error: 'Failed to update job',

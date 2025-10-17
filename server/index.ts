@@ -1,5 +1,9 @@
 import { Server } from 'bun';
 
+// Initialize Sentry as early as possible
+import { initializeServerMonitoring, logger } from '../src/lib/sentry';
+await initializeServerMonitoring();
+
 // Import routes
 import { setupRoutes } from './routes';
 import { setupWebSocket, WSBroadcaster } from './websocket';
@@ -8,6 +12,7 @@ import { Job } from '../src/types/database';
 import { serveStatic } from './static';
 import { FileSelectionService, JobService } from './db-service';
 import { cleanupAllTempFiles } from './temp-file-service';
+import { captureException } from '../src/lib/sentry';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -16,12 +21,12 @@ const DIST_DIR = process.env.DIST_DIR || './dist';
 if (process.env.FFMPEG_THREADS) {
   const threads = parseInt(process.env.FFMPEG_THREADS, 10);
   if (isNaN(threads) || threads <= 0) {
-    console.error(
-      `[Config] Invalid FFMPEG_THREADS value: "${process.env.FFMPEG_THREADS}". Must be a positive integer.`,
-    );
+    logger.error('[Config] Invalid FFMPEG_THREADS value', {
+      value: process.env.FFMPEG_THREADS,
+    });
     process.exit(1);
   }
-  console.log(`[Config] FFmpeg will use ${threads} threads for encoding`);
+  logger.info('[Config] FFmpeg threads configured', { threads });
 }
 
 // Clean up temporary files from previous runs BEFORE starting job processor
@@ -29,11 +34,12 @@ if (process.env.FFMPEG_THREADS) {
 const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
 try {
   const deletedCount = await cleanupAllTempFiles(baseDir);
-  console.log(
-    `[Startup] Temporary file cleanup complete: ${deletedCount} file(s) deleted`,
-  );
+  logger.info('[Startup] Temporary file cleanup complete', { deletedCount });
 } catch (error) {
-  console.error('[Startup] Failed to clean up temporary files:', error);
+  logger.error('[Startup] Failed to clean up temporary files', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  captureException(error);
   // Don't exit - continue with startup even if cleanup fails
 }
 
@@ -47,13 +53,13 @@ try {
 
   // Set up event listeners for job processor to broadcast via WebSocket
   processor.on('job:start', (job: Job) => {
-    console.log(`[JobProcessor] Job ${job.id} started`);
+    logger.info('[JobProcessor] Job started', { jobId: job.id });
     WSBroadcaster.broadcastJobUpdate(job);
     WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
   });
 
   processor.on('job:progress', (job: Job, progress: any) => {
-    console.log(`[JobProcessor] Job ${job.id} progress: ${progress.progress}%`);
+    logger.debug`[JobProcessor] Job ${job.id} progress: ${progress.progress}%`;
     WSBroadcaster.broadcastJobProgress(job.id, progress.progress, {
       frame: progress.frame,
       fps: progress.fps,
@@ -62,44 +68,56 @@ try {
   });
 
   processor.on('job:complete', (job: Job) => {
-    console.log(`[JobProcessor] Job ${job.id} completed`);
+    logger.info('[JobProcessor] Job completed', { jobId: job.id });
     WSBroadcaster.broadcastJobUpdate(job);
     WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
   });
 
   processor.on('job:fail', (job: Job) => {
-    console.log(`[JobProcessor] Job ${job.id} failed`);
+    logger.error('[JobProcessor] Job failed', {
+      jobId: job.id,
+      error: job.error,
+    });
     WSBroadcaster.broadcastJobUpdate(job);
     WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
   });
 
   // Start the processor
   await processor.start();
-  console.log('[JobProcessor] Initialized and started');
+  logger.info('[JobProcessor] Initialized and started');
 } catch (error) {
-  console.error('[JobProcessor] Failed to initialize:', error);
+  logger.fatal('[JobProcessor] Failed to initialize', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  captureException(error);
   process.exit(1);
 }
 
 // Run file selections cleanup on startup and schedule daily cleanup
 try {
   const deletedCount = FileSelectionService.cleanup();
-  console.log(
-    `[FileSelections] Cleanup complete: ${deletedCount} old entries deleted`,
-  );
+  logger.info('[FileSelections] Cleanup complete', { deletedCount });
 
   // Run cleanup daily (every 24 hours)
   setInterval(
     () => {
-      const count = FileSelectionService.cleanup();
-      console.log(
-        `[FileSelections] Daily cleanup: ${count} old entries deleted`,
-      );
+      try {
+        const count = FileSelectionService.cleanup();
+        logger.info('[FileSelections] Daily cleanup', { deletedCount: count });
+      } catch (error) {
+        logger.error('[FileSelections] Daily cleanup failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        captureException(error);
+      }
     },
     24 * 60 * 60 * 1000,
   );
 } catch (error) {
-  console.error('[FileSelections] Cleanup failed:', error);
+  logger.error('[FileSelections] Cleanup failed', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  captureException(error);
 }
 
 // Create the HTTP server
@@ -112,6 +130,7 @@ const server = Bun.serve({
     if (url.pathname === '/api/ws') {
       const upgraded = server.upgrade(req);
       if (!upgraded) {
+        logger.error('[WebSocket] Upgrade failed');
         return new Response('WebSocket upgrade failed', { status: 500 });
       }
       return undefined;
@@ -128,11 +147,11 @@ const server = Bun.serve({
   websocket: setupWebSocket(),
 });
 
-console.log(`🚀 Server running at http://localhost:${PORT}`);
+logger.info('[Server] Started successfully', { port: PORT });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down server...');
+  logger.info('[Server] Shutting down (SIGINT)');
   if (processor) {
     processor.stop();
   }
@@ -141,10 +160,28 @@ process.on('SIGINT', () => {
 });
 
 process.on('SIGTERM', () => {
-  console.log('\n🛑 Shutting down server...');
+  logger.info('[Server] Shutting down (SIGTERM)');
   if (processor) {
     processor.stop();
   }
   server.stop();
   process.exit(0);
+});
+
+// Catch unhandled errors
+process.on('uncaughtException', (error) => {
+  logger.fatal('[Process] Uncaught exception', {
+    error: error.message,
+    stack: error.stack,
+  });
+  captureException(error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.fatal('[Process] Unhandled rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+  captureException(reason);
+  process.exit(1);
 });

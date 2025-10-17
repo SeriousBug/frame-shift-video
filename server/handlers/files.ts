@@ -3,6 +3,7 @@ import { join } from 'path';
 import micromatch from 'micromatch';
 import { orderBy } from 'natural-orderby';
 import { FileSystemItem } from '../../src/types/files';
+import { logger, captureException } from '../../src/lib/sentry';
 
 /**
  * Recursively scan a directory and its subdirectories
@@ -62,12 +63,12 @@ async function scanDirectory(
         }
       } catch (error) {
         // Skip files we can't access
-        console.warn(`Could not access ${item}:`, error);
+        logger.warn(`Could not access ${item}`, { error });
         continue;
       }
     }
   } catch (error) {
-    console.error(`Error scanning directory ${fullPath}:`, error);
+    logger.error(`Error scanning directory ${fullPath}`, { error });
   }
 
   return results;
@@ -173,7 +174,7 @@ export async function filesHandler(
           });
         } catch (error) {
           // Skip files we can't access
-          console.warn(`Could not access ${item}:`, error);
+          logger.warn(`Could not access ${item}`, { error });
           continue;
         }
       }
@@ -201,7 +202,8 @@ export async function filesHandler(
       },
     );
   } catch (error) {
-    console.error('Error reading directory:', error);
+    logger.error('Error reading directory', { error });
+    captureException(error);
     return new Response(JSON.stringify({ error: 'Could not read directory' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },

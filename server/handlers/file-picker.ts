@@ -3,6 +3,7 @@
  */
 
 import { FilePickerStateService } from '../file-picker-service';
+import { logger, captureException } from '../../src/lib/sentry';
 
 export type PickerAction =
   | { type: 'toggle-folder'; path: string }
@@ -34,7 +35,7 @@ export async function getPickerStateHandler(
     const url = new URL(req.url);
     const key = url.searchParams.get('key');
 
-    console.log('[SERVER] getPickerStateHandler called with key:', key);
+    logger.info('[SERVER] getPickerStateHandler called', { key });
 
     let state;
     let stateKey;
@@ -57,7 +58,7 @@ export async function getPickerStateHandler(
 
     const response = FilePickerStateService.buildStateResponse(stateKey, state);
 
-    console.log('[SERVER] getPickerStateHandler returning:', {
+    logger.info('[SERVER] getPickerStateHandler returning', {
       stateKey,
       itemsCount: response.items.length,
       selectedCount: response.selectedCount,
@@ -68,7 +69,8 @@ export async function getPickerStateHandler(
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   } catch (error) {
-    console.error('Error getting picker state:', error);
+    logger.error('Error getting picker state', { error });
+    captureException(error);
     return new Response(
       JSON.stringify({
         error: 'Failed to get picker state',
@@ -102,7 +104,7 @@ export async function pickerActionHandler(
     const body = await req.json();
     const { key, action } = body;
 
-    console.log('[SERVER] pickerActionHandler received:', { key, action });
+    logger.info('[SERVER] pickerActionHandler received', { key, action });
 
     if (!action || !action.type) {
       return new Response(
@@ -285,7 +287,7 @@ export async function pickerActionHandler(
       newState,
     );
 
-    console.log('[SERVER] pickerActionHandler returning:', {
+    logger.info('[SERVER] pickerActionHandler returning', {
       newKey,
       itemsCount: response.items.length,
       selectedCount: response.selectedCount,
@@ -296,7 +298,8 @@ export async function pickerActionHandler(
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   } catch (error) {
-    console.error('Error performing picker action:', error);
+    logger.error('Error performing picker action', { error });
+    captureException(error);
     return new Response(
       JSON.stringify({
         error: 'Failed to perform picker action',

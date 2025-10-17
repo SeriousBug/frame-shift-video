@@ -1,5 +1,6 @@
 import { notificationService } from '../notification-service';
 import { JobService } from '../db-service';
+import { logger, captureException } from '../../src/lib/sentry';
 
 /**
  * POST /api/notifications/test - Send a test notification
@@ -50,7 +51,8 @@ export async function testNotificationHandler(
       },
     );
   } catch (error) {
-    console.error('[NotificationHandler] Test notification failed:', error);
+    logger.error('[NotificationHandler] Test notification failed', { error });
+    captureException(error);
     return new Response(
       JSON.stringify({
         error: 'Failed to send test notification',

@@ -3,6 +3,8 @@
  * Supports Discord webhooks and Pushover API
  */
 
+import { logger, captureException } from '../src/lib/sentry';
+
 /**
  * Notification configuration from environment variables
  */
@@ -65,12 +67,12 @@ async function sendDiscordNotification(
       );
     }
 
-    console.log('[NotificationService] Discord notification sent successfully');
+    logger.info('[NotificationService] Discord notification sent successfully');
   } catch (error) {
-    console.error(
-      '[NotificationService] Failed to send Discord notification:',
-      error,
-    );
+    logger.error('[NotificationService] Failed to send Discord notification', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
     throw error;
   }
 }
@@ -107,14 +109,14 @@ async function sendPushoverNotification(
       );
     }
 
-    console.log(
+    logger.info(
       '[NotificationService] Pushover notification sent successfully',
     );
   } catch (error) {
-    console.error(
-      '[NotificationService] Failed to send Pushover notification:',
-      error,
-    );
+    logger.error('[NotificationService] Failed to send Pushover notification', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
     throw error;
   }
 }
@@ -150,7 +152,7 @@ export class NotificationService {
       const timeSinceLastNotification =
         Date.now() - this.lastNotificationSent.getTime();
       if (timeSinceLastNotification < this.notificationCooldown) {
-        console.log(
+        logger.debug(
           '[NotificationService] Skipping notification due to cooldown',
         );
         return;
@@ -164,7 +166,10 @@ export class NotificationService {
       message += `Failed: ${failedCount}\n`;
     }
 
-    console.log('[NotificationService] Sending completion notification');
+    logger.info('[NotificationService] Sending completion notification', {
+      completedCount,
+      failedCount,
+    });
 
     // Send notifications to all enabled services
     const promises: Promise<void>[] = [];
@@ -193,10 +198,13 @@ export class NotificationService {
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         const service = index === 0 ? 'Discord' : 'Pushover';
-        console.error(
-          `[NotificationService] ${service} notification failed:`,
-          result.reason,
-        );
+        logger.error(`[NotificationService] ${service} notification failed`, {
+          error:
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason),
+        });
+        captureException(result.reason);
       }
     });
 

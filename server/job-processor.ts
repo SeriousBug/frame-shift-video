@@ -17,6 +17,7 @@ import { JobService } from './db-service';
 import { notificationService } from './notification-service';
 import { WSBroadcaster } from './websocket';
 import { finalizeTempFile, cleanupTempFile } from './temp-file-service';
+import { logger, captureException, startSpan } from '../src/lib/sentry';
 
 /**
  * Job processor configuration
@@ -108,14 +109,14 @@ export class JobProcessor extends EventEmitter {
       throw new Error('Cannot start processor while shutting down');
     }
 
-    console.log('[JobProcessor] Starting job processor...');
+    logger.info('[JobProcessor] Starting job processor');
 
     // Reset any jobs that were in processing state (from server restart/crash)
     const resetCount = JobService.resetProcessingJobs();
     if (resetCount > 0) {
-      console.log(
-        `[JobProcessor] Reset ${resetCount} processing job(s) to pending`,
-      );
+      logger.info('[JobProcessor] Reset processing jobs to pending', {
+        resetCount,
+      });
     }
 
     // Check for incomplete jobs immediately (don't await - run async)
@@ -126,9 +127,9 @@ export class JobProcessor extends EventEmitter {
       this.checkForJobs();
     }, this.config.checkInterval);
 
-    console.log(
-      `[JobProcessor] Started with check interval of ${this.config.checkInterval}ms`,
-    );
+    logger.info('[JobProcessor] Started', {
+      checkInterval: this.config.checkInterval,
+    });
   }
 
   /**
@@ -137,7 +138,7 @@ export class JobProcessor extends EventEmitter {
    * - Clears periodic checks
    */
   stop(): void {
-    console.log('[JobProcessor] Stopping job processor...');
+    logger.info('[JobProcessor] Stopping job processor');
     this.isShuttingDown = true;
 
     // Clear interval
@@ -167,7 +168,7 @@ export class JobProcessor extends EventEmitter {
 
     this.isProcessing = false;
     this.isShuttingDown = false;
-    console.log('[JobProcessor] Stopped');
+    logger.info('[JobProcessor] Stopped');
   }
 
   /**
@@ -176,13 +177,14 @@ export class JobProcessor extends EventEmitter {
    */
   trigger(): void {
     if (this.isShuttingDown) {
-      console.log('[JobProcessor] Cannot trigger check while shutting down');
+      logger.debug('[JobProcessor] Cannot trigger check while shutting down');
       return;
     }
 
-    console.log(
-      `[JobProcessor] Manual trigger requested (isProcessing: ${this.isProcessing}, currentJobId: ${this.currentJobId})`,
-    );
+    logger.debug('[JobProcessor] Manual trigger requested', {
+      isProcessing: this.isProcessing,
+      currentJobId: this.currentJobId,
+    });
     this.checkForJobs();
   }
 
@@ -211,7 +213,7 @@ export class JobProcessor extends EventEmitter {
 
     // If this is the current job being processed, kill it
     if (this.currentJobId === jobId && this.executor) {
-      console.log(`[JobProcessor] Cancelling job ${jobId}`);
+      logger.info('[JobProcessor] Cancelling job', { jobId });
       this.executor.kill();
       JobService.update(jobId, {
         status: 'cancelled',
@@ -239,13 +241,14 @@ export class JobProcessor extends EventEmitter {
    * The async work happens in an IIFE.
    */
   private checkForJobs(): void {
-    console.log(
-      `[JobProcessor] checkForJobs called (isProcessing: ${this.isProcessing}, isShuttingDown: ${this.isShuttingDown})`,
-    );
+    logger.debug('[JobProcessor] checkForJobs called', {
+      isProcessing: this.isProcessing,
+      isShuttingDown: this.isShuttingDown,
+    });
 
     // Don't check if already processing or shutting down
     if (this.isProcessing || this.isShuttingDown) {
-      console.log(
+      logger.debug(
         '[JobProcessor] Skipping check - already processing or shutting down',
       );
       return;
@@ -256,19 +259,20 @@ export class JobProcessor extends EventEmitter {
 
     if (!nextJob) {
       // No pending jobs
-      console.log('[JobProcessor] No pending jobs found');
+      logger.debug('[JobProcessor] No pending jobs found');
       return;
     }
 
     // Reset notification flag when starting a new batch of jobs
     if (this.lastCompletionNotificationSent) {
       this.lastCompletionNotificationSent = false;
-      console.log('[JobProcessor] Starting new batch of jobs');
+      logger.info('[JobProcessor] Starting new batch of jobs');
     }
 
-    console.log(
-      `[JobProcessor] Found pending job: ${nextJob.id} - ${nextJob.name}`,
-    );
+    logger.info('[JobProcessor] Found pending job', {
+      jobId: nextJob.id,
+      jobName: nextJob.name,
+    });
 
     // Run async processing in IIFE (don't await - fire and forget)
     (async () => {
@@ -280,156 +284,177 @@ export class JobProcessor extends EventEmitter {
    * Process a single job
    */
   private async processJob(job: Job): Promise<void> {
-    this.isProcessing = true;
-    this.currentJobId = job.id;
-    this.emit('state:change', true);
+    return startSpan(
+      { op: 'job.process', name: `Process job ${job.id}` },
+      async () => {
+        this.isProcessing = true;
+        this.currentJobId = job.id;
+        this.emit('state:change', true);
 
-    try {
-      // Update job status to processing and set start time
-      const startTime = new Date().toISOString();
-      JobService.update(job.id, {
-        status: 'processing',
-        progress: 0,
-        start_time: startTime,
-      });
-      console.log(
-        `[JobProcessor] Started processing job ${job.id}: ${job.name}`,
-      );
-      const updatedJob = JobService.getById(job.id);
-      if (updatedJob) {
-        this.emit('job:start', updatedJob);
-      }
-
-      // Parse FFmpeg command from job
-      const command = this.parseJobCommand(job);
-
-      // Create executor (no timeout - jobs can run as long as needed)
-      this.executor = new FFmpegExecutor({
-        uploadsDir: this.config.uploadsDir,
-        outputsDir: this.config.outputsDir,
-      });
-
-      // Track maximum frame count
-      let maxFrames = 0;
-
-      // Set up progress tracking
-      this.executor.on('progress', (progress: FFmpegProgress) => {
-        // Track maximum frame count
-        if (progress.frame > maxFrames) {
-          maxFrames = progress.frame;
-        }
-        JobService.updateProgress(job.id, progress.progress);
-        const updatedJob = JobService.getById(job.id);
-        if (updatedJob) {
-          this.emit('job:progress', updatedJob, progress);
-        }
-      });
-
-      // Execute the command
-      const result: FFmpegResult = await this.executor.execute(command);
-
-      // Handle result
-      if (result.success) {
-        const endTime = new Date().toISOString();
-        // Update with total frames if we have them
-        if (result.finalProgress && result.finalProgress.frame > maxFrames) {
-          maxFrames = result.finalProgress.frame;
-        }
-
-        // Rename temporary file to final output path
         try {
-          await finalizeTempFile(result.tempPath, result.finalPath);
-          JobService.complete(job.id, result.finalPath);
+          // Update job status to processing and set start time
+          const startTime = new Date().toISOString();
           JobService.update(job.id, {
-            end_time: endTime,
-            total_frames: maxFrames > 0 ? maxFrames : undefined,
+            status: 'processing',
+            progress: 0,
+            start_time: startTime,
           });
-          console.log(`[JobProcessor] Job ${job.id} completed successfully`);
-          const completedJob = JobService.getById(job.id);
-          if (completedJob) {
-            this.emit('job:complete', completedJob);
+          logger.info('[JobProcessor] Started processing job', {
+            jobId: job.id,
+            jobName: job.name,
+          });
+          const updatedJob = JobService.getById(job.id);
+          if (updatedJob) {
+            this.emit('job:start', updatedJob);
+          }
+
+          // Parse FFmpeg command from job
+          const command = this.parseJobCommand(job);
+
+          // Create executor (no timeout - jobs can run as long as needed)
+          this.executor = new FFmpegExecutor({
+            uploadsDir: this.config.uploadsDir,
+            outputsDir: this.config.outputsDir,
+          });
+
+          // Track maximum frame count
+          let maxFrames = 0;
+
+          // Set up progress tracking
+          this.executor.on('progress', (progress: FFmpegProgress) => {
+            // Track maximum frame count
+            if (progress.frame > maxFrames) {
+              maxFrames = progress.frame;
+            }
+            JobService.updateProgress(job.id, progress.progress);
+            const updatedJob = JobService.getById(job.id);
+            if (updatedJob) {
+              this.emit('job:progress', updatedJob, progress);
+            }
+          });
+
+          // Execute the command
+          const result: FFmpegResult = await this.executor.execute(command);
+
+          // Handle result
+          if (result.success) {
+            const endTime = new Date().toISOString();
+            // Update with total frames if we have them
+            if (
+              result.finalProgress &&
+              result.finalProgress.frame > maxFrames
+            ) {
+              maxFrames = result.finalProgress.frame;
+            }
+
+            // Rename temporary file to final output path
+            try {
+              await finalizeTempFile(result.tempPath, result.finalPath);
+              JobService.complete(job.id, result.finalPath);
+              JobService.update(job.id, {
+                end_time: endTime,
+                total_frames: maxFrames > 0 ? maxFrames : undefined,
+              });
+              logger.info('[JobProcessor] Job completed successfully', {
+                jobId: job.id,
+                outputPath: result.finalPath,
+                totalFrames: maxFrames,
+              });
+              const completedJob = JobService.getById(job.id);
+              if (completedJob) {
+                this.emit('job:complete', completedJob);
+              }
+            } catch (error) {
+              // Failed to rename - treat as failure and clean up temp file
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              await cleanupTempFile(result.tempPath);
+              JobService.setError(
+                job.id,
+                `Failed to finalize output file: ${errorMessage}`,
+              );
+              JobService.update(job.id, { end_time: endTime });
+              logger.error('[JobProcessor] Job failed to finalize', {
+                jobId: job.id,
+                error: errorMessage,
+              });
+              captureException(error);
+              const failedJob = JobService.getById(job.id);
+              if (failedJob) {
+                this.emit('job:fail', failedJob, errorMessage);
+              }
+            }
+          } else {
+            const endTime = new Date().toISOString();
+            // Clean up temporary file
+            await cleanupTempFile(result.tempPath);
+
+            // Check if job was already cancelled (don't override cancelled status)
+            const currentJob = JobService.getById(job.id);
+            if (currentJob && currentJob.status !== 'cancelled') {
+              const errorMessage = this.formatErrorMessage(result);
+              JobService.setError(job.id, errorMessage);
+              JobService.update(job.id, { end_time: endTime });
+              logger.error('[JobProcessor] Job failed', {
+                jobId: job.id,
+                error: result.error,
+              });
+              captureException(new Error(result.error));
+              const failedJob = JobService.getById(job.id);
+              if (failedJob) {
+                this.emit('job:fail', failedJob, result.error);
+              }
+            } else {
+              // Job was cancelled, just update end time
+              JobService.update(job.id, { end_time: endTime });
+              logger.info('[JobProcessor] Job was cancelled', {
+                jobId: job.id,
+              });
+            }
           }
         } catch (error) {
-          // Failed to rename - treat as failure and clean up temp file
           const errorMessage =
             error instanceof Error ? error.message : String(error);
-          await cleanupTempFile(result.tempPath);
-          JobService.setError(
-            job.id,
-            `Failed to finalize output file: ${errorMessage}`,
-          );
-          JobService.update(job.id, { end_time: endTime });
-          console.error(
-            `[JobProcessor] Job ${job.id} failed to finalize:`,
-            errorMessage,
-          );
-          const failedJob = JobService.getById(job.id);
-          if (failedJob) {
-            this.emit('job:fail', failedJob, errorMessage);
+          // Check if job was already cancelled (don't override cancelled status)
+          const currentJob = JobService.getById(job.id);
+          if (currentJob && currentJob.status !== 'cancelled') {
+            JobService.setError(job.id, errorMessage);
+            logger.error('[JobProcessor] Job failed with exception', {
+              jobId: job.id,
+              error: errorMessage,
+            });
+            captureException(error);
+            const failedJob = JobService.getById(job.id);
+            if (failedJob) {
+              this.emit('job:fail', failedJob, errorMessage);
+            }
+          } else {
+            logger.info('[JobProcessor] Job was cancelled during processing', {
+              jobId: job.id,
+            });
+          }
+        } finally {
+          // Clean up
+          this.executor = null;
+          this.currentJobId = null;
+          this.isProcessing = false;
+          this.emit('state:change', false);
+
+          logger.debug('[JobProcessor] Job finished, cleaning up');
+
+          // Check if all jobs are complete and send notification
+          if (!this.isShuttingDown) {
+            await this.checkAndNotifyIfAllJobsComplete();
+          }
+
+          // Check for next job if not shutting down
+          if (!this.isShuttingDown) {
+            logger.debug('[JobProcessor] Scheduling next job check');
+            setImmediate(() => this.checkForJobs());
           }
         }
-      } else {
-        const endTime = new Date().toISOString();
-        // Clean up temporary file
-        await cleanupTempFile(result.tempPath);
-
-        // Check if job was already cancelled (don't override cancelled status)
-        const currentJob = JobService.getById(job.id);
-        if (currentJob && currentJob.status !== 'cancelled') {
-          const errorMessage = this.formatErrorMessage(result);
-          JobService.setError(job.id, errorMessage);
-          JobService.update(job.id, { end_time: endTime });
-          console.error(`[JobProcessor] Job ${job.id} failed: ${result.error}`);
-          const failedJob = JobService.getById(job.id);
-          if (failedJob) {
-            this.emit('job:fail', failedJob, result.error);
-          }
-        } else {
-          // Job was cancelled, just update end time
-          JobService.update(job.id, { end_time: endTime });
-          console.log(`[JobProcessor] Job ${job.id} was cancelled`);
-        }
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      // Check if job was already cancelled (don't override cancelled status)
-      const currentJob = JobService.getById(job.id);
-      if (currentJob && currentJob.status !== 'cancelled') {
-        JobService.setError(job.id, errorMessage);
-        console.error(
-          `[JobProcessor] Job ${job.id} failed with exception:`,
-          error,
-        );
-        const failedJob = JobService.getById(job.id);
-        if (failedJob) {
-          this.emit('job:fail', failedJob, errorMessage);
-        }
-      } else {
-        console.log(
-          `[JobProcessor] Job ${job.id} was cancelled during processing`,
-        );
-      }
-    } finally {
-      // Clean up
-      this.executor = null;
-      this.currentJobId = null;
-      this.isProcessing = false;
-      this.emit('state:change', false);
-
-      console.log('[JobProcessor] Job finished, cleaning up');
-
-      // Check if all jobs are complete and send notification
-      if (!this.isShuttingDown) {
-        await this.checkAndNotifyIfAllJobsComplete();
-      }
-
-      // Check for next job if not shutting down
-      if (!this.isShuttingDown) {
-        console.log('[JobProcessor] Scheduling next job check');
-        setImmediate(() => this.checkForJobs());
-      }
-    }
+      },
+    );
   }
 
   /**
@@ -505,23 +530,26 @@ export class JobProcessor extends EventEmitter {
               unclearedFailedCount,
             );
           } catch (error) {
-            console.error(
-              '[JobProcessor] Failed to send completion notification:',
-              error,
+            logger.error(
+              '[JobProcessor] Failed to send completion notification',
+              {
+                error: error instanceof Error ? error.message : String(error),
+              },
             );
+            captureException(error);
           }
         }
 
         // Auto-clear all successful jobs when queue completes (regardless of notification settings)
         const clearedCount = JobService.clearSuccessfulJobs();
         if (clearedCount > 0) {
-          console.log(
-            `[JobProcessor] Auto-cleared ${clearedCount} successful job(s)`,
-          );
+          logger.info('[JobProcessor] Auto-cleared successful jobs', {
+            clearedCount,
+          });
         }
 
         // Always trigger UI refresh when queue completes (even if jobs were already cleared)
-        console.log('[JobProcessor] Queue complete, triggering UI refresh');
+        logger.info('[JobProcessor] Queue complete, triggering UI refresh');
         WSBroadcaster.broadcastJobsCleared();
 
         this.lastCompletionNotificationSent = true;
