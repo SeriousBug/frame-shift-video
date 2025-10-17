@@ -34,8 +34,8 @@ if [[ "$*" == *"-progress pipe:1"* ]]; then
     echo "drop_frames=0"
     echo "speed= 3.9x"
     echo "progress=continue"
-    sleep 0.05
-    
+    sleep 0.01
+
     # Second progress update
     echo "frame=127"
     echo "fps=125.73"
@@ -49,9 +49,9 @@ if [[ "$*" == *"-progress pipe:1"* ]]; then
     echo "drop_frames=0"
     echo "speed=4.13x"
     echo "progress=continue"
-    sleep 0.05
-    
-    # Third progress update  
+    sleep 0.01
+
+    # Third progress update
     echo "frame=192"
     echo "fps=127.12"
     echo "stream_0_0_q=32.4"
@@ -64,7 +64,7 @@ if [[ "$*" == *"-progress pipe:1"* ]]; then
     echo "drop_frames=0"
     echo "speed=N/A"
     echo "progress=continue"
-    sleep 0.05
+    sleep 0.01
     
     # Final progress update
     echo "frame=228"
@@ -173,13 +173,13 @@ echo "      vendor_id       : [0][0][0][0]" >&2
 echo -n "frame=   61 fps=0.0 q=34.2 size=       7KiB time=00:00:01.96 bitrate=  30.0kbits/s speed= 3.9x    " >&2
 
 # Small delay to simulate processing
-sleep 0.1
+sleep 0.02
 
 echo -ne "\rframe=  127 fps=126 q=36.0 size=     256KiB time=00:00:04.17 bitrate= 502.8kbits/s speed=4.13x    " >&2
-sleep 0.1
+sleep 0.02
 
 echo -ne "\rframe=  192 fps=127 q=32.4 size=     256KiB time=N/A bitrate=N/A speed=N/A    " >&2
-sleep 0.1
+sleep 0.02
 
 # Final progress line and completion
 echo -ne "\rframe=  228 fps=130 q=31.3 Lsize=     748KiB time=00:00:07.54 bitrate= 812.5kbits/s speed= 4.3x    " >&2

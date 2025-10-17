@@ -10,6 +10,22 @@ import { FFmpegCommand, validateFFmpegCommand } from './ffmpeg-command';
 import { getTempFilePath } from '../../server/temp-file-service';
 
 /**
+ * Get the ffmpeg binary path
+ * Can be overridden with FFMPEG_BIN_PATH environment variable
+ */
+function getFfmpeg(): string {
+  return process.env.FFMPEG_BIN_PATH || 'ffmpeg';
+}
+
+/**
+ * Get the ffprobe binary path
+ * Can be overridden with FFPROBE_BIN_PATH environment variable
+ */
+function getFfprobe(): string {
+  return process.env.FFPROBE_BIN_PATH || 'ffprobe';
+}
+
+/**
  * Progress information parsed from FFmpeg output
  */
 export interface FFmpegProgress {
@@ -164,8 +180,9 @@ export class FFmpegExecutor extends EventEmitter {
       let progressBuffer = ''; // Accumulate progress data across chunks
 
       // Spawn FFmpeg process
-      this.process = spawn('ffmpeg', processedArgs, {
+      this.process = spawn(getFfmpeg(), processedArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env,
       });
 
       // Set up timeout (only if specified)
@@ -280,15 +297,21 @@ export class FFmpegExecutor extends EventEmitter {
    */
   private async getVideoDuration(inputPath: string): Promise<number | null> {
     return new Promise((resolve) => {
-      const ffprobe = spawn('ffprobe', [
-        '-v',
-        'error',
-        '-show_entries',
-        'format=duration',
-        '-of',
-        'default=noprint_wrappers=1:nokey=1',
-        inputPath,
-      ]);
+      const ffprobe = spawn(
+        getFfprobe(),
+        [
+          '-v',
+          'error',
+          '-show_entries',
+          'format=duration',
+          '-of',
+          'default=noprint_wrappers=1:nokey=1',
+          inputPath,
+        ],
+        {
+          env: process.env,
+        },
+      );
 
       let output = '';
       ffprobe.stdout?.on('data', (data: Buffer) => {
