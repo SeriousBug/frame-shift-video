@@ -213,7 +213,8 @@ export class FilePickerStateService {
     folderPath: string,
     showHidden: boolean,
     hideConverted: boolean,
-    allFilesForConversionCheck: string[] = [],
+    videosOnly: boolean = false,
+    searchQuery?: string,
   ): string[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, folderPath);
@@ -235,12 +236,25 @@ export class FilePickerStateService {
               itemPath,
               showHidden,
               hideConverted,
-              allFilesForConversionCheck,
+              videosOnly,
+              searchQuery,
             ),
           );
         } else {
+          // Skip non-video files if videosOnly is enabled
+          if (videosOnly && !this.isVideoFile(entry.name)) continue;
+
           // Skip converted files if hideConverted is true
           if (hideConverted && this.isConvertedFile(entry.name)) continue;
+
+          // Skip files that don't match search query if provided
+          if (
+            searchQuery &&
+            searchQuery.trim() &&
+            !micromatch.isMatch(entry.name, searchQuery, { nocase: true })
+          ) {
+            continue;
+          }
 
           files.push(itemPath);
         }
@@ -659,19 +673,21 @@ export class FilePickerStateService {
       expandedFolders.add(folderPath);
     }
 
-    // Build items list with current filters to get the actual visible files
-    // This respects all filters: showHidden, hideConverted, search, etc.
-    const tempState = { ...state, expandedFolders };
-    const items = this.buildItemsList(tempState);
+    // Use recursive scanning to get ALL files in the folder (including nested ones)
+    // This respects all filters: showHidden, hideConverted, videosOnly, searchQuery
+    const showHidden = state.showHidden || false;
+    const hideConverted =
+      state.hideConverted !== undefined ? state.hideConverted : true;
+    const videosOnly = state.videosOnly || false;
+    const searchQuery = state.searchQuery;
 
-    // Get all files in this folder from the filtered items list
-    const allFiles = items
-      .filter(
-        (item) =>
-          !item.isDirectory &&
-          (item.path === folderPath || item.path.startsWith(folderPath + '/')),
-      )
-      .map((item) => item.path);
+    const allFiles = this.scanFolderForFilesWithFilters(
+      folderPath,
+      showHidden,
+      hideConverted,
+      videosOnly,
+      searchQuery,
+    );
 
     if (allFiles.length === 0) {
       // No files in folder, just return state with expanded folder
