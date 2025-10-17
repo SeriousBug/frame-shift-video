@@ -14,7 +14,6 @@
     "test": "bun test",
     "test:run": "bun test",
     "test:ui": "bun test --watch",
-    "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"
@@ -37,7 +36,6 @@
     "react-virtuoso": "^4.14.1"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@happy-dom/global-registrator": "^20.0.2",
     "@tailwindcss/postcss": "^4",
     "@tanstack/router-plugin": "^1.132.51",
@@ -51,7 +49,6 @@
     "@types/react-highlight-words": "^0.20.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.0.1",
-    "eslint": "^9",
     "husky": "^9.1.7",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
