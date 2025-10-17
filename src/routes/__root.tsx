@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { useEffect, useState } from 'react';
 import { checkVersion } from '@/lib/version-checker';
 import { VersionMismatchBanner } from '@/components/version-mismatch-banner';
+import { AppErrorBoundary } from '@/components/app-error-boundary';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -51,18 +52,20 @@ function RootComponent() {
 
   return (
     <ThemeProvider>
-      {versionMismatch && (
-        <VersionMismatchBanner
-          clientVersion={versionMismatch.clientVersion}
-          serverVersion={versionMismatch.serverVersion}
-          onReload={handleReload}
-        />
-      )}
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-        <Outlet />
-      </div>
-      <TanStackRouterDevtools />
-      <ReactQueryDevtools initialIsOpen={false} />
+      <AppErrorBoundary variant="page">
+        {versionMismatch && (
+          <VersionMismatchBanner
+            clientVersion={versionMismatch.clientVersion}
+            serverVersion={versionMismatch.serverVersion}
+            onReload={handleReload}
+          />
+        )}
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+          <Outlet />
+        </div>
+        <TanStackRouterDevtools />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </AppErrorBoundary>
     </ThemeProvider>
   );
 }

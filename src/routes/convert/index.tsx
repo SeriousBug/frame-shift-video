@@ -11,6 +11,7 @@ import { Menu } from '@ark-ui/react/menu';
 import { useInPageSearch } from '@/hooks/use-in-page-search';
 import { InPageSearch } from '@/components/in-page-search';
 import Highlighter from 'react-highlight-words';
+import { AppErrorBoundary } from '@/components/app-error-boundary';
 
 export const Route = createFileRoute('/convert/')({
   component: ConvertPage,
@@ -668,24 +669,26 @@ function ConvertPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto border-b border-gray-200 dark:border-gray-600">
-            {isLoading ? (
-              <div className="flex items-center justify-center p-8">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span className="ml-3 text-gray-600 dark:text-gray-400">
-                  Loading files...
-                </span>
-              </div>
-            ) : pickerState ? (
-              <div>
-                {pickerState.items.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                    No files found in this directory
-                  </div>
-                ) : (
-                  pickerState.items.map((item) => renderItem(item))
-                )}
-              </div>
-            ) : null}
+            <AppErrorBoundary>
+              {isLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">
+                    Loading files...
+                  </span>
+                </div>
+              ) : pickerState ? (
+                <div>
+                  {pickerState.items.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                      No files found in this directory
+                    </div>
+                  ) : (
+                    pickerState.items.map((item) => renderItem(item))
+                  )}
+                </div>
+              ) : null}
+            </AppErrorBoundary>
           </div>
 
           <div className="p-6 border-t border-gray-200 dark:border-gray-600">

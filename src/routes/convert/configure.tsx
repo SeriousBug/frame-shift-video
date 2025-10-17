@@ -10,6 +10,7 @@ import {
 } from '@/lib/api-hooks';
 import { useInPageSearch } from '@/hooks/use-in-page-search';
 import { InPageSearch } from '@/components/in-page-search';
+import { AppErrorBoundary } from '@/components/app-error-boundary';
 
 export const Route = createFileRoute('/convert/configure')({
   component: ConfigurePage,
@@ -152,16 +153,18 @@ function ConfigurePage() {
         </div>
 
         <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
-          <ConversionConfig
-            selectedFiles={files}
-            initialConfig={savedConfig}
-            onOptionsChange={setCurrentOptions}
-            onStartConversion={handleStartConversion}
-            onFilesChange={handleFilesChange}
-            searchQuery={search.query}
-            searchCurrentMatch={search.currentMatchIndex}
-            onSearchMatchesFound={search.setTotalMatches}
-          />
+          <AppErrorBoundary>
+            <ConversionConfig
+              selectedFiles={files}
+              initialConfig={savedConfig}
+              onOptionsChange={setCurrentOptions}
+              onStartConversion={handleStartConversion}
+              onFilesChange={handleFilesChange}
+              searchQuery={search.query}
+              searchCurrentMatch={search.currentMatchIndex}
+              onSearchMatchesFound={search.setTotalMatches}
+            />
+          </AppErrorBoundary>
         </div>
 
         <div className="p-6 border-t border-gray-200 dark:border-gray-600">

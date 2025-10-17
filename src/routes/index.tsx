@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { JobList } from '@/components/job-list';
 import { sendTestNotification } from '@/lib/api';
 import { useState } from 'react';
+import { AppErrorBoundary } from '@/components/app-error-boundary';
 
 export const Route = createFileRoute('/')({
   component: IndexComponent,
@@ -75,7 +76,9 @@ function IndexComponent() {
         </div>
 
         <div className="mt-16">
-          <JobList />
+          <AppErrorBoundary>
+            <JobList />
+          </AppErrorBoundary>
         </div>
 
         <div className="mt-8 text-center">
