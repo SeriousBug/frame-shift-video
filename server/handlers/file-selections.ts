@@ -1,6 +1,7 @@
 import { orderBy } from 'natural-orderby';
 import { FileSelectionService } from '../db-service';
 import { logger, captureException } from '../../src/lib/sentry';
+import { stripLeadingArticles } from '../sort-utils';
 
 /**
  * POST /api/file-selections - Save file selections and return key
@@ -26,7 +27,11 @@ export async function fileSelectionsHandler(
       }
 
       // Sort files naturally before saving
-      const sortedFiles = orderBy(files, [(file) => file], ['asc']);
+      const sortedFiles = orderBy(
+        files,
+        [(file) => stripLeadingArticles(file)],
+        ['asc'],
+      );
 
       // Serialize config if provided
       const configJson = config ? JSON.stringify(config) : undefined;
@@ -110,7 +115,11 @@ export async function fileSelectionByKeyHandler(
     const config = result.config || (result.files as any).config;
 
     // Sort files naturally before returning
-    const sortedFiles = orderBy(files, [(file) => file], ['asc']);
+    const sortedFiles = orderBy(
+      files,
+      [(file) => stripLeadingArticles(file)],
+      ['asc'],
+    );
 
     return new Response(JSON.stringify({ files: sortedFiles, config }), {
       status: 200,

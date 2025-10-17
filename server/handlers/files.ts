@@ -4,6 +4,7 @@ import micromatch from 'micromatch';
 import { orderBy } from 'natural-orderby';
 import { FileSystemItem } from '../../src/types/files';
 import { logger, captureException } from '../../src/lib/sentry';
+import { stripLeadingArticles } from '../sort-utils';
 
 /**
  * Recursively scan a directory and its subdirectories
@@ -105,8 +106,16 @@ function buildTreeStructure(items: FileSystemItem[]): FileSystemItem[] {
     const files = items.filter((item) => !item.isDirectory);
 
     // Sort each group naturally
-    const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
-    const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
+    const sortedDirs = orderBy(
+      directories,
+      [(item) => stripLeadingArticles(item.name)],
+      ['asc'],
+    );
+    const sortedFiles = orderBy(
+      files,
+      [(item) => stripLeadingArticles(item.name)],
+      ['asc'],
+    );
 
     // Replace items array contents (in-place mutation)
     items.length = 0;
@@ -183,8 +192,16 @@ export async function filesHandler(
       const directories = fileSystemItems.filter((item) => item.isDirectory);
       const files = fileSystemItems.filter((item) => !item.isDirectory);
 
-      const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
-      const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
+      const sortedDirs = orderBy(
+        directories,
+        [(item) => stripLeadingArticles(item.name)],
+        ['asc'],
+      );
+      const sortedFiles = orderBy(
+        files,
+        [(item) => stripLeadingArticles(item.name)],
+        ['asc'],
+      );
 
       fileSystemItems = [...sortedDirs, ...sortedFiles];
     }

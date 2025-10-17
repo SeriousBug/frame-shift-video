@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import micromatch from 'micromatch';
 import { orderBy } from 'natural-orderby';
+import { stripLeadingArticles } from './sort-utils';
 
 const VIDEO_EXTENSIONS = [
   '.mp4',
@@ -187,8 +188,16 @@ export class FilePickerStateService {
       const directories = items.filter((item) => item.isDirectory);
       const files = items.filter((item) => !item.isDirectory);
 
-      const sortedDirs = orderBy(directories, [(item) => item.name], ['asc']);
-      const sortedFiles = orderBy(files, [(item) => item.name], ['asc']);
+      const sortedDirs = orderBy(
+        directories,
+        [(item) => stripLeadingArticles(item.name)],
+        ['asc'],
+      );
+      const sortedFiles = orderBy(
+        files,
+        [(item) => stripLeadingArticles(item.name)],
+        ['asc'],
+      );
 
       return [...sortedDirs, ...sortedFiles];
     } catch (error) {
@@ -262,8 +271,16 @@ export class FilePickerStateService {
       // Sort entries naturally: directories first, then files
       const directories = entries.filter((entry) => entry.isDirectory());
       const files = entries.filter((entry) => entry.isFile());
-      const sortedDirs = orderBy(directories, [(entry) => entry.name], ['asc']);
-      const sortedFiles = orderBy(files, [(entry) => entry.name], ['asc']);
+      const sortedDirs = orderBy(
+        directories,
+        [(entry) => stripLeadingArticles(entry.name)],
+        ['asc'],
+      );
+      const sortedFiles = orderBy(
+        files,
+        [(entry) => stripLeadingArticles(entry.name)],
+        ['asc'],
+      );
       const sortedEntries = [...sortedDirs, ...sortedFiles];
 
       for (const entry of sortedEntries) {
