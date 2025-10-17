@@ -49,7 +49,9 @@ function escapeFilePath(filePath: string): string {
   const cleaned = filePath.replace(/\0/g, '');
 
   // Validate path structure - prevent path traversal
-  if (cleaned.includes('..')) {
+  // Check if ".." appears as a path segment (not just anywhere in the filename)
+  const segments = cleaned.split(/[/\\]/);
+  if (segments.some((segment) => segment === '..')) {
     console.error(
       '[FFmpeg Command] Invalid file path - path traversal detected:',
       filePath,

@@ -227,6 +227,35 @@ describe('FFmpeg Command Generation', () => {
       );
     });
 
+    it('should allow legitimate filenames containing consecutive dots', () => {
+      const dotsOptions = {
+        ...basicOptions,
+        selectedFiles: [
+          'abc..xy.mkv',
+          'file..name..test.mp4',
+          'video...multiple.avi',
+        ],
+      };
+
+      expect(() => createFFmpegJobs(dotsOptions)).not.toThrow();
+      const jobs = createFFmpegJobs(dotsOptions);
+      expect(jobs).toHaveLength(3);
+      expect(jobs[0].inputFile).toBe('abc..xy.mkv');
+      expect(jobs[1].inputFile).toBe('file..name..test.mp4');
+      expect(jobs[2].inputFile).toBe('video...multiple.avi');
+    });
+
+    it('should reject path traversal in the middle of paths', () => {
+      const traversalOptions = {
+        ...basicOptions,
+        selectedFiles: ['/home/user/../etc/passwd', 'folder/../secrets.txt'],
+      };
+
+      expect(() => createFFmpegJobs(traversalOptions)).toThrow(
+        'Path traversal not allowed',
+      );
+    });
+
     it('should allow absolute paths for server-local files', () => {
       const absoluteOptions = {
         ...basicOptions,
