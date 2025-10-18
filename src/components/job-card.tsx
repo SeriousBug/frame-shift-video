@@ -278,8 +278,9 @@ export function JobCard({
       {job.status === 'completed' && job.progress >= 0 && (
         <div className="mb-2">
           <button
+            type="button"
             onClick={() => setShowStats(!showStats)}
-            className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1"
+            className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded px-1"
           >
             <span>{showStats ? '▼' : '▶'}</span>
             <span>Conversion Stats</span>
@@ -307,8 +308,9 @@ export function JobCard({
       {job.error_message && (
         <div className="mb-2">
           <button
+            type="button"
             onClick={() => setShowError(!showError)}
-            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded px-1"
           >
             <span>{showError ? '▼' : '▶'}</span>
             <span>Error Details</span>

@@ -579,18 +579,23 @@ export function JobList() {
             )}
           </div>
           <Menu.Root>
-            <Menu.Trigger className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2">
+            <Menu.Trigger className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
               Actions
               <span className="text-xs">▼</span>
             </Menu.Trigger>
             <Menu.Positioner>
               <Menu.Content className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-1 min-w-[240px] z-50">
                 {/* Show Cleared Jobs Checkbox */}
-                <Menu.CheckboxItem
-                  value="show-cleared"
-                  checked={showCleared}
-                  onCheckedChange={() => setShowCleared(!showCleared)}
-                  className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                <button
+                  type="button"
+                  onClick={() => setShowCleared(!showCleared)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setShowCleared(!showCleared);
+                    }
+                  }}
+                  className="w-full px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
                 >
                   <div
                     className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
@@ -615,16 +620,16 @@ export function JobList() {
                       </svg>
                     )}
                   </div>
-                  <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                  <span className="text-sm text-gray-900 dark:text-white">
                     Show Cleared Jobs
-                  </Menu.ItemText>
-                </Menu.CheckboxItem>
+                  </span>
+                </button>
 
                 <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
 
                 {/* Clear Queue */}
-                <Menu.Item
-                  value="clear-queue"
+                <button
+                  type="button"
                   disabled={
                     clearFinishedJobsMutation.isPending ||
                     clearableJobsCount === 0
@@ -637,7 +642,18 @@ export function JobList() {
                       setShowClearFinishedModal(true);
                     }
                   }}
-                  className={`px-3 py-2 rounded cursor-pointer flex items-center gap-3 ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (
+                        !clearFinishedJobsMutation.isPending &&
+                        clearableJobsCount > 0
+                      ) {
+                        setShowClearFinishedModal(true);
+                      }
+                    }
+                  }}
+                  className={`w-full px-3 py-2 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-left ${
                     clearFinishedJobsMutation.isPending ||
                     clearableJobsCount === 0
                       ? 'opacity-50 cursor-not-allowed'
@@ -648,7 +664,7 @@ export function JobList() {
                     size={16}
                     className="text-orange-600 dark:text-orange-400"
                   />
-                  <Menu.ItemText
+                  <span
                     className={`text-sm ${
                       clearFinishedJobsMutation.isPending ||
                       clearableJobsCount === 0
@@ -659,12 +675,12 @@ export function JobList() {
                     {clearFinishedJobsMutation.isPending
                       ? 'Clearing...'
                       : 'Clear Queue'}
-                  </Menu.ItemText>
-                </Menu.Item>
+                  </span>
+                </button>
 
                 {/* Retry All Failed */}
-                <Menu.Item
-                  value="retry-all-failed"
+                <button
+                  type="button"
                   disabled={
                     markAllFailedAsRetriedMutation.isPending ||
                     failedNotRetriedCount === 0
@@ -677,7 +693,18 @@ export function JobList() {
                       setShowRetryAllFailedModal(true);
                     }
                   }}
-                  className={`px-3 py-2 rounded cursor-pointer flex items-center gap-3 ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (
+                        !markAllFailedAsRetriedMutation.isPending &&
+                        failedNotRetriedCount > 0
+                      ) {
+                        setShowRetryAllFailedModal(true);
+                      }
+                    }
+                  }}
+                  className={`w-full px-3 py-2 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left ${
                     markAllFailedAsRetriedMutation.isPending ||
                     failedNotRetriedCount === 0
                       ? 'opacity-50 cursor-not-allowed'
@@ -688,7 +715,7 @@ export function JobList() {
                     size={16}
                     className="text-blue-600 dark:text-blue-400"
                   />
-                  <Menu.ItemText
+                  <span
                     className={`text-sm ${
                       markAllFailedAsRetriedMutation.isPending ||
                       failedNotRetriedCount === 0
@@ -699,12 +726,12 @@ export function JobList() {
                     {markAllFailedAsRetriedMutation.isPending
                       ? 'Retrying...'
                       : 'Retry All Failed'}
-                  </Menu.ItemText>
-                </Menu.Item>
+                  </span>
+                </button>
 
                 {/* Cancel All */}
-                <Menu.Item
-                  value="cancel-all"
+                <button
+                  type="button"
                   disabled={
                     cancelAllJobsMutation.isPending ||
                     cancellableJobsCount === 0
@@ -717,7 +744,18 @@ export function JobList() {
                       setShowCancelAllModal(true);
                     }
                   }}
-                  className={`px-3 py-2 rounded cursor-pointer flex items-center gap-3 ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (
+                        !cancelAllJobsMutation.isPending &&
+                        cancellableJobsCount > 0
+                      ) {
+                        setShowCancelAllModal(true);
+                      }
+                    }
+                  }}
+                  className={`w-full px-3 py-2 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-red-500 text-left ${
                     cancelAllJobsMutation.isPending ||
                     cancellableJobsCount === 0
                       ? 'opacity-50 cursor-not-allowed'
@@ -725,7 +763,7 @@ export function JobList() {
                   }`}
                 >
                   <X size={16} className="text-red-600 dark:text-red-400" />
-                  <Menu.ItemText
+                  <span
                     className={`text-sm ${
                       cancelAllJobsMutation.isPending ||
                       cancellableJobsCount === 0
@@ -736,8 +774,8 @@ export function JobList() {
                     {cancelAllJobsMutation.isPending
                       ? 'Cancelling...'
                       : 'Cancel All'}
-                  </Menu.ItemText>
-                </Menu.Item>
+                  </span>
+                </button>
               </Menu.Content>
             </Menu.Positioner>
           </Menu.Root>

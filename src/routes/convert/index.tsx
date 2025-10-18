@@ -465,8 +465,9 @@ function ConvertPage() {
               )}
             </button>
 
-            <div
-              className={`flex items-center flex-1 min-w-0 ${isExpanding ? 'cursor-default' : 'cursor-pointer'}`}
+            <button
+              type="button"
+              className={`flex items-center flex-1 min-w-0 text-left ${isExpanding ? 'cursor-default' : 'cursor-pointer'} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded`}
               onClick={(e) => {
                 if (isExpanding) return;
                 // Prevent text selection when shift-clicking
@@ -479,6 +480,7 @@ function ConvertPage() {
                   handleToggleFile(item.path, e.shiftKey);
                 }
               }}
+              disabled={isExpanding}
             >
               <span className="mr-2">{getItemIcon(item)}</span>
 
@@ -504,7 +506,7 @@ function ConvertPage() {
                   {formatFileSize(item.size)}
                 </span>
               )}
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -541,8 +543,9 @@ function ConvertPage() {
             )}
           </div>
           <button
+            type="button"
             onClick={handleCancel}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
           >
             <span className="text-2xl">×</span>
           </button>
@@ -562,17 +565,22 @@ function ConvertPage() {
             <div className="flex gap-2 items-center">
               {/* Filter Menu */}
               <Menu.Root>
-                <Menu.Trigger className="px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2">
+                <Menu.Trigger className="px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
                   Filters
                   <span className="text-xs">▼</span>
                 </Menu.Trigger>
                 <Menu.Positioner>
                   <Menu.Content className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-1 min-w-[200px] z-50">
-                    <Menu.CheckboxItem
-                      value="advanced-mode"
-                      checked={advancedMode}
-                      onCheckedChange={() => setAdvancedMode(!advancedMode)}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                    <button
+                      type="button"
+                      onClick={() => setAdvancedMode(!advancedMode)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setAdvancedMode(!advancedMode);
+                        }
+                      }}
+                      className="w-full px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
                     >
                       <div
                         className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
@@ -597,19 +605,26 @@ function ConvertPage() {
                           </svg>
                         )}
                       </div>
-                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                      <span className="text-sm text-gray-900 dark:text-white">
                         Advanced Mode
-                      </Menu.ItemText>
-                    </Menu.CheckboxItem>
-                    <Menu.CheckboxItem
-                      value="videos-only"
-                      checked={videosOnly && !advancedMode}
-                      onCheckedChange={() => {
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
                         if (!advancedMode) {
                           setVideosOnly(!videosOnly);
                         }
                       }}
-                      className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 ${advancedMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (!advancedMode) {
+                            setVideosOnly(!videosOnly);
+                          }
+                        }
+                      }}
+                      className={`w-full px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-green-500 text-left ${advancedMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <div
                         className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
@@ -634,15 +649,20 @@ function ConvertPage() {
                           </svg>
                         )}
                       </div>
-                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                      <span className="text-sm text-gray-900 dark:text-white">
                         Videos Only
-                      </Menu.ItemText>
-                    </Menu.CheckboxItem>
-                    <Menu.CheckboxItem
-                      value="show-hidden"
-                      checked={showHidden}
-                      onCheckedChange={() => setShowHidden(!showHidden)}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowHidden(!showHidden)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setShowHidden(!showHidden);
+                        }
+                      }}
+                      className="w-full px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
                     >
                       <div
                         className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
@@ -667,15 +687,20 @@ function ConvertPage() {
                           </svg>
                         )}
                       </div>
-                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                      <span className="text-sm text-gray-900 dark:text-white">
                         Show Hidden Files
-                      </Menu.ItemText>
-                    </Menu.CheckboxItem>
-                    <Menu.CheckboxItem
-                      value="hide-converted"
-                      checked={hideConverted}
-                      onCheckedChange={() => setHideConverted(!hideConverted)}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3"
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHideConverted(!hideConverted)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setHideConverted(!hideConverted);
+                        }
+                      }}
+                      className="w-full px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-left"
                     >
                       <div
                         className={`w-4 h-4 flex items-center justify-center border-2 rounded ${
@@ -700,10 +725,10 @@ function ConvertPage() {
                           </svg>
                         )}
                       </div>
-                      <Menu.ItemText className="text-sm text-gray-900 dark:text-white">
+                      <span className="text-sm text-gray-900 dark:text-white">
                         Hide Converted Videos
-                      </Menu.ItemText>
-                    </Menu.CheckboxItem>
+                      </span>
+                    </button>
                   </Menu.Content>
                 </Menu.Positioner>
               </Menu.Root>
@@ -724,8 +749,9 @@ function ConvertPage() {
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
+                type="button"
                 onClick={() => setIsSearchHelpOpen(true)}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Search pattern help"
               >
                 <HelpCircle size={18} />
@@ -774,20 +800,22 @@ function ConvertPage() {
               </div>
               <div className="flex gap-3">
                 <button
+                  type="button"
                   onClick={handleCancel}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
                 >
                   Cancel
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleContinue}
                   disabled={
                     !pickerState ||
                     pickerState.selectedCount === 0 ||
                     pickerAction.isPending
                   }
-                  className="w-24 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="w-24 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   {pickerAction.isPending ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

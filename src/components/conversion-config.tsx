@@ -280,8 +280,9 @@ export function ConversionConfig({
             )}
           </span>
           <button
+            type="button"
             onClick={() => handleRemoveFile(file)}
-            className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:opacity-100"
             aria-label={`Remove ${file}`}
             title="Remove file"
           >
@@ -397,8 +398,9 @@ export function ConversionConfig({
       {/* Advanced Options Toggle */}
       <div className="flex items-center">
         <button
+          type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+          className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded px-2 py-1"
         >
           <span
             className={`transform transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
@@ -596,8 +598,9 @@ export function ConversionConfig({
       {/* Custom Options Toggle */}
       <div className="flex items-center">
         <button
+          type="button"
           onClick={() => setShowCustomOptions(!showCustomOptions)}
-          className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+          className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded px-2 py-1"
         >
           <span
             className={`transform transition-transform ${showCustomOptions ? 'rotate-90' : ''}`}

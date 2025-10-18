@@ -145,8 +145,9 @@ function ConfigurePage() {
             Configure Conversion
           </h1>
           <button
+            type="button"
             onClick={handleCancel}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
           >
             <span className="text-2xl">×</span>
           </button>
@@ -170,25 +171,28 @@ function ConfigurePage() {
         <div className="p-6 border-t border-gray-200 dark:border-gray-600">
           <div className="flex items-center justify-between">
             <button
+              type="button"
               onClick={() =>
                 navigate({
                   to: '/convert',
                   search: { key: urlKey },
                 })
               }
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
             >
               ← Back to File Selection
             </button>
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={handleCancel}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() =>
                   currentOptions && handleStartConversion(currentOptions)
                 }
@@ -197,7 +201,7 @@ function ConfigurePage() {
                   files.length === 0 ||
                   createJobsMutation.isPending
                 }
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 {createJobsMutation.isPending
                   ? 'Creating Jobs...'
