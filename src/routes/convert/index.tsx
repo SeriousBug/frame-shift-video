@@ -41,6 +41,9 @@ function ConvertPage() {
   const [hideConverted, setHideConverted] = useState<boolean | undefined>(
     undefined,
   );
+  const [lastClickedFilePath, setLastClickedFilePath] = useState<string | null>(
+    null,
+  );
 
   // In-page search
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -186,19 +189,41 @@ function ConvertPage() {
     console.log('[CLIENT] handleToggleFolder result', result);
   };
 
-  const handleToggleFile = async (filePath: string) => {
+  const handleToggleFile = async (
+    filePath: string,
+    shiftKey: boolean = false,
+  ) => {
     console.log('[CLIENT] handleToggleFile called', {
       filePath,
+      shiftKey,
+      lastClickedFilePath,
       isPending: pickerAction.isPending,
       currentKey: pickerState?.key,
     });
     if (pickerAction.isPending) return;
 
-    const result = await pickerAction.mutateAsync({
-      action: { type: 'toggle-file', path: filePath },
-      key: pickerState?.key,
-    });
-    console.log('[CLIENT] handleToggleFile result', result);
+    // If shift is held and we have a previous click, do range selection
+    if (shiftKey && lastClickedFilePath && lastClickedFilePath !== filePath) {
+      const result = await pickerAction.mutateAsync({
+        action: {
+          type: 'select-range',
+          startPath: lastClickedFilePath,
+          endPath: filePath,
+        },
+        key: pickerState?.key,
+      });
+      console.log('[CLIENT] handleToggleFile (range) result', result);
+    } else {
+      // Normal toggle behavior
+      const result = await pickerAction.mutateAsync({
+        action: { type: 'toggle-file', path: filePath },
+        key: pickerState?.key,
+      });
+      console.log('[CLIENT] handleToggleFile result', result);
+    }
+
+    // Update last clicked file path (for future shift-clicks)
+    setLastClickedFilePath(filePath);
   };
 
   const handleToggleFolderSelection = async (folderPath: string) => {
@@ -399,12 +424,16 @@ function ConvertPage() {
 
             {/* Custom checkbox */}
             <button
-              onClick={() => {
+              onClick={(e) => {
                 if (!canInteract) return;
+                // Prevent text selection when shift-clicking
+                if (e.shiftKey) {
+                  e.preventDefault();
+                }
                 if (item.isDirectory) {
                   handleToggleFolderSelection(item.path);
                 } else {
-                  handleToggleFile(item.path);
+                  handleToggleFile(item.path, e.shiftKey);
                 }
               }}
               disabled={isTopLevelFolder}
@@ -438,12 +467,16 @@ function ConvertPage() {
 
             <div
               className={`flex items-center flex-1 min-w-0 ${isExpanding ? 'cursor-default' : 'cursor-pointer'}`}
-              onClick={() => {
+              onClick={(e) => {
                 if (isExpanding) return;
+                // Prevent text selection when shift-clicking
+                if (e.shiftKey) {
+                  e.preventDefault();
+                }
                 if (item.isDirectory) {
                   handleToggleFolder(item.path);
                 } else {
-                  handleToggleFile(item.path);
+                  handleToggleFile(item.path, e.shiftKey);
                 }
               }}
             >
@@ -710,7 +743,7 @@ function ConvertPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto border-b border-gray-200 dark:border-gray-600">
+          <div className="flex-1 overflow-y-auto border-b border-gray-200 dark:border-gray-600 select-none">
             <AppErrorBoundary>
               {isLoading ? (
                 <div className="flex items-center justify-center p-8">

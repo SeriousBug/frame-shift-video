@@ -86,8 +86,11 @@ See `/server/websocket.ts` for event definitions. Websocket events update page a
 bun run dev
 
 # Run tests
-bun test
+bun run test
 
 # Linting
 bun run lint
+
+# Read Github issue
+gh issue view 1234 --repo SeriousBug/frame-shift-video
 ```

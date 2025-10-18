@@ -744,6 +744,46 @@ export class FilePickerStateService {
   }
 
   /**
+   * Select a range of files between startPath and endPath (inclusive)
+   * Only selects files, not folders
+   */
+  static selectRange(
+    state: PickerStateData,
+    startPath: string,
+    endPath: string,
+  ): PickerStateData {
+    // Build the current items list to get the flat, ordered list
+    const items = this.buildItemsList(state);
+
+    // Find indices of start and end paths
+    const startIndex = items.findIndex((item) => item.path === startPath);
+    const endIndex = items.findIndex((item) => item.path === endPath);
+
+    // If either path is not found, return state unchanged
+    if (startIndex === -1 || endIndex === -1) {
+      return state;
+    }
+
+    // Determine the range (handle both directions)
+    const minIndex = Math.min(startIndex, endIndex);
+    const maxIndex = Math.max(startIndex, endIndex);
+
+    // Select all files in the range (skip folders)
+    const newSelectedFiles = new Set(state.selectedFiles);
+    for (let i = minIndex; i <= maxIndex; i++) {
+      const item = items[i];
+      if (!item.isDirectory) {
+        newSelectedFiles.add(item.path);
+      }
+    }
+
+    return {
+      ...state,
+      selectedFiles: newSelectedFiles,
+    };
+  }
+
+  /**
    * Navigate to a different directory
    */
   static navigateTo(

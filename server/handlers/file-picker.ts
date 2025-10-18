@@ -9,6 +9,7 @@ export type PickerAction =
   | { type: 'toggle-folder'; path: string }
   | { type: 'toggle-file'; path: string }
   | { type: 'toggle-folder-selection'; path: string }
+  | { type: 'select-range'; startPath: string; endPath: string }
   | { type: 'navigate'; path: string }
   | { type: 'update-config'; config: any }
   | { type: 'search'; query: string }
@@ -174,6 +175,25 @@ export async function pickerActionHandler(
         newState = FilePickerStateService.toggleFolderSelection(
           state,
           action.path,
+        );
+        break;
+
+      case 'select-range':
+        if (!action.startPath || !action.endPath) {
+          return new Response(
+            JSON.stringify({
+              error: 'startPath and endPath are required for select-range',
+            }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            },
+          );
+        }
+        newState = FilePickerStateService.selectRange(
+          state,
+          action.startPath,
+          action.endPath,
         );
         break;
 
