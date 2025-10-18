@@ -4,14 +4,12 @@
 
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { MetaService, JobService } from '../../server/db-service';
-import { getDatabase } from '../../server/database';
+import { resetDatabase } from '../../server/database';
 
 describe('Database', () => {
   beforeEach(() => {
-    // Clear all data before each test
-    const db = getDatabase();
-    db.exec('DELETE FROM jobs');
-    db.exec("DELETE FROM meta WHERE key != 'version'");
+    // Reset to a fresh in-memory database before each test
+    resetDatabase();
   });
 
   describe('MetaService', () => {

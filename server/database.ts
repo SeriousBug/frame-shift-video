@@ -4,13 +4,15 @@ import fs from 'fs';
 
 const DB_PATH =
   process.env.NODE_ENV === 'test'
-    ? path.join(process.cwd(), 'data', 'test-database.sqlite')
+    ? ':memory:'
     : path.join(process.cwd(), 'data', 'database.sqlite');
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Ensure data directory exists (skip for in-memory databases)
+if (DB_PATH !== ':memory:') {
+  const dataDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
 }
 
 let db: Database | null = null;
@@ -224,6 +226,16 @@ export function closeDatabase(): void {
     db.close();
     db = null;
   }
+}
+
+/**
+ * Reset database connection (test-only)
+ * Closes the current connection and clears the singleton,
+ * allowing the next getDatabase() call to create a fresh database.
+ * For in-memory databases, this creates a completely clean database.
+ */
+export function resetDatabase(): void {
+  closeDatabase();
 }
 
 // Cleanup on process exit
