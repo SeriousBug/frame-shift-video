@@ -16,7 +16,9 @@ COPY . .
 
 # Build the frontend with version
 ENV VITE_APP_VERSION=${VERSION}
-RUN bun run build
+RUN --mount=type=secret,id=sentry_auth_token \
+    SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token) \
+    bun run build
 
 # Production stage - use Alpine for smaller size
 FROM oven/bun:1.3-alpine
