@@ -56,7 +56,7 @@ function escapeFilePath(filePath: string): string {
       '[FFmpeg Command] Invalid file path - path traversal detected:',
       filePath,
     );
-    throw new Error(`Path traversal not allowed: ${filePath}`);
+    throw new Error('Path traversal not allowed', { cause: { filePath } });
   }
 
   // Allow absolute paths (needed for server-local files)
@@ -241,9 +241,12 @@ export function createFFmpegJobs(
         `[FFmpeg Command] Failed to create job config for file: ${inputFile}`,
         error,
       );
-      throw new Error(
-        `Failed to create job config for ${inputFile}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error('Failed to create job config for file', {
+        cause: {
+          inputFile,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -275,9 +278,12 @@ export function generateFFmpegCommand(config: FFmpegJobConfig): FFmpegCommand {
       `[FFmpeg Command] Failed to generate command for ${config.inputFile}:`,
       error,
     );
-    throw new Error(
-      `Failed to generate FFmpeg command for ${config.inputFile}: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    throw new Error('Failed to generate FFmpeg command for file', {
+      cause: {
+        inputFile: config.inputFile,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
   }
 }
 

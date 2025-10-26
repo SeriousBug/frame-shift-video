@@ -361,9 +361,11 @@ export async function jobsHandler(
           error,
         });
         captureException(error);
-        throw new Error(
-          `Failed to create FFmpeg configurations: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        throw new Error('Failed to create FFmpeg configurations', {
+          cause: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
 
       // Sort job configs naturally by input file path
@@ -383,9 +385,11 @@ export async function jobsHandler(
         logger.info('[Jobs API] Saved configuration with key', { configKey });
       } catch (error) {
         logger.error('[Jobs API] Failed to save configuration', { error });
-        throw new Error(
-          `Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        throw new Error('Failed to save configuration', {
+          cause: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
 
       // Get the current maximum queue_position to append new jobs to the end of the queue
@@ -440,9 +444,12 @@ export async function jobsHandler(
             inputFile: config.inputFile,
             error,
           });
-          throw new Error(
-            `Failed to create job for ${config.inputFile}: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          throw new Error('Failed to create job for file', {
+            cause: {
+              inputFile: config.inputFile,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
         }
       }
 
@@ -476,9 +483,11 @@ export async function jobsHandler(
           logger.info('[Jobs API] Job processor started successfully');
         } catch (error) {
           logger.error('[Jobs API] Failed to start job processor', { error });
-          throw new Error(
-            `Failed to start job processor: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          throw new Error('Failed to start job processor', {
+            cause: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
         }
       }
 

@@ -39,7 +39,9 @@ export async function finalizeTempFile(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`[TempFile] Failed to finalize ${tempPath}:`, errorMessage);
-    throw new Error(`Failed to rename temporary file: ${errorMessage}`);
+    throw new Error('Failed to rename temporary file', {
+      cause: { error: errorMessage, tempPath, finalPath },
+    });
   }
 }
 

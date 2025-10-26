@@ -208,7 +208,7 @@ export class JobProcessor extends EventEmitter {
   cancelJob(jobId: number): void {
     const job = JobService.getById(jobId);
     if (!job) {
-      throw new Error(`Job ${jobId} not found`);
+      throw new Error('Job not found', { cause: { jobId } });
     }
 
     // If this is the current job being processed, kill it
@@ -501,7 +501,9 @@ export class JobProcessor extends EventEmitter {
       };
     }
 
-    throw new Error(`Job ${job.id} has no FFmpeg command stored`);
+    throw new Error('Job has no FFmpeg command stored', {
+      cause: { jobId: job.id },
+    });
   }
 
   /**

@@ -62,9 +62,10 @@ async function sendDiscordNotification(
     });
 
     if (!response.ok) {
-      throw new Error(
-        `Discord webhook returned status ${response.status}: ${await response.text()}`,
-      );
+      const responseText = await response.text();
+      throw new Error('Discord webhook request failed', {
+        cause: { status: response.status, response: responseText },
+      });
     }
 
     logger.info('[NotificationService] Discord notification sent successfully');
@@ -104,9 +105,9 @@ async function sendPushoverNotification(
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Pushover API returned status ${response.status}: ${errorText}`,
-      );
+      throw new Error('Pushover API request failed', {
+        cause: { status: response.status, error: errorText },
+      });
     }
 
     logger.info(

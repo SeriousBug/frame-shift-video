@@ -223,7 +223,7 @@ describe('FFmpeg Command Generation', () => {
       };
 
       expect(() => createFFmpegJobs(traversalOptions)).toThrow(
-        'Path traversal not allowed',
+        'Failed to create job config for file',
       );
     });
 
@@ -252,7 +252,7 @@ describe('FFmpeg Command Generation', () => {
       };
 
       expect(() => createFFmpegJobs(traversalOptions)).toThrow(
-        'Path traversal not allowed',
+        'Failed to create job config for file',
       );
     });
 
