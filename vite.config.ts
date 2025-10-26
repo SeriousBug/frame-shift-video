@@ -1,10 +1,18 @@
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [TanStackRouterVite(), react()],
+  plugins: [
+    TanStackRouterVite(),
+    react(),
+    sentryVitePlugin({
+      org: 'kaan-barmore-genc',
+      project: 'frame-shift-video-server',
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -17,6 +25,8 @@ export default defineConfig({
         '@sentry/bun',
       ],
     },
+
+    sourcemap: true,
   },
   server: {
     port: 3000,

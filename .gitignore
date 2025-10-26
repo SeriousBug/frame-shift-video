@@ -50,3 +50,6 @@ dist
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Sentry Config File
+.env.sentry-build-plugin
