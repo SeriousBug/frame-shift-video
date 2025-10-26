@@ -61,11 +61,16 @@ export function execute(
   const stmt = database.query(sqlQuery);
   stmt.run(...params);
 
+  const changesResult = database.query('SELECT changes() as changes').get() as {
+    changes: number;
+  };
+  const lastInsertRowidResult = database
+    .query('SELECT last_insert_rowid() as lastInsertRowid')
+    .get() as { lastInsertRowid: number | bigint };
+
   return {
-    changes: database.query('SELECT changes()').get() as number,
-    lastInsertRowid: database.query('SELECT last_insert_rowid()').get() as
-      | number
-      | bigint,
+    changes: changesResult.changes,
+    lastInsertRowid: lastInsertRowidResult.lastInsertRowid,
   };
 }
 

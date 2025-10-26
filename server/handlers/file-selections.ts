@@ -91,18 +91,30 @@ export async function fileSelectionByKeyHandler(
       );
     }
 
-    // Extract selectedFiles from the picker state format
-    // Expected format: { files: { selectedFiles: [...], ... }, config?: {...} }
-    if (
-      !result.files ||
-      typeof result.files !== 'object' ||
-      !('selectedFiles' in result.files) ||
-      !Array.isArray((result.files as any).selectedFiles)
+    // Handle both old and new data formats
+    // OLD format (from UI picker state): { files: { selectedFiles: [...], ... }, config?: {...} }
+    // NEW format (from retry): { files: [...], config: {...} }
+    let files: string[];
+    let config: any;
+
+    if (Array.isArray(result.files)) {
+      // New format: files is already an array
+      files = result.files;
+      config = result.config;
+    } else if (
+      result.files &&
+      typeof result.files === 'object' &&
+      'selectedFiles' in result.files &&
+      Array.isArray((result.files as any).selectedFiles)
     ) {
+      // Old format: files is an object with selectedFiles
+      files = (result.files as any).selectedFiles;
+      config = result.config || (result.files as any).config;
+    } else {
       return new Response(
         JSON.stringify({
           error: 'Invalid file selection format',
-          details: 'Expected picker state with selectedFiles array',
+          details: 'Expected files array or picker state with selectedFiles',
         }),
         {
           status: 400,
@@ -110,9 +122,6 @@ export async function fileSelectionByKeyHandler(
         },
       );
     }
-
-    const files = (result.files as any).selectedFiles;
-    const config = result.config || (result.files as any).config;
 
     // Sort files naturally before returning
     const sortedFiles = orderBy(
