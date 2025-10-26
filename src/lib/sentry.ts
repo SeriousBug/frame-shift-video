@@ -30,8 +30,14 @@ export interface Logger {
   fmt(strings: TemplateStringsArray, ...values: any[]): string;
 }
 
+export interface CaptureContext {
+  tags?: Record<string, string>;
+  extra?: Record<string, any>;
+  contexts?: Record<string, any>;
+}
+
 export interface Monitor {
-  captureException(error: Error | unknown): void;
+  captureException(error: Error | unknown, context?: CaptureContext): void;
   startSpan<T>(context: SpanContext, callback: (span: any) => T): T;
   logger: Logger;
 }
@@ -73,8 +79,8 @@ class SentryMonitor implements Monitor {
     };
   }
 
-  captureException(error: Error | unknown): void {
-    this.sentryInstance.captureException(error);
+  captureException(error: Error | unknown, context?: CaptureContext): void {
+    this.sentryInstance.captureException(error, context);
   }
 
   startSpan<T>(context: SpanContext, callback: (span: any) => T): T {
@@ -114,8 +120,11 @@ export class ConsoleMonitor implements Monitor {
     };
   }
 
-  captureException(error: Error | unknown): void {
+  captureException(error: Error | unknown, context?: CaptureContext): void {
     console.error('Exception:', error);
+    if (context) {
+      console.error('Context:', context);
+    }
   }
 
   startSpan<T>(context: SpanContext, callback: (span: any) => T): T {
@@ -207,8 +216,10 @@ export function getMonitor(): Monitor {
 /**
  * Convenience exports for common operations
  */
-export const captureException = (error: Error | unknown) =>
-  getMonitor().captureException(error);
+export const captureException = (
+  error: Error | unknown,
+  context?: CaptureContext,
+) => getMonitor().captureException(error, context);
 export const startSpan = <T>(
   context: SpanContext,
   callback: (span: any) => T,

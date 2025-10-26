@@ -378,7 +378,13 @@ export class JobProcessor extends EventEmitter {
                 jobId: job.id,
                 error: errorMessage,
               });
-              captureException(error);
+              captureException(error, {
+                extra: {
+                  jobId: job.id,
+                  jobName: job.name,
+                  ffmpegStderr: result.stderr,
+                },
+              });
               const failedJob = JobService.getById(job.id);
               if (failedJob) {
                 this.emit('job:fail', failedJob, errorMessage);
@@ -399,7 +405,16 @@ export class JobProcessor extends EventEmitter {
                 jobId: job.id,
                 error: result.error,
               });
-              captureException(new Error(result.error));
+              captureException(new Error(result.error), {
+                extra: {
+                  jobId: job.id,
+                  jobName: job.name,
+                  exitCode: result.exitCode,
+                  ffmpegStderr: result.stderr,
+                  inputFile: job.input_file,
+                  outputFile: job.output_file,
+                },
+              });
               const failedJob = JobService.getById(job.id);
               if (failedJob) {
                 this.emit('job:fail', failedJob, result.error);
@@ -423,7 +438,14 @@ export class JobProcessor extends EventEmitter {
               jobId: job.id,
               error: errorMessage,
             });
-            captureException(error);
+            captureException(error, {
+              extra: {
+                jobId: job.id,
+                jobName: job.name,
+                inputFile: job.input_file,
+                outputFile: job.output_file,
+              },
+            });
             const failedJob = JobService.getById(job.id);
             if (failedJob) {
               this.emit('job:fail', failedJob, errorMessage);
