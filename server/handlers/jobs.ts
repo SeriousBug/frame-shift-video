@@ -5,6 +5,7 @@ import {
   createFFmpegJobs,
   generateFFmpegCommand,
 } from '../../src/lib/ffmpeg-command';
+import { getSubtitleFormats } from '../../src/lib/ffmpeg-executor';
 import { JobService, FileSelectionService } from '../db-service';
 import { JobProcessor } from '../job-processor';
 import { WSBroadcaster } from '../websocket';
@@ -409,8 +410,21 @@ export async function jobsHandler(
 
       for (const config of jobConfigs) {
         try {
-          // Generate FFmpeg command for storage
-          const ffmpegCommand = generateFFmpegCommand(config);
+          // Detect subtitle formats from source file using FFprobe
+          const subtitleCodecs = await getSubtitleFormats(config.inputFile);
+          logger.info('[Jobs API] Detected subtitle formats', {
+            inputFile: config.inputFile,
+            subtitleCodecs,
+          });
+
+          // Add subtitle codec information to the config
+          const configWithSubtitles = {
+            ...config,
+            subtitleCodecs,
+          };
+
+          // Generate FFmpeg command for storage (with subtitle codec info)
+          const ffmpegCommand = generateFFmpegCommand(configWithSubtitles);
 
           // Create job in database with JSON-encoded command and config key
           const jobId = JobService.create({

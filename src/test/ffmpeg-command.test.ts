@@ -88,8 +88,7 @@ describe('FFmpeg Command Generation', () => {
         'slow',
         '-c:a',
         'copy',
-        '-c:s',
-        'copy',
+        '-sn', // No subtitles when subtitleCodecs is not provided
         '-progress',
         'pipe:1',
         '-y',
@@ -97,7 +96,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -c:v libx265 -crf 22 -preset slow -c:a copy -c:s copy -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -c:v libx265 -crf 22 -preset slow -c:a copy -sn -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');
@@ -441,6 +440,160 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).toContain('aac');
       expect(command.args).toContain('-b:a');
       expect(command.args).toContain('192k');
+    });
+  });
+
+  describe('Subtitle Handling', () => {
+    it('should copy subtitles when format is ASS', () => {
+      const assConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'ASS Subtitle Test',
+        subtitleCodecs: ['ass'],
+      };
+
+      const command = generateFFmpegCommand(assConfig);
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should copy subtitles when format is SSA', () => {
+      const ssaConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'SSA Subtitle Test',
+        subtitleCodecs: ['ssa'],
+      };
+
+      const command = generateFFmpegCommand(ssaConfig);
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should copy subtitles when format is SRT', () => {
+      const srtConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'SRT Subtitle Test',
+        subtitleCodecs: ['srt'],
+      };
+
+      const command = generateFFmpegCommand(srtConfig);
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should copy subtitles when format is SubRip', () => {
+      const subripConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'SubRip Subtitle Test',
+        subtitleCodecs: ['subrip'],
+      };
+
+      const command = generateFFmpegCommand(subripConfig);
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should convert subtitles to ASS when format is PGS', () => {
+      const pgsConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'PGS Subtitle Test',
+        subtitleCodecs: ['hdmv_pgs_subtitle'],
+      };
+
+      const command = generateFFmpegCommand(pgsConfig);
+      const csIndex = command.args.indexOf('-c:s');
+      expect(csIndex).toBeGreaterThan(-1);
+      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should convert subtitles to ASS when format is VOBSUB', () => {
+      const vobsubConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'VOBSUB Subtitle Test',
+        subtitleCodecs: ['dvd_subtitle'],
+      };
+
+      const command = generateFFmpegCommand(vobsubConfig);
+      const csIndex = command.args.indexOf('-c:s');
+      expect(csIndex).toBeGreaterThan(-1);
+      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should skip subtitles when no subtitle streams are present', () => {
+      const noSubsConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'No Subtitles Test',
+        subtitleCodecs: [],
+      };
+
+      const command = generateFFmpegCommand(noSubsConfig);
+      expect(command.args).toContain('-sn');
+      expect(command.args).not.toContain('-c:s');
+    });
+
+    it('should copy when all subtitle streams are compatible (mixed ASS and SRT)', () => {
+      const mixedConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'Mixed Compatible Subtitles Test',
+        subtitleCodecs: ['ass', 'srt', 'subrip'],
+      };
+
+      const command = generateFFmpegCommand(mixedConfig);
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should convert to ASS when one subtitle stream is incompatible', () => {
+      const mixedIncompatibleConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'Mixed Incompatible Subtitles Test',
+        subtitleCodecs: ['ass', 'hdmv_pgs_subtitle'],
+      };
+
+      const command = generateFFmpegCommand(mixedIncompatibleConfig);
+      const csIndex = command.args.indexOf('-c:s');
+      expect(csIndex).toBeGreaterThan(-1);
+      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should handle case-insensitive subtitle codec names', () => {
+      const uppercaseConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'Uppercase Subtitle Test',
+        subtitleCodecs: ['ASS', 'SRT'],
+      };
+
+      const command = generateFFmpegCommand(uppercaseConfig);
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
+      expect(command.args).not.toContain('-sn');
     });
   });
 });

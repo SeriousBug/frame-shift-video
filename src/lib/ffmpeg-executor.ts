@@ -332,6 +332,54 @@ export class FFmpegExecutor extends EventEmitter {
   }
 
   /**
+   * Get subtitle codec formats from the input file using ffprobe
+   * Returns array of codec names for all subtitle streams (e.g., ['ass', 'srt', 'subrip'])
+   */
+  private async getSubtitleFormats(inputPath: string): Promise<string[]> {
+    return new Promise((resolve) => {
+      const ffprobe = spawn(
+        getFfprobe(),
+        [
+          '-v',
+          'error',
+          '-select_streams',
+          's',
+          '-show_entries',
+          'stream=codec_name',
+          '-of',
+          'default=noprint_wrappers=1:nokey=1',
+          inputPath,
+        ],
+        {
+          env: process.env,
+        },
+      );
+
+      let output = '';
+      ffprobe.stdout?.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          // Parse codec names from output (one per line)
+          const codecs = output
+            .trim()
+            .split('\n')
+            .map((line) => line.trim().toLowerCase())
+            .filter((line) => line.length > 0);
+          resolve(codecs);
+        } else {
+          // No subtitle streams or error - return empty array
+          resolve([]);
+        }
+      });
+
+      ffprobe.on('error', () => resolve([]));
+    });
+  }
+
+  /**
    * Convert time string (HH:MM:SS.ms or MM:SS.ms) to seconds
    */
   private timeToSeconds(timeStr: string): number {
@@ -433,6 +481,54 @@ export class FFmpegExecutor extends EventEmitter {
 
     return null;
   }
+}
+
+/**
+ * Get subtitle codec formats from a video file using ffprobe
+ * Returns array of codec names for all subtitle streams (e.g., ['ass', 'srt', 'subrip'])
+ */
+export async function getSubtitleFormats(inputPath: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    const ffprobe = spawn(
+      getFfprobe(),
+      [
+        '-v',
+        'error',
+        '-select_streams',
+        's',
+        '-show_entries',
+        'stream=codec_name',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
+        inputPath,
+      ],
+      {
+        env: process.env,
+      },
+    );
+
+    let output = '';
+    ffprobe.stdout?.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      if (code === 0 && output.trim()) {
+        // Parse codec names from output (one per line)
+        const codecs = output
+          .trim()
+          .split('\n')
+          .map((line) => line.trim().toLowerCase())
+          .filter((line) => line.length > 0);
+        resolve(codecs);
+      } else {
+        // No subtitle streams or error - return empty array
+        resolve([]);
+      }
+    });
+
+    ffprobe.on('error', () => resolve([]));
+  });
 }
 
 /**

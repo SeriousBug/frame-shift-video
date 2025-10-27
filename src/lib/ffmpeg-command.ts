@@ -17,6 +17,8 @@ export interface FFmpegJobConfig {
   options: ConversionOptions;
   /** Job name for display */
   jobName: string;
+  /** Detected subtitle codec formats from source file (e.g., ['ass', 'srt']) */
+  subtitleCodecs?: string[];
 }
 
 /**
@@ -146,8 +148,27 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     args.push('-c:a', 'copy');
   }
 
-  // Subtitle codec - always copy subtitles
-  args.push('-c:s', 'copy');
+  // Subtitle codec - smart handling based on detected formats
+  const subtitleCodecs = config.subtitleCodecs || [];
+
+  if (subtitleCodecs.length === 0) {
+    // No subtitle streams detected - skip subtitles
+    args.push('-sn');
+  } else {
+    // Check if all subtitle formats are compatible (ASS/SSA/SRT/SubRip)
+    const compatibleFormats = ['ass', 'ssa', 'srt', 'subrip'];
+    const allCompatible = subtitleCodecs.every((codec) =>
+      compatibleFormats.includes(codec.toLowerCase()),
+    );
+
+    if (allCompatible) {
+      // All subtitle formats are compatible - copy them
+      args.push('-c:s', 'copy');
+    } else {
+      // Some subtitle formats need conversion - convert to ASS
+      args.push('-c:s', 'ass');
+    }
+  }
 
   // Bitrate mode (if not CRF)
   if (
