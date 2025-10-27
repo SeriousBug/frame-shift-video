@@ -373,7 +373,10 @@ export class JobProcessor extends EventEmitter {
                 job.id,
                 `Failed to finalize output file: ${errorMessage}`,
               );
-              JobService.update(job.id, { end_time: endTime });
+              JobService.update(job.id, {
+                end_time: endTime,
+                ffmpeg_stderr: result.stderr,
+              });
               logger.error('[JobProcessor] Job failed to finalize', {
                 jobId: job.id,
                 error: errorMessage,
@@ -400,7 +403,10 @@ export class JobProcessor extends EventEmitter {
             if (currentJob && currentJob.status !== 'cancelled') {
               const errorMessage = this.formatErrorMessage(result);
               JobService.setError(job.id, errorMessage);
-              JobService.update(job.id, { end_time: endTime });
+              JobService.update(job.id, {
+                end_time: endTime,
+                ffmpeg_stderr: result.stderr,
+              });
               logger.error('[JobProcessor] Job failed', {
                 jobId: job.id,
                 error: result.error,

@@ -51,6 +51,7 @@ export function JobCard({
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showStats, setShowStats] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [showFullLog, setShowFullLog] = useState(false);
 
   // Parse config if available
   const config: ConversionOptions | null = job.config_json
@@ -316,9 +317,28 @@ export function JobCard({
             <span>Error Details</span>
           </button>
           {showError && (
-            <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded mt-1">
-              {job.error_message}
-            </p>
+            <div className="mt-1">
+              <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                {job.error_message}
+              </p>
+              {job.ffmpeg_stderr && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFullLog(!showFullLog)}
+                    className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 rounded px-1"
+                  >
+                    <span>{showFullLog ? '▼' : '▶'}</span>
+                    <span>Full FFmpeg Log</span>
+                  </button>
+                  {showFullLog && (
+                    <pre className="text-xs text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-900 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap break-words font-mono">
+                      {job.ffmpeg_stderr}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -26,6 +26,7 @@ export interface Job {
   config_key?: string; // Key to file_selections table for configuration
   cleared?: number; // SQLite boolean: 0 = false, 1 = true - whether job is hidden from UI
   config_json?: string; // JSON-encoded ConversionOptions for this specific job
+  ffmpeg_stderr?: string; // Full FFmpeg stderr output for debugging
 }
 
 export interface CreateJobInput {
@@ -52,6 +53,7 @@ export interface UpdateJobInput {
   config_key?: string;
   cleared?: number;
   config_json?: string;
+  ffmpeg_stderr?: string;
 }
 
 export interface FileSelection {

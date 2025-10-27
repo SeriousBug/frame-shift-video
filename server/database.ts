@@ -165,6 +165,10 @@ const MIGRATIONS = [
   `
     ALTER TABLE jobs ADD COLUMN config_json TEXT;
   `,
+  // Migration 12: Add ffmpeg_stderr to store full FFmpeg error output
+  `
+    ALTER TABLE jobs ADD COLUMN ffmpeg_stderr TEXT;
+  `,
 ];
 
 /**
