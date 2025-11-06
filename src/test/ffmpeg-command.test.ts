@@ -504,7 +504,7 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should convert subtitles to ASS when format is PGS', () => {
+    it('should copy subtitles when format is PGS (bitmap format)', () => {
       const pgsConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -514,13 +514,12 @@ describe('FFmpeg Command Generation', () => {
       };
 
       const command = generateFFmpegCommand(pgsConfig);
-      const csIndex = command.args.indexOf('-c:s');
-      expect(csIndex).toBeGreaterThan(-1);
-      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should convert subtitles to ASS when format is VOBSUB', () => {
+    it('should copy subtitles when format is VOBSUB (bitmap format)', () => {
       const vobsubConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -530,9 +529,8 @@ describe('FFmpeg Command Generation', () => {
       };
 
       const command = generateFFmpegCommand(vobsubConfig);
-      const csIndex = command.args.indexOf('-c:s');
-      expect(csIndex).toBeGreaterThan(-1);
-      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).toContain('-c:s');
+      expect(command.args).toContain('copy');
       expect(command.args).not.toContain('-sn');
     });
 
@@ -550,31 +548,63 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).not.toContain('-c:s');
     });
 
-    it('should copy when all subtitle streams are compatible (mixed ASS and SRT)', () => {
+    it('should convert to ASS when all subtitle streams are text-based (mixed ASS and SRT)', () => {
       const mixedConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
         options: basicOptions,
-        jobName: 'Mixed Compatible Subtitles Test',
+        jobName: 'Mixed Text Subtitles Test',
         subtitleCodecs: ['ass', 'srt', 'subrip'],
       };
 
       const command = generateFFmpegCommand(mixedConfig);
+      const csIndex = command.args.indexOf('-c:s');
+      expect(csIndex).toBeGreaterThan(-1);
+      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should copy when mixing bitmap and text subtitles', () => {
+      const mixedIncompatibleConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'Mixed Bitmap and Text Subtitles Test',
+        subtitleCodecs: ['ass', 'hdmv_pgs_subtitle'],
+      };
+
+      const command = generateFFmpegCommand(mixedIncompatibleConfig);
       expect(command.args).toContain('-c:s');
       expect(command.args).toContain('copy');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should convert to ASS when one subtitle stream is incompatible', () => {
-      const mixedIncompatibleConfig: FFmpegJobConfig = {
-        inputFile: 'input.mkv',
-        outputFile: 'output.mp4',
+    it('should convert mov_text to ASS (text-based format)', () => {
+      const movTextConfig: FFmpegJobConfig = {
+        inputFile: 'input.mp4',
+        outputFile: 'output.mkv',
         options: basicOptions,
-        jobName: 'Mixed Incompatible Subtitles Test',
-        subtitleCodecs: ['ass', 'hdmv_pgs_subtitle'],
+        jobName: 'mov_text Subtitle Test',
+        subtitleCodecs: ['mov_text'],
       };
 
-      const command = generateFFmpegCommand(mixedIncompatibleConfig);
+      const command = generateFFmpegCommand(movTextConfig);
+      const csIndex = command.args.indexOf('-c:s');
+      expect(csIndex).toBeGreaterThan(-1);
+      expect(command.args[csIndex + 1]).toBe('ass');
+      expect(command.args).not.toContain('-sn');
+    });
+
+    it('should convert webvtt to ASS (text-based format)', () => {
+      const webvttConfig: FFmpegJobConfig = {
+        inputFile: 'input.webm',
+        outputFile: 'output.mkv',
+        options: basicOptions,
+        jobName: 'WebVTT Subtitle Test',
+        subtitleCodecs: ['webvtt'],
+      };
+
+      const command = generateFFmpegCommand(webvttConfig);
       const csIndex = command.args.indexOf('-c:s');
       expect(csIndex).toBeGreaterThan(-1);
       expect(command.args[csIndex + 1]).toBe('ass');
@@ -591,8 +621,9 @@ describe('FFmpeg Command Generation', () => {
       };
 
       const command = generateFFmpegCommand(uppercaseConfig);
-      expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      const csIndex = command.args.indexOf('-c:s');
+      expect(csIndex).toBeGreaterThan(-1);
+      expect(command.args[csIndex + 1]).toBe('ass');
       expect(command.args).not.toContain('-sn');
     });
   });

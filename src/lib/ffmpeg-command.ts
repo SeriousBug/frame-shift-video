@@ -155,18 +155,27 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     // No subtitle streams detected - skip subtitles
     args.push('-sn');
   } else {
-    // Check if all subtitle formats are compatible (ASS/SSA/SRT/SubRip)
-    const compatibleFormats = ['ass', 'ssa', 'srt', 'subrip'];
-    const allCompatible = subtitleCodecs.every((codec) =>
-      compatibleFormats.includes(codec.toLowerCase()),
+    // Text-based formats that can be converted
+    const textFormats = ['ass', 'ssa', 'srt', 'subrip', 'mov_text', 'webvtt'];
+    // Bitmap formats that must be copied (cannot convert to text)
+    const bitmapFormats = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvdsub'];
+
+    const hasOnlyTextSubs = subtitleCodecs.every((codec) =>
+      textFormats.includes(codec.toLowerCase()),
+    );
+    const hasBitmapSubs = subtitleCodecs.some((codec) =>
+      bitmapFormats.includes(codec.toLowerCase()),
     );
 
-    if (allCompatible) {
-      // All subtitle formats are compatible - copy them
+    if (hasBitmapSubs) {
+      // Has bitmap subtitles - must copy (can't convert bitmap to text)
       args.push('-c:s', 'copy');
-    } else {
-      // Some subtitle formats need conversion - convert to ASS
+    } else if (hasOnlyTextSubs) {
+      // All text-based - can convert incompatible ones to ASS
       args.push('-c:s', 'ass');
+    } else {
+      // Mixed or unknown - safest to copy
+      args.push('-c:s', 'copy');
     }
   }
 
