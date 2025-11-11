@@ -80,20 +80,12 @@ describe('Conversion Types', () => {
       const validCodecs: AudioCodec[] = [
         'libopus',
         'aac',
-        'libfdk_aac',
         'ac3',
         'flac',
         'copy',
       ];
       validCodecs.forEach((codec) => {
-        expect([
-          'libopus',
-          'aac',
-          'libfdk_aac',
-          'ac3',
-          'flac',
-          'copy',
-        ]).toContain(codec);
+        expect(['libopus', 'aac', 'ac3', 'flac', 'copy']).toContain(codec);
       });
     });
 

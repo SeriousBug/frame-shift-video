@@ -557,7 +557,6 @@ export function ConversionConfig({
                       Opus - Best quality/size (recommended)
                     </option>
                     <option value="aac">AAC - Good compatibility</option>
-                    <option value="libfdk_aac">AAC (High quality)</option>
                     <option value="ac3">AC3 - Dolby Digital</option>
                     <option value="flac">FLAC - Lossless</option>
                     <option value="copy">Copy - No re-encoding</option>
