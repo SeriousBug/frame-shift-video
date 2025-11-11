@@ -44,8 +44,6 @@ export type AudioCodec =
   | 'libopus'
   /** AAC using native encoder (maps to -c:a aac) */
   | 'aac'
-  /** Higher quality AAC if compiled with --enable-libfdk-aac (maps to -c:a libfdk_aac) */
-  | 'libfdk_aac'
   /** Dolby Digital for 5.1 passthrough (maps to -c:a ac3) */
   | 'ac3'
   /** Lossless for archival (maps to -c:a flac) */

@@ -594,17 +594,19 @@ export class JobProcessor extends EventEmitter {
     if (!result.success) {
       let message = result.error;
 
-      // Include relevant stderr information if available
-      if (result.stderr) {
-        // Extract last few lines of stderr for context (max 500 chars)
-        const stderrLines = result.stderr.trim().split('\n');
-        const relevantLines = stderrLines.slice(-5).join('\n');
-        const truncated =
-          relevantLines.length > 500
-            ? relevantLines.substring(relevantLines.length - 500)
-            : relevantLines;
+      // Include the full FFmpeg command that was executed
+      if (result.command) {
+        message += `\n\n=== FFmpeg Command ===\n${result.command}`;
+      }
 
-        message += `\n\nFFmpeg output:\n${truncated}`;
+      // Include full ffprobe output for debugging
+      if (result.ffprobeOutput) {
+        message += `\n\n=== FFprobe Output ===\n${result.ffprobeOutput}`;
+      }
+
+      // Include full stderr output
+      if (result.stderr) {
+        message += `\n\n=== FFmpeg stderr ===\n${result.stderr}`;
       }
 
       return message;

@@ -26,6 +26,23 @@ function getFfprobe(): string {
 }
 
 /**
+ * Quote a command argument if it contains spaces or special shell characters
+ * This is for display purposes to avoid confusing users/AI, even though we don't use shell execution
+ */
+function quoteArgIfNeeded(arg: string): string {
+  // Check if argument contains spaces or special shell characters
+  const needsQuoting = /[ \t\n*?[\]{}$&|;<>()\\"`!]/.test(arg);
+
+  if (needsQuoting) {
+    // Escape single quotes by replacing ' with '\''
+    const escaped = arg.replace(/'/g, "'\\''");
+    return `'${escaped}'`;
+  }
+
+  return arg;
+}
+
+/**
  * Progress information parsed from FFmpeg output
  */
 export interface FFmpegProgress {
@@ -64,6 +81,10 @@ export interface FFmpegSuccess {
   stderr: string;
   /** Exit code */
   exitCode: number;
+  /** Full ffprobe output for debugging */
+  ffprobeOutput: string;
+  /** The FFmpeg command that was executed */
+  command: string;
 }
 
 /**
@@ -81,6 +102,10 @@ export interface FFmpegFailure {
   exitCode: number | null;
   /** Partial progress information if available */
   finalProgress?: FFmpegProgress;
+  /** Full ffprobe output for debugging */
+  ffprobeOutput: string;
+  /** The FFmpeg command that was executed */
+  command: string;
 }
 
 /**
@@ -116,6 +141,7 @@ export class FFmpegExecutor extends EventEmitter {
   private killed = false;
   private options: FFmpegExecutionOptions;
   private inputDuration: number | null = null; // Duration in seconds
+  private ffprobeOutput = ''; // Store comprehensive ffprobe output
 
   constructor(options: FFmpegExecutionOptions) {
     super();
@@ -135,6 +161,9 @@ export class FFmpegExecutor extends EventEmitter {
 
     // Generate temporary file path for the conversion
     const tempOutputPath = getTempFilePath(finalOutputPath);
+
+    // Get comprehensive ffprobe output for debugging
+    this.ffprobeOutput = await this.getComprehensiveFfprobeOutput(inputPath);
 
     // Get input video duration for accurate progress calculation
     this.inputDuration = await this.getVideoDuration(inputPath);
@@ -172,6 +201,11 @@ export class FFmpegExecutor extends EventEmitter {
       processedArgs[lastArgIndex] = '-';
     }
 
+    // Store the full command that will be executed for error reporting
+    // Quote arguments that contain spaces or special characters for clarity
+    const quotedArgs = processedArgs.map(quoteArgIfNeeded);
+    const fullCommand = `${getFfmpeg()} ${quotedArgs.join(' ')}`;
+
     this.emit('start', { command: command.displayCommand });
 
     return new Promise((resolve) => {
@@ -196,6 +230,8 @@ export class FFmpegExecutor extends EventEmitter {
               stderr,
               exitCode: null,
               finalProgress: lastProgress,
+              ffprobeOutput: this.ffprobeOutput,
+              command: fullCommand,
             });
           }, this.options.timeout)
         : null;
@@ -231,6 +267,8 @@ export class FFmpegExecutor extends EventEmitter {
             stderr,
             exitCode: code,
             finalProgress: lastProgress,
+            ffprobeOutput: this.ffprobeOutput,
+            command: fullCommand,
           });
           return;
         }
@@ -244,6 +282,8 @@ export class FFmpegExecutor extends EventEmitter {
             finalProgress: lastProgress,
             stderr,
             exitCode: code,
+            ffprobeOutput: this.ffprobeOutput,
+            command: fullCommand,
           });
         } else {
           resolve({
@@ -253,6 +293,8 @@ export class FFmpegExecutor extends EventEmitter {
             stderr,
             exitCode: code,
             finalProgress: lastProgress,
+            ffprobeOutput: this.ffprobeOutput,
+            command: fullCommand,
           });
         }
 
@@ -270,6 +312,8 @@ export class FFmpegExecutor extends EventEmitter {
           stderr,
           exitCode: null,
           finalProgress: lastProgress,
+          ffprobeOutput: this.ffprobeOutput,
+          command: fullCommand,
         });
       });
     });
@@ -290,6 +334,57 @@ export class FFmpegExecutor extends EventEmitter {
         }
       }, 5000);
     }
+  }
+
+  /**
+   * Get comprehensive ffprobe output for debugging and error reporting
+   */
+  private async getComprehensiveFfprobeOutput(
+    inputPath: string,
+  ): Promise<string> {
+    return new Promise((resolve) => {
+      const ffprobe = spawn(
+        getFfprobe(),
+        [
+          '-v',
+          'quiet',
+          '-print_format',
+          'json',
+          '-show_format',
+          '-show_streams',
+          '-show_error',
+          inputPath,
+        ],
+        {
+          env: process.env,
+        },
+      );
+
+      let output = '';
+      let errorOutput = '';
+
+      ffprobe.stdout?.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      ffprobe.stderr?.on('data', (data: Buffer) => {
+        errorOutput += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code === 0 && output.trim()) {
+          resolve(output);
+        } else {
+          resolve(
+            `FFprobe failed with exit code ${code}\nStderr: ${errorOutput}\nStdout: ${output}`,
+          );
+        }
+      });
+
+      ffprobe.on('error', (error) =>
+        resolve(`FFprobe error: ${error.message}`),
+      );
+    });
   }
 
   /**

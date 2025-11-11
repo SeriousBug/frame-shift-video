@@ -52,6 +52,7 @@ export function JobCard({
   const [showStats, setShowStats] = useState(false);
   const [showError, setShowError] = useState(false);
   const [showFullLog, setShowFullLog] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Parse config if available
   const config: ConversionOptions | null = job.config_json
@@ -151,6 +152,22 @@ export function JobCard({
       await onCancel(job.id);
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleCopyForAI = async () => {
+    const prompt = `The following error happened when using Frame Shift Video, an app that runs ffmpeg to convert video files. Please look at the error, and explain briefly why the error happened, and what could be changed to fix the error. You can tell me to retry the conversion. If I need to add custom ffmpeg command line options, please tell me to open "Custom FFmpeg Options" in the "Configure Conversion" page and paste the options you suggest. These options will get appended to the end during the retry. If you suspect there may be an issue with the video file itself, then explain your reasoning why. If you believe the video file is okay, do not reference this at all.
+
+\`\`\`
+${job.error_message}
+\`\`\``;
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
     }
   };
 
@@ -318,9 +335,19 @@ export function JobCard({
           </button>
           {showError && (
             <div className="mt-1">
-              <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+              <div className="mb-2">
+                <button
+                  type="button"
+                  onClick={handleCopyForAI}
+                  title="If you need help, click this button and paste the output to an AI agent to get suggestions on how to fix the issue"
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-xs font-medium transition-colors"
+                >
+                  {copied ? 'Copied!' : 'Copy for AI'}
+                </button>
+              </div>
+              <pre className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded font-mono whitespace-pre overflow-x-auto">
                 {job.error_message}
-              </p>
+              </pre>
               {job.ffmpeg_stderr && (
                 <div className="mt-2">
                   <button
