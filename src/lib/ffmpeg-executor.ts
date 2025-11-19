@@ -212,12 +212,68 @@ export class FFmpegExecutor extends EventEmitter {
       let stderr = '';
       let lastProgress: FFmpegProgress | undefined;
       let progressBuffer = ''; // Accumulate progress data across chunks
+      let stdoutEnded = false;
+      let stderrEnded = false;
+      let processExited = false;
+      let exitCode: number | null = null;
 
       // Spawn FFmpeg process
       this.process = spawn(getFfmpeg(), processedArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: process.env,
       });
+
+      // Helper to check if we can resolve
+      const tryResolve = () => {
+        // Only resolve when process has exited AND both streams have ended
+        if (!processExited || !stdoutEnded || !stderrEnded) {
+          return;
+        }
+
+        if (timeoutId) clearTimeout(timeoutId);
+        this.process = null;
+
+        if (this.killed) {
+          resolve({
+            success: false,
+            error: 'FFmpeg execution was cancelled',
+            tempPath: tempOutputPath,
+            stderr,
+            exitCode: exitCode,
+            finalProgress: lastProgress,
+            ffprobeOutput: this.ffprobeOutput,
+            command: fullCommand,
+          });
+          return;
+        }
+
+        if (exitCode === 0) {
+          resolve({
+            success: true,
+            outputPath: this.options.dryRun ? 'dry-run-output' : tempOutputPath,
+            tempPath: tempOutputPath,
+            finalPath: finalOutputPath,
+            finalProgress: lastProgress,
+            stderr,
+            exitCode: exitCode,
+            ffprobeOutput: this.ffprobeOutput,
+            command: fullCommand,
+          });
+        } else {
+          resolve({
+            success: false,
+            error: `FFmpeg failed with exit code ${exitCode}`,
+            tempPath: tempOutputPath,
+            stderr,
+            exitCode: exitCode,
+            finalProgress: lastProgress,
+            ffprobeOutput: this.ffprobeOutput,
+            command: fullCommand,
+          });
+        }
+
+        this.emit('complete', { success: exitCode === 0, exitCode: exitCode });
+      };
 
       // Set up timeout (only if specified)
       const timeoutId = this.options.timeout
@@ -249,56 +305,28 @@ export class FFmpegExecutor extends EventEmitter {
         }
       });
 
+      // Track when stdout ends
+      this.process.stdout?.on('end', () => {
+        stdoutEnded = true;
+        tryResolve();
+      });
+
       // Capture stderr for error reporting
       this.process.stderr?.on('data', (data: Buffer) => {
         stderr += data.toString();
       });
 
+      // Track when stderr ends
+      this.process.stderr?.on('end', () => {
+        stderrEnded = true;
+        tryResolve();
+      });
+
       // Handle process completion
       this.process.on('close', (code) => {
-        if (timeoutId) clearTimeout(timeoutId);
-        this.process = null;
-
-        if (this.killed) {
-          resolve({
-            success: false,
-            error: 'FFmpeg execution was cancelled',
-            tempPath: tempOutputPath,
-            stderr,
-            exitCode: code,
-            finalProgress: lastProgress,
-            ffprobeOutput: this.ffprobeOutput,
-            command: fullCommand,
-          });
-          return;
-        }
-
-        if (code === 0) {
-          resolve({
-            success: true,
-            outputPath: this.options.dryRun ? 'dry-run-output' : tempOutputPath,
-            tempPath: tempOutputPath,
-            finalPath: finalOutputPath,
-            finalProgress: lastProgress,
-            stderr,
-            exitCode: code,
-            ffprobeOutput: this.ffprobeOutput,
-            command: fullCommand,
-          });
-        } else {
-          resolve({
-            success: false,
-            error: `FFmpeg failed with exit code ${code}`,
-            tempPath: tempOutputPath,
-            stderr,
-            exitCode: code,
-            finalProgress: lastProgress,
-            ffprobeOutput: this.ffprobeOutput,
-            command: fullCommand,
-          });
-        }
-
-        this.emit('complete', { success: code === 0, exitCode: code });
+        processExited = true;
+        exitCode = code;
+        tryResolve();
       });
 
       // Handle process errors
