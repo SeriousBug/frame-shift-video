@@ -363,6 +363,14 @@ export class FilePickerStateService {
 
         try {
           if (entry.isDirectory()) {
+            // Check if directory name matches the search pattern
+            const dirMatches =
+              compiledPattern !== false
+                ? compiledPattern.test(entry.name)
+                : micromatch.isMatch(entry.name, searchPattern, {
+                    nocase: true,
+                  });
+
             // Recursively search subdirectories, passing compiled pattern for reuse
             const subResults = this.scanDirectoryWithSearch(
               itemPath,
@@ -372,8 +380,8 @@ export class FilePickerStateService {
               compiledPattern,
             );
 
-            // Only include directory if it has matching descendants
-            if (subResults.length > 0) {
+            // Include directory if it matches the pattern OR has matching descendants
+            if (dirMatches || subResults.length > 0) {
               // Only call statSync when we know we need the directory
               const stats = fs.statSync(fullItemPath);
               results.push({
@@ -509,27 +517,49 @@ export class FilePickerStateService {
         searchCache.set(cacheKey, unsortedResults);
       }
 
-      // Sort all results once at the end: directories first, then files, using natural sort
-      // This is much faster than sorting at each directory level during recursion
-      const directories = unsortedResults.filter((item) => item.isDirectory);
-      const files = unsortedResults.filter((item) => !item.isDirectory);
-      const sortedDirs = orderBy(
-        directories,
-        [
-          (item) => item.path.split('/').length,
-          (item) => stripLeadingArticles(item.name),
-        ],
-        ['asc', 'asc'],
-      );
-      const sortedFiles = orderBy(
-        files,
-        [
-          (item) => item.path.split('/').length,
-          (item) => stripLeadingArticles(item.name),
-        ],
-        ['asc', 'asc'],
-      );
-      const searchResults = [...sortedDirs, ...sortedFiles];
+      // Sort results in tree order (parent, then children)
+      // Build parent->children mapping
+      const childrenByParent = new Map<string, FilePickerItem[]>();
+      for (const item of unsortedResults) {
+        const parentPath = item.path.includes('/')
+          ? item.path.substring(0, item.path.lastIndexOf('/'))
+          : '';
+
+        if (!childrenByParent.has(parentPath)) {
+          childrenByParent.set(parentPath, []);
+        }
+        childrenByParent.get(parentPath)!.push(item);
+      }
+
+      // Sort children within each parent (directories first, then files, alphabetically)
+      for (const children of childrenByParent.values()) {
+        children.sort((a, b) => {
+          // Directories before files
+          if (a.isDirectory !== b.isDirectory) {
+            return a.isDirectory ? -1 : 1;
+          }
+          // Then sort alphabetically (with natural sort)
+          const aName = stripLeadingArticles(a.name);
+          const bName = stripLeadingArticles(b.name);
+          return aName.localeCompare(bName, undefined, { numeric: true });
+        });
+      }
+
+      // Flatten tree in depth-first order
+      const searchResults: FilePickerItem[] = [];
+      const addItemAndChildren = (item: FilePickerItem) => {
+        searchResults.push(item);
+        const children = childrenByParent.get(item.path) || [];
+        for (const child of children) {
+          addItemAndChildren(child);
+        }
+      };
+
+      // Start with root items
+      const rootItems = childrenByParent.get('') || [];
+      for (const item of rootItems) {
+        addItemAndChildren(item);
+      }
 
       // Build a map of folder -> all descendant files for efficient selection state calculation
       // This avoids rescanning the same folders multiple times
@@ -598,11 +628,59 @@ export class FilePickerStateService {
       }
 
       // Filter out converted files if hideConverted is enabled
-      const filteredItems = hideConverted
+      let filteredItems = hideConverted
         ? items.filter(
             (item) => item.isDirectory || !this.isConvertedFile(item.name),
           )
         : items;
+
+      // After filtering converted files, remove folders that have no descendant files
+      // and don't match the search pattern themselves
+      if (hideConverted) {
+        // Build a set of all file paths for quick lookup
+        const filePaths = new Set(
+          filteredItems
+            .filter((item) => !item.isDirectory)
+            .map((item) => item.path),
+        );
+
+        // Compile the search pattern for checking if folder names match
+        const compiledPattern = state.searchQuery
+          ? micromatch.makeRe(state.searchQuery, {
+              nocase: true,
+            })
+          : false;
+
+        // Filter out directories that don't have any descendant files
+        // and don't match the search pattern themselves
+        filteredItems = filteredItems.filter((item) => {
+          if (!item.isDirectory) return true;
+
+          // Check if any file path starts with this folder path
+          const folderPrefix = item.path + '/';
+          const hasDescendantFiles = Array.from(filePaths).some((filePath) =>
+            filePath.startsWith(folderPrefix),
+          );
+
+          // If folder has descendant files, keep it
+          if (hasDescendantFiles) return true;
+
+          // If folder name matches the search pattern AND it's not just a wildcard,
+          // keep it (even if empty after filtering)
+          // Don't keep folders for generic wildcards like "*" or "**"
+          if (
+            state.searchQuery &&
+            state.searchQuery.trim() !== '*' &&
+            state.searchQuery.trim() !== '**' &&
+            compiledPattern &&
+            compiledPattern !== false
+          ) {
+            return compiledPattern.test(item.name);
+          }
+
+          return false;
+        });
+      }
 
       return filteredItems;
     }
