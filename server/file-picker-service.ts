@@ -29,6 +29,53 @@ const VIDEO_EXTENSIONS = [
   '.m2ts',
 ];
 
+/**
+ * Simple LRU cache with TTL for search results
+ */
+class SearchCache {
+  private cache = new Map<
+    string,
+    { results: FilePickerItem[]; timestamp: number }
+  >();
+  private maxSize = 50; // Maximum number of cached searches
+  private ttl = 5000; // 5 seconds TTL
+
+  get(key: string): FilePickerItem[] | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    // Check if cache entry is still valid
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    // Move to end (LRU)
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.results;
+  }
+
+  set(key: string, results: FilePickerItem[]): void {
+    // Evict oldest entry if cache is full
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    this.cache.set(key, {
+      results,
+      timestamp: Date.now(),
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+const searchCache = new SearchCache();
+
 interface PickerStateData {
   selectedFiles: Set<string>;
   expandedFolders: Set<string>;
@@ -215,10 +262,21 @@ export class FilePickerStateService {
     hideConverted: boolean,
     videosOnly: boolean = false,
     searchQuery?: string,
+    compiledSearchPattern?: RegExp | false,
   ): string[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, folderPath);
     const files: string[] = [];
+
+    // Compile search pattern once at the top level
+    if (
+      searchQuery &&
+      searchQuery.trim() &&
+      compiledSearchPattern === undefined
+    ) {
+      const compiled = micromatch.makeRe(searchQuery, { nocase: true });
+      compiledSearchPattern = compiled === false ? false : compiled;
+    }
 
     try {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
@@ -230,7 +288,7 @@ export class FilePickerStateService {
         const itemPath = path.join(folderPath, entry.name);
 
         if (entry.isDirectory()) {
-          // Recursively get files from subdirectory
+          // Recursively get files from subdirectory, passing compiled pattern
           files.push(
             ...this.scanFolderForFilesWithFilters(
               itemPath,
@@ -238,6 +296,7 @@ export class FilePickerStateService {
               hideConverted,
               videosOnly,
               searchQuery,
+              compiledSearchPattern,
             ),
           );
         } else {
@@ -247,13 +306,16 @@ export class FilePickerStateService {
           // Skip converted files if hideConverted is true
           if (hideConverted && this.isConvertedFile(entry.name)) continue;
 
-          // Skip files that don't match search query if provided
-          if (
-            searchQuery &&
-            searchQuery.trim() &&
-            !micromatch.isMatch(entry.name, searchQuery, { nocase: true })
-          ) {
-            continue;
+          // Skip files that don't match search query
+          // Use compiled pattern if available, otherwise fall back to micromatch.isMatch
+          if (compiledSearchPattern !== undefined) {
+            const matches =
+              compiledSearchPattern !== false
+                ? compiledSearchPattern.test(entry.name)
+                : micromatch.isMatch(entry.name, searchQuery!, {
+                    nocase: true,
+                  });
+            if (!matches) continue;
           }
 
           files.push(itemPath);
@@ -268,36 +330,31 @@ export class FilePickerStateService {
 
   /**
    * Recursively scan directory tree and filter by search pattern
+   * Note: Sorting is deferred until all results are collected for performance
    */
   private static scanDirectoryWithSearch(
     dirPath: string,
     searchPattern: string,
     showHidden: boolean = false,
     videosOnly: boolean = false,
+    compiledPattern?: RegExp | false,
   ): FilePickerItem[] {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
     const results: FilePickerItem[] = [];
 
+    // Compile pattern once at the top level for reuse in recursive calls
+    // Note: makeRe can return false for patterns that can't be compiled to regex
+    if (compiledPattern === undefined) {
+      const compiled = micromatch.makeRe(searchPattern, { nocase: true });
+      compiledPattern = compiled === false ? false : compiled;
+    }
+
     try {
       const entries = fs.readdirSync(fullPath, { withFileTypes: true });
 
-      // Sort entries naturally: directories first, then files
-      const directories = entries.filter((entry) => entry.isDirectory());
-      const files = entries.filter((entry) => entry.isFile());
-      const sortedDirs = orderBy(
-        directories,
-        [(entry) => stripLeadingArticles(entry.name)],
-        ['asc'],
-      );
-      const sortedFiles = orderBy(
-        files,
-        [(entry) => stripLeadingArticles(entry.name)],
-        ['asc'],
-      );
-      const sortedEntries = [...sortedDirs, ...sortedFiles];
-
-      for (const entry of sortedEntries) {
+      // Process entries without sorting - we'll sort once at the end
+      for (const entry of entries) {
         // Skip hidden files unless showHidden is true
         if (!showHidden && entry.name.startsWith('.')) continue;
 
@@ -305,19 +362,20 @@ export class FilePickerStateService {
         const fullItemPath = path.join(fullPath, entry.name);
 
         try {
-          const stats = fs.statSync(fullItemPath);
-
           if (entry.isDirectory()) {
-            // Recursively search subdirectories
+            // Recursively search subdirectories, passing compiled pattern for reuse
             const subResults = this.scanDirectoryWithSearch(
               itemPath,
               searchPattern,
               showHidden,
               videosOnly,
+              compiledPattern,
             );
 
             // Only include directory if it has matching descendants
             if (subResults.length > 0) {
+              // Only call statSync when we know we need the directory
+              const stats = fs.statSync(fullItemPath);
               results.push({
                 name: entry.name,
                 path: itemPath,
@@ -333,10 +391,18 @@ export class FilePickerStateService {
             // Skip non-video files if videosOnly is enabled
             if (videosOnly && !this.isVideoFile(entry.name)) continue;
 
-            // Check if file matches the search pattern (case insensitive)
-            if (
-              micromatch.isMatch(entry.name, searchPattern, { nocase: true })
-            ) {
+            // Check if file matches the search pattern
+            // Use compiled regex if available, otherwise fall back to micromatch.isMatch
+            const matches =
+              compiledPattern !== false
+                ? compiledPattern.test(entry.name)
+                : micromatch.isMatch(entry.name, searchPattern, {
+                    nocase: true,
+                  });
+
+            if (matches) {
+              // Only call statSync for files that match the pattern
+              const stats = fs.statSync(fullItemPath);
               results.push({
                 name: entry.name,
                 path: itemPath,
@@ -377,33 +443,38 @@ export class FilePickerStateService {
   }
 
   /**
-   * Check if a file has a converted version in the given items list
+   * Build an index of converted files for O(1) lookup
+   * Returns a Set of base paths (without extension, without _converted suffix)
+   */
+  private static buildConvertedFilesIndex(
+    items: FilePickerItem[],
+  ): Set<string> {
+    const convertedFiles = new Set<string>();
+
+    for (const item of items) {
+      if (!item.isDirectory && this.isConvertedFile(item.name)) {
+        // Extract base path: "folder/movie_converted.mp4" -> "folder/movie"
+        const pathWithoutExt = item.path.replace(/\.[^.]+$/, '');
+        const basePath = pathWithoutExt.replace(/_converted$/, '');
+        convertedFiles.add(basePath);
+      }
+    }
+
+    return convertedFiles;
+  }
+
+  /**
+   * Check if a file has a converted version using the pre-built index
+   * This is O(1) instead of O(n)
    */
   private static hasConvertedVersion(
     item: FilePickerItem,
-    allItems: FilePickerItem[],
+    convertedIndex: Set<string>,
   ): boolean {
     if (item.isDirectory) return false;
 
-    const nameWithoutExt = item.name.replace(/\.[^.]+$/, '');
-    const itemDir = item.path.substring(0, item.path.lastIndexOf('/'));
-
-    // Check if any file with the pattern <name>_converted.<any-ext> exists in the same directory
-    return allItems.some((otherItem) => {
-      if (otherItem.isDirectory || otherItem.path === item.path) return false;
-
-      const otherNameWithoutExt = otherItem.name.replace(/\.[^.]+$/, '');
-      const otherDir = otherItem.path.substring(
-        0,
-        otherItem.path.lastIndexOf('/'),
-      );
-
-      // Check if it's in the same directory and has the _converted suffix
-      return (
-        otherDir === itemDir &&
-        otherNameWithoutExt === `${nameWithoutExt}_converted`
-      );
-    });
+    const pathWithoutExt = item.path.replace(/\.[^.]+$/, '');
+    return convertedIndex.has(pathWithoutExt);
   }
 
   /**
@@ -416,12 +487,49 @@ export class FilePickerStateService {
 
     // If search query is present, use search mode
     if (state.searchQuery && state.searchQuery.trim()) {
-      const searchResults = this.scanDirectoryWithSearch(
-        '',
-        state.searchQuery,
-        state.showHidden || false,
-        videosOnly,
+      // Check cache first - include base path in cache key to avoid collisions
+      const showHidden = state.showHidden || false;
+      const basePath = this.getBasePath();
+      const cacheKey = `${basePath}:${state.searchQuery}-${showHidden}-${videosOnly}-${hideConverted}`;
+      const cachedResults = searchCache.get(cacheKey);
+
+      let unsortedResults: FilePickerItem[];
+      if (cachedResults) {
+        // Use cached results (already includes all processing)
+        unsortedResults = cachedResults;
+      } else {
+        // Perform search and cache the results
+        unsortedResults = this.scanDirectoryWithSearch(
+          '',
+          state.searchQuery,
+          showHidden,
+          videosOnly,
+        );
+        // Cache the unsorted results before further processing
+        searchCache.set(cacheKey, unsortedResults);
+      }
+
+      // Sort all results once at the end: directories first, then files, using natural sort
+      // This is much faster than sorting at each directory level during recursion
+      const directories = unsortedResults.filter((item) => item.isDirectory);
+      const files = unsortedResults.filter((item) => !item.isDirectory);
+      const sortedDirs = orderBy(
+        directories,
+        [
+          (item) => item.path.split('/').length,
+          (item) => stripLeadingArticles(item.name),
+        ],
+        ['asc', 'asc'],
       );
+      const sortedFiles = orderBy(
+        files,
+        [
+          (item) => item.path.split('/').length,
+          (item) => stripLeadingArticles(item.name),
+        ],
+        ['asc', 'asc'],
+      );
+      const searchResults = [...sortedDirs, ...sortedFiles];
 
       // Build a map of folder -> all descendant files for efficient selection state calculation
       // This avoids rescanning the same folders multiple times
@@ -440,6 +548,9 @@ export class FilePickerStateService {
           }
         }
       }
+
+      // Build converted files index once for O(1) lookups
+      const convertedIndex = this.buildConvertedFilesIndex(searchResults);
 
       // Calculate depths and selection states
       const items: FilePickerItem[] = [];
@@ -475,11 +586,11 @@ export class FilePickerStateService {
             : 'none';
         }
 
-        // Check if file has converted version (before filtering)
+        // Check if file has converted version using O(1) index lookup
         if (!item.isDirectory) {
           item.hasConvertedVersion = this.hasConvertedVersion(
             item,
-            searchResults,
+            convertedIndex,
           );
         }
 
@@ -513,6 +624,10 @@ export class FilePickerStateService {
       );
       const result: FilePickerItem[] = [];
       const allFilesInSubtree: string[] = [];
+
+      // Build converted files index once per directory for O(1) lookups
+      const convertedIndex =
+        FilePickerStateService.buildConvertedFilesIndex(entries);
 
       for (const entry of entries) {
         entry.depth = depth;
@@ -565,13 +680,17 @@ export class FilePickerStateService {
               !FilePickerStateService.isConvertedFile(child.name),
           );
 
+          // Build index from immediate children for checking converted versions
+          const immediateConvertedIndex =
+            FilePickerStateService.buildConvertedFilesIndex(immediateChildren);
+
           // All immediate video files must be converted
           const allFilesConverted =
             videoFiles.length === 0 ||
             videoFiles.every((file) =>
               FilePickerStateService.hasConvertedVersion(
                 file,
-                immediateChildren,
+                immediateConvertedIndex,
               ),
             );
 
@@ -594,9 +713,9 @@ export class FilePickerStateService {
           entry.selectionState = state.selectedFiles.has(entry.path)
             ? 'full'
             : 'none';
-          // Mark file as converted if it has a converted version in this folder
+          // Mark file as converted if it has a converted version using O(1) index lookup
           entry.hasConvertedVersion =
-            FilePickerStateService.hasConvertedVersion(entry, entries);
+            FilePickerStateService.hasConvertedVersion(entry, convertedIndex);
           // Add this file to the subtree's file list
           allFilesInSubtree.push(entry.path);
           result.push(entry);
