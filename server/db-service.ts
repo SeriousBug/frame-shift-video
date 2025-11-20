@@ -410,6 +410,14 @@ export const JobService = {
       updates.push('config_json = ?');
       params.push(input.config_json);
     }
+    if (input.assigned_worker !== undefined) {
+      updates.push('assigned_worker = ?');
+      params.push(input.assigned_worker);
+    }
+    if (input.worker_last_seen !== undefined) {
+      updates.push('worker_last_seen = ?');
+      params.push(input.worker_last_seen);
+    }
 
     if (updates.length === 0) return;
 
@@ -517,6 +525,137 @@ export const JobService = {
        WHERE status NOT IN ('pending', 'processing') AND cleared = 0`,
     );
     return result.changes;
+  },
+
+  /**
+   * Claim the next pending job for a worker (atomic operation)
+   * Returns the job if successfully claimed, undefined otherwise
+   */
+  claimNextJob(workerId: string): Job | undefined {
+    let claimedJob: Job | undefined;
+
+    transaction(() => {
+      // Find next pending job
+      const nextJob = queryOne<Job>(
+        `SELECT * FROM jobs
+         WHERE status = 'pending' AND assigned_worker IS NULL
+         ORDER BY queue_position ASC, created_at ASC
+         LIMIT 1`,
+      );
+
+      if (!nextJob) {
+        return;
+      }
+
+      // Atomically claim it
+      const result = execute(
+        `UPDATE jobs
+         SET assigned_worker = ?,
+             worker_last_seen = CURRENT_TIMESTAMP,
+             status = 'processing',
+             start_time = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = 'pending' AND assigned_worker IS NULL`,
+        [workerId, nextJob.id],
+      );
+
+      // Only return the job if we successfully claimed it
+      if (result.changes > 0) {
+        claimedJob = this.getById(nextJob.id);
+      }
+    });
+
+    return claimedJob;
+  },
+
+  /**
+   * Update the worker heartbeat timestamp for a job
+   */
+  updateWorkerHeartbeat(jobId: number, workerId: string): void {
+    execute(
+      `UPDATE jobs
+       SET worker_last_seen = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND assigned_worker = ?`,
+      [jobId, workerId],
+    );
+  },
+
+  /**
+   * Get all jobs assigned to a specific worker
+   */
+  getJobsByWorker(workerId: string): Job[] {
+    const jobs = query<Job>(
+      'SELECT * FROM jobs WHERE assigned_worker = ? ORDER BY created_at DESC',
+      [workerId],
+    );
+    return jobs.map(normalizeJobTimestamps);
+  },
+
+  /**
+   * Release jobs that have stale worker heartbeats (worker hasn't checked in)
+   * @param timeoutMinutes Number of minutes since last heartbeat before considering job stale
+   * @returns Number of jobs released
+   */
+  releaseStaleJobs(timeoutMinutes: number = 5): number {
+    const result = execute(
+      `UPDATE jobs
+       SET status = 'failed',
+           error_message = 'Worker became unresponsive',
+           assigned_worker = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'processing'
+         AND assigned_worker IS NOT NULL
+         AND worker_last_seen < datetime('now', '-' || ? || ' minutes')`,
+      [timeoutMinutes],
+    );
+    return result.changes;
+  },
+
+  /**
+   * Update job fields for a worker (progress, error, etc.)
+   * Only allows updates if the job is assigned to the specified worker
+   */
+  updateJobAsWorker(
+    jobId: number,
+    workerId: string,
+    input: UpdateJobInput,
+  ): boolean {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (input.status !== undefined) {
+      updates.push('status = ?');
+      params.push(input.status);
+    }
+    if (input.output_file !== undefined) {
+      updates.push('output_file = ?');
+      params.push(input.output_file);
+    }
+    if (input.progress !== undefined) {
+      updates.push('progress = ?');
+      params.push(input.progress);
+    }
+    if (input.error_message !== undefined) {
+      updates.push('error_message = ?');
+      params.push(input.error_message);
+    }
+    if (input.end_time !== undefined) {
+      updates.push('end_time = ?');
+      params.push(input.end_time);
+    }
+
+    if (updates.length === 0) return false;
+
+    updates.push('worker_last_seen = CURRENT_TIMESTAMP');
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(jobId);
+    params.push(workerId);
+
+    const queryStr = `UPDATE jobs SET ${updates.join(', ')} WHERE id = ? AND assigned_worker = ?`;
+    const result = execute(queryStr, params);
+
+    return result.changes > 0;
   },
 };
 

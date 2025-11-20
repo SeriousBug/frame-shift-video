@@ -76,20 +76,107 @@ docker compose up -d
 
 Access the web interface at `http://localhost:3001`
 
+### Distributed Setup (Leader-Follower)
+
+For high-performance setups, you can distribute FFmpeg processing across multiple servers:
+
+**Requirements:**
+
+- All instances (leader + followers) must access the same filesystem with identical paths (use NFS, CIFS, or similar)
+- All instances must be on a trusted network (VPN recommended)
+
+**Example docker-compose.yml for distributed setup:**
+
+```yaml
+services:
+  # Leader instance - serves UI and manages jobs
+  frame-shift-leader:
+    image: ghcr.io/seriousbug/frame-shift-video:latest
+    container_name: frame-shift-leader
+    ports:
+      - '3001:3001'
+    volumes:
+      # CRITICAL: Same mount path on all instances
+      - /mnt/media:/videos
+      - ./leader-data:/app/data
+    environment:
+      - PORT=3001
+      - FRAME_SHIFT_HOME=/videos
+      - INSTANCE_TYPE=leader
+      - SHARED_TOKEN=your_secure_random_token_here # Generate with: openssl rand -hex 32
+      - FOLLOWER_URLS=http://follower1:3001,http://follower2:3001
+      # Optional: notifications, sentry, etc.
+    restart: unless-stopped
+
+  # Follower instance 1 - executes FFmpeg jobs
+  frame-shift-follower1:
+    image: ghcr.io/seriousbug/frame-shift-video:latest
+    container_name: frame-shift-follower1
+    ports:
+      - '3002:3001'
+    volumes:
+      # CRITICAL: Must be the exact same path as leader
+      - /mnt/media:/videos
+      - ./follower1-data:/app/data
+    environment:
+      - PORT=3001
+      - INSTANCE_TYPE=follower
+      - SHARED_TOKEN=your_secure_random_token_here # Must match leader
+      - LEADER_URL=http://frame-shift-leader:3001
+      # Optional: FFMPEG_THREADS to control encoding threads
+    restart: unless-stopped
+
+  # Follower instance 2 - executes FFmpeg jobs
+  frame-shift-follower2:
+    image: ghcr.io/seriousbug/frame-shift-video:latest
+    container_name: frame-shift-follower2
+    ports:
+      - '3003:3001'
+    volumes:
+      # CRITICAL: Must be the exact same path as leader
+      - /mnt/media:/videos
+      - ./follower2-data:/app/data
+    environment:
+      - PORT=3001
+      - INSTANCE_TYPE=follower
+      - SHARED_TOKEN=your_secure_random_token_here # Must match leader
+      - LEADER_URL=http://frame-shift-leader:3001
+    restart: unless-stopped
+```
+
+**How it works:**
+
+- Access the web UI on the leader instance at `http://localhost:3001`
+- Leader receives job requests and distributes them to available followers
+- Followers execute FFmpeg and report progress back to the leader
+- All progress updates and status changes are visible in the leader's UI
+
+**Important notes:**
+
+- The `SHARED_TOKEN` must be identical on leader and all followers
+- Generate a secure token: `openssl rand -hex 32`
+- Follower instances do not serve the web UI
+- Jobs are distributed using "first available" strategy
+- If a follower becomes unresponsive, the job is marked as failed
+
 ### Environment Variables
 
-| Variable                  | Required | Default          | Description                                 |
-| ------------------------- | -------- | ---------------- | ------------------------------------------- |
-| `PORT`                    | No       | `3001`           | Port the server listens on                  |
-| `FRAME_SHIFT_HOME`        | No       | `/` (or `$HOME`) | Starting directory for file browser         |
-| `FFMPEG_THREADS`          | No       | -                | Number of threads FFmpeg should use         |
-| `DISCORD_WEBHOOK_URL`     | No       | -                | Discord webhook URL for notifications       |
-| `PUSHOVER_API_TOKEN`      | No       | -                | Pushover application token                  |
-| `PUSHOVER_USER_KEY`       | No       | -                | Pushover user key                           |
-| `SENTRY_CLIENT_DSN`       | No       | -                | Sentry DSN for client-side error tracking   |
-| `SENTRY_SERVER_DSN`       | No       | -                | Sentry DSN for server-side error tracking   |
-| `SENTRY_ENVIRONMENT`      | No       | `production`     | Sentry environment name                     |
-| `SENTRY_SEND_DEFAULT_PII` | No       | -                | Send personally identifiable info to Sentry |
+| Variable                  | Required              | Default          | Description                                          |
+| ------------------------- | --------------------- | ---------------- | ---------------------------------------------------- |
+| `PORT`                    | No                    | `3001`           | Port the server listens on                           |
+| `FRAME_SHIFT_HOME`        | No                    | `/` (or `$HOME`) | Starting directory for file browser                  |
+| `INSTANCE_TYPE`           | No                    | `standalone`     | Instance type: `standalone`, `leader`, or `follower` |
+| `SHARED_TOKEN`            | Yes (leader/follower) | -                | Shared authentication token for distributed setup    |
+| `FOLLOWER_URLS`           | Yes (leader)          | -                | Comma-separated list of follower URLs                |
+| `LEADER_URL`              | Yes (follower)        | -                | URL of the leader instance                           |
+| `FFMPEG_THREADS`          | No                    | -                | Number of threads FFmpeg should use                  |
+| `DISCORD_WEBHOOK_URL`     | No                    | -                | Discord webhook URL for notifications                |
+| `PUSHOVER_API_TOKEN`      | No                    | -                | Pushover application token                           |
+| `PUSHOVER_USER_KEY`       | No                    | -                | Pushover user key                                    |
+| `SENTRY_CLIENT_DSN`       | No                    | -                | Sentry DSN for client-side error tracking            |
+| `SENTRY_SERVER_DSN`       | No                    | -                | Sentry DSN for server-side error tracking            |
+| `SENTRY_ENVIRONMENT`      | No                    | `production`     | Sentry environment name                              |
+| `SENTRY_SEND_DEFAULT_PII` | No                    | -                | Send personally identifiable info to Sentry          |
 
 ## Development
 
