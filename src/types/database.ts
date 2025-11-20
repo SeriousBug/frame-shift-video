@@ -27,6 +27,8 @@ export interface Job {
   cleared?: number; // SQLite boolean: 0 = false, 1 = true - whether job is hidden from UI
   config_json?: string; // JSON-encoded ConversionOptions for this specific job
   ffmpeg_stderr?: string; // Full FFmpeg stderr output for debugging
+  assigned_worker?: string; // ID of worker (follower) processing this job
+  worker_last_seen?: string; // Last heartbeat timestamp from worker
 }
 
 export interface CreateJobInput {
@@ -54,6 +56,8 @@ export interface UpdateJobInput {
   cleared?: number;
   config_json?: string;
   ffmpeg_stderr?: string;
+  assigned_worker?: string;
+  worker_last_seen?: string;
 }
 
 export interface FileSelection {

@@ -9,6 +9,7 @@ import {
   pickerActionHandler,
 } from './handlers/file-picker';
 import { testNotificationHandler } from './handlers/notifications';
+import { executeJobHandler, receiveProgressHandler } from './handlers/worker';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
 
@@ -63,6 +64,14 @@ const wrappedPickerActionHandler = withErrorHandler(
 const wrappedTestNotificationHandler = withErrorHandler(
   testNotificationHandler,
   'TestNotificationHandler',
+);
+const wrappedExecuteJobHandler = withErrorHandler(
+  executeJobHandler,
+  'ExecuteJobHandler',
+);
+const wrappedReceiveProgressHandler = withErrorHandler(
+  receiveProgressHandler,
+  'ReceiveProgressHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -154,6 +163,18 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: POST /api/notifications/test
     if (pathname === '/api/notifications/test' && req.method === 'POST') {
       return await wrappedTestNotificationHandler(req, corsHeaders);
+    }
+
+    // Route: POST /worker/execute (follower endpoint)
+    if (pathname === '/worker/execute' && req.method === 'POST') {
+      return await wrappedExecuteJobHandler(req, corsHeaders);
+    }
+
+    // Route: POST /api/jobs/:id/progress (leader endpoint to receive progress from followers)
+    const jobProgressMatch = pathname.match(/^\/api\/jobs\/(\d+)\/progress$/);
+    if (jobProgressMatch && req.method === 'POST') {
+      const jobId = parseInt(jobProgressMatch[1], 10);
+      return await wrappedReceiveProgressHandler(req, jobId, corsHeaders);
     }
 
     // 404 Not Found

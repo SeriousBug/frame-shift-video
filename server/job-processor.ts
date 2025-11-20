@@ -18,6 +18,7 @@ import { notificationService } from './notification-service';
 import { WSBroadcaster } from './websocket';
 import { finalizeTempFile, cleanupTempFile } from './temp-file-service';
 import { logger, captureException, startSpan } from '../src/lib/sentry';
+import { LeaderDistributor } from './leader-distributor';
 
 /**
  * Job processor configuration
@@ -35,6 +36,8 @@ export interface JobProcessorConfig {
   outputsDir?: string;
   /** Interval in milliseconds to check for new jobs (default: 60000 = 1 minute) */
   checkInterval?: number;
+  /** If provided, use leader distributor instead of local execution */
+  leaderDistributor?: LeaderDistributor;
 }
 
 /**
@@ -311,30 +314,52 @@ export class JobProcessor extends EventEmitter {
           // Parse FFmpeg command from job
           const command = this.parseJobCommand(job);
 
-          // Create executor (no timeout - jobs can run as long as needed)
-          this.executor = new FFmpegExecutor({
-            uploadsDir: this.config.uploadsDir,
-            outputsDir: this.config.outputsDir,
-          });
-
           // Track maximum frame count
           let maxFrames = 0;
 
-          // Set up progress tracking
-          this.executor.on('progress', (progress: FFmpegProgress) => {
-            // Track maximum frame count
-            if (progress.frame > maxFrames) {
-              maxFrames = progress.frame;
-            }
-            JobService.updateProgress(job.id, progress.progress);
-            const updatedJob = JobService.getById(job.id);
-            if (updatedJob) {
-              this.emit('job:progress', updatedJob, progress);
-            }
-          });
+          let result: FFmpegResult;
 
-          // Execute the command
-          const result: FFmpegResult = await this.executor.execute(command);
+          // Use leader distributor if configured, otherwise use local executor
+          if (this.config.leaderDistributor) {
+            // Leader mode: distribute to follower
+            const distributor = this.config.leaderDistributor;
+
+            // Set up progress tracking from distributor
+            distributor.on('progress', (progress: FFmpegProgress) => {
+              if (progress.frame > maxFrames) {
+                maxFrames = progress.frame;
+              }
+              JobService.updateProgress(job.id, progress.progress);
+              const updatedJob = JobService.getById(job.id);
+              if (updatedJob) {
+                this.emit('job:progress', updatedJob, progress);
+              }
+            });
+
+            // Execute on follower
+            result = await distributor.execute(command, job);
+          } else {
+            // Standalone mode: execute locally
+            this.executor = new FFmpegExecutor({
+              uploadsDir: this.config.uploadsDir,
+              outputsDir: this.config.outputsDir,
+            });
+
+            // Set up progress tracking
+            this.executor.on('progress', (progress: FFmpegProgress) => {
+              if (progress.frame > maxFrames) {
+                maxFrames = progress.frame;
+              }
+              JobService.updateProgress(job.id, progress.progress);
+              const updatedJob = JobService.getById(job.id);
+              if (updatedJob) {
+                this.emit('job:progress', updatedJob, progress);
+              }
+            });
+
+            // Execute the command
+            result = await this.executor.execute(command);
+          }
 
           // Handle result
           if (result.success) {
@@ -347,17 +372,28 @@ export class JobProcessor extends EventEmitter {
               maxFrames = result.finalProgress.frame;
             }
 
-            // Rename temporary file to final output path
+            // Handle file finalization
+            // For leader mode, result.output contains the final path (already finalized by follower)
+            // For standalone mode, result has tempPath and finalPath that need renaming
+            const isLeaderMode = this.config.leaderDistributor !== undefined;
+            const outputPath = isLeaderMode
+              ? result.output!
+              : result.finalPath!;
+
             try {
-              await finalizeTempFile(result.tempPath, result.finalPath);
-              JobService.complete(job.id, result.finalPath);
+              // Only finalize temp file if in standalone mode
+              if (!isLeaderMode) {
+                await finalizeTempFile(result.tempPath, result.finalPath);
+              }
+
+              JobService.complete(job.id, outputPath);
               JobService.update(job.id, {
                 end_time: endTime,
                 total_frames: maxFrames > 0 ? maxFrames : undefined,
               });
               logger.info('[JobProcessor] Job completed successfully', {
                 jobId: job.id,
-                outputPath: result.finalPath,
+                outputPath: outputPath,
                 totalFrames: maxFrames,
               });
               const completedJob = JobService.getById(job.id);
@@ -368,7 +404,12 @@ export class JobProcessor extends EventEmitter {
               // Failed to rename - treat as failure and clean up temp file
               const errorMessage =
                 error instanceof Error ? error.message : String(error);
-              await cleanupTempFile(result.tempPath);
+
+              // Only cleanup temp file if in standalone mode
+              if (!isLeaderMode && result.tempPath) {
+                await cleanupTempFile(result.tempPath);
+              }
+
               JobService.setError(
                 job.id,
                 `Failed to finalize output file: ${errorMessage}`,
@@ -395,8 +436,12 @@ export class JobProcessor extends EventEmitter {
             }
           } else {
             const endTime = new Date().toISOString();
-            // Clean up temporary file
-            await cleanupTempFile(result.tempPath);
+            const isLeaderMode = this.config.leaderDistributor !== undefined;
+
+            // Clean up temporary file (only in standalone mode)
+            if (!isLeaderMode && result.tempPath) {
+              await cleanupTempFile(result.tempPath);
+            }
 
             // Check if job was already cancelled (don't override cancelled status)
             const currentJob = JobService.getById(job.id);
