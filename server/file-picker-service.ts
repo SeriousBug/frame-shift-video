@@ -8,6 +8,7 @@ import { FileSelection } from '../src/types/database';
 import { FilePickerItem, FilePickerState } from '../src/types/files';
 import crypto from 'crypto';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 import path from 'path';
 import micromatch from 'micromatch';
 import { orderBy } from 'natural-orderby';
@@ -189,11 +190,11 @@ export class FilePickerStateService {
   /**
    * List files and directories in a path
    */
-  private static listDirectory(
+  private static async listDirectory(
     dirPath: string,
     showHidden: boolean = false,
     videosOnly: boolean = false,
-  ): FilePickerItem[] {
+  ): Promise<FilePickerItem[]> {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
 
@@ -205,20 +206,24 @@ export class FilePickerStateService {
     }
 
     try {
-      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
-      const items = entries
-        .filter((entry) => {
-          // Filter hidden files
-          if (!showHidden && entry.name.startsWith('.')) return false;
-          // Filter non-video files if videosOnly is enabled
-          if (videosOnly && entry.isFile() && !this.isVideoFile(entry.name))
-            return false;
-          return true;
-        })
-        .map((entry) => {
+      const entries = await fsPromises.readdir(fullPath, {
+        withFileTypes: true,
+      });
+      const filteredEntries = entries.filter((entry) => {
+        // Filter hidden files
+        if (!showHidden && entry.name.startsWith('.')) return false;
+        // Filter non-video files if videosOnly is enabled
+        if (videosOnly && entry.isFile() && !this.isVideoFile(entry.name))
+          return false;
+        return true;
+      });
+
+      // Parallel stat calls for all entries
+      const items = await Promise.all(
+        filteredEntries.map(async (entry) => {
           const itemPath = path.join(dirPath, entry.name);
           const fullItemPath = path.join(fullPath, entry.name);
-          const stats = fs.statSync(fullItemPath);
+          const stats = await fsPromises.stat(fullItemPath);
 
           return {
             name: entry.name,
@@ -229,7 +234,8 @@ export class FilePickerStateService {
             depth: 0,
             selectionState: 'none' as const,
           };
-        });
+        }),
+      );
 
       // Sort directories first, then files, using natural sort
       const directories = items.filter((item) => item.isDirectory);
@@ -256,17 +262,16 @@ export class FilePickerStateService {
   /**
    * Recursively scan a folder to get all file paths, respecting filters
    */
-  private static scanFolderForFilesWithFilters(
+  private static async scanFolderForFilesWithFilters(
     folderPath: string,
     showHidden: boolean,
     hideConverted: boolean,
     videosOnly: boolean = false,
     searchQuery?: string,
     compiledSearchPattern?: RegExp | false,
-  ): string[] {
+  ): Promise<string[]> {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, folderPath);
-    const files: string[] = [];
 
     // Compile search pattern once at the top level
     if (
@@ -279,7 +284,13 @@ export class FilePickerStateService {
     }
 
     try {
-      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+      const entries = await fsPromises.readdir(fullPath, {
+        withFileTypes: true,
+      });
+
+      // Separate directories and files
+      const directories: string[] = [];
+      const files: string[] = [];
 
       for (const entry of entries) {
         // Skip hidden files if showHidden is false
@@ -288,17 +299,7 @@ export class FilePickerStateService {
         const itemPath = path.join(folderPath, entry.name);
 
         if (entry.isDirectory()) {
-          // Recursively get files from subdirectory, passing compiled pattern
-          files.push(
-            ...this.scanFolderForFilesWithFilters(
-              itemPath,
-              showHidden,
-              hideConverted,
-              videosOnly,
-              searchQuery,
-              compiledSearchPattern,
-            ),
-          );
+          directories.push(itemPath);
         } else {
           // Skip non-video files if videosOnly is enabled
           if (videosOnly && !this.isVideoFile(entry.name)) continue;
@@ -321,27 +322,42 @@ export class FilePickerStateService {
           files.push(itemPath);
         }
       }
+
+      // Recursively scan directories in parallel
+      const subdirResults = await Promise.all(
+        directories.map((dirPath) =>
+          this.scanFolderForFilesWithFilters(
+            dirPath,
+            showHidden,
+            hideConverted,
+            videosOnly,
+            searchQuery,
+            compiledSearchPattern,
+          ),
+        ),
+      );
+
+      // Flatten results
+      return [...files, ...subdirResults.flat()];
     } catch (error) {
       console.error(`Failed to scan folder ${folderPath}:`, error);
+      return [];
     }
-
-    return files;
   }
 
   /**
    * Recursively scan directory tree and filter by search pattern
    * Note: Sorting is deferred until all results are collected for performance
    */
-  private static scanDirectoryWithSearch(
+  private static async scanDirectoryWithSearch(
     dirPath: string,
     searchPattern: string,
     showHidden: boolean = false,
     videosOnly: boolean = false,
     compiledPattern?: RegExp | false,
-  ): FilePickerItem[] {
+  ): Promise<FilePickerItem[]> {
     const basePath = this.getBasePath();
     const fullPath = path.join(basePath, dirPath);
-    const results: FilePickerItem[] = [];
 
     // Compile pattern once at the top level for reuse in recursive calls
     // Note: makeRe can return false for patterns that can't be compiled to regex
@@ -351,9 +367,22 @@ export class FilePickerStateService {
     }
 
     try {
-      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+      const entries = await fsPromises.readdir(fullPath, {
+        withFileTypes: true,
+      });
 
-      // Process entries without sorting - we'll sort once at the end
+      // Separate directories and files for parallel processing
+      const directoryEntries: Array<{
+        entry: any;
+        itemPath: string;
+        fullItemPath: string;
+      }> = [];
+      const fileEntries: Array<{
+        entry: any;
+        itemPath: string;
+        fullItemPath: string;
+      }> = [];
+
       for (const entry of entries) {
         // Skip hidden files unless showHidden is true
         if (!showHidden && entry.name.startsWith('.')) continue;
@@ -361,8 +390,30 @@ export class FilePickerStateService {
         const itemPath = path.join(dirPath, entry.name);
         const fullItemPath = path.join(fullPath, entry.name);
 
-        try {
-          if (entry.isDirectory()) {
+        if (entry.isDirectory()) {
+          directoryEntries.push({ entry, itemPath, fullItemPath });
+        } else {
+          // Skip non-video files if videosOnly is enabled
+          if (videosOnly && !this.isVideoFile(entry.name)) continue;
+
+          // Check if file matches the search pattern
+          const matches =
+            compiledPattern !== false
+              ? compiledPattern.test(entry.name)
+              : micromatch.isMatch(entry.name, searchPattern, {
+                  nocase: true,
+                });
+
+          if (matches) {
+            fileEntries.push({ entry, itemPath, fullItemPath });
+          }
+        }
+      }
+
+      // Process directories in parallel
+      const dirResults = await Promise.all(
+        directoryEntries.map(async ({ entry, itemPath, fullItemPath }) => {
+          try {
             // Check if directory name matches the search pattern
             const dirMatches =
               compiledPattern !== false
@@ -372,7 +423,7 @@ export class FilePickerStateService {
                   });
 
             // Recursively search subdirectories, passing compiled pattern for reuse
-            const subResults = this.scanDirectoryWithSearch(
+            const subResults = await this.scanDirectoryWithSearch(
               itemPath,
               searchPattern,
               showHidden,
@@ -382,56 +433,58 @@ export class FilePickerStateService {
 
             // Include directory if it matches the pattern OR has matching descendants
             if (dirMatches || subResults.length > 0) {
-              // Only call statSync when we know we need the directory
-              const stats = fs.statSync(fullItemPath);
-              results.push({
-                name: entry.name,
-                path: itemPath,
-                isDirectory: true,
-                size: undefined,
-                modified: stats.mtime.toISOString(),
-                depth: 0,
-                selectionState: 'none',
-              });
-              results.push(...subResults);
+              const stats = await fsPromises.stat(fullItemPath);
+              return [
+                {
+                  name: entry.name,
+                  path: itemPath,
+                  isDirectory: true,
+                  size: undefined,
+                  modified: stats.mtime.toISOString(),
+                  depth: 0,
+                  selectionState: 'none' as const,
+                },
+                ...subResults,
+              ];
             }
-          } else {
-            // Skip non-video files if videosOnly is enabled
-            if (videosOnly && !this.isVideoFile(entry.name)) continue;
-
-            // Check if file matches the search pattern
-            // Use compiled regex if available, otherwise fall back to micromatch.isMatch
-            const matches =
-              compiledPattern !== false
-                ? compiledPattern.test(entry.name)
-                : micromatch.isMatch(entry.name, searchPattern, {
-                    nocase: true,
-                  });
-
-            if (matches) {
-              // Only call statSync for files that match the pattern
-              const stats = fs.statSync(fullItemPath);
-              results.push({
-                name: entry.name,
-                path: itemPath,
-                isDirectory: false,
-                size: stats.size,
-                modified: stats.mtime.toISOString(),
-                depth: 0,
-                selectionState: 'none',
-              });
-            }
+            return [];
+          } catch (error) {
+            console.warn(`Could not access ${entry.name}:`, error);
+            return [];
           }
-        } catch (error) {
-          // Skip files we can't access
-          console.warn(`Could not access ${entry.name}:`, error);
-        }
-      }
+        }),
+      );
+
+      // Process files in parallel
+      const fileResults = await Promise.all(
+        fileEntries.map(async ({ entry, itemPath, fullItemPath }) => {
+          try {
+            const stats = await fsPromises.stat(fullItemPath);
+            return {
+              name: entry.name,
+              path: itemPath,
+              isDirectory: false,
+              size: stats.size,
+              modified: stats.mtime.toISOString(),
+              depth: 0,
+              selectionState: 'none' as const,
+            };
+          } catch (error) {
+            console.warn(`Could not access ${entry.name}:`, error);
+            return null;
+          }
+        }),
+      );
+
+      // Combine results, filtering out nulls
+      return [
+        ...dirResults.flat(),
+        ...fileResults.filter((f): f is FilePickerItem => f !== null),
+      ];
     } catch (error) {
       console.error(`Failed to scan directory ${dirPath}:`, error);
+      return [];
     }
-
-    return results;
   }
 
   /**
@@ -488,7 +541,9 @@ export class FilePickerStateService {
   /**
    * Build the flat list of items to render based on current state
    */
-  static buildItemsList(state: PickerStateData): FilePickerItem[] {
+  static async buildItemsList(
+    state: PickerStateData,
+  ): Promise<FilePickerItem[]> {
     const hideConverted =
       state.hideConverted !== undefined ? state.hideConverted : true;
     const videosOnly = state.videosOnly || false;
@@ -507,7 +562,7 @@ export class FilePickerStateService {
         unsortedResults = cachedResults;
       } else {
         // Perform search and cache the results
-        unsortedResults = this.scanDirectoryWithSearch(
+        unsortedResults = await this.scanDirectoryWithSearch(
           '',
           state.searchQuery,
           showHidden,
@@ -692,10 +747,13 @@ export class FilePickerStateService {
       allFiles: string[]; // All file paths in this subtree (for selection state calculation)
     }
 
-    function buildTree(dirPath: string, depth: number): TreeBuildResult {
+    async function buildTree(
+      dirPath: string,
+      depth: number,
+    ): Promise<TreeBuildResult> {
       const showHidden = state.showHidden || false;
       const videosOnly = state.videosOnly || false;
-      const entries = FilePickerStateService.listDirectory(
+      const entries = await FilePickerStateService.listDirectory(
         dirPath,
         showHidden,
         videosOnly,
@@ -707,102 +765,116 @@ export class FilePickerStateService {
       const convertedIndex =
         FilePickerStateService.buildConvertedFilesIndex(entries);
 
-      for (const entry of entries) {
-        entry.depth = depth;
-        if (entry.isDirectory) {
+      // Separate directories and files for parallel processing
+      const directories = entries.filter((e) => e.isDirectory);
+      const files = entries.filter((e) => !e.isDirectory);
+
+      // Process all directories in parallel
+      const dirResults = await Promise.all(
+        directories.map(async (entry) => {
+          entry.depth = depth;
           entry.isExpanded = state.expandedFolders.has(entry.path);
+          const childResult = await buildTree(entry.path, depth + 1);
+          return { entry, childResult };
+        }),
+      );
 
-          // Recursively build children and get file list
-          // This single recursion gives us both the UI items AND the file list
-          const childResult = buildTree(entry.path, depth + 1);
-          const childFiles = childResult.allFiles;
+      // Process directory results
+      for (const { entry, childResult } of dirResults) {
+        const childFiles = childResult.allFiles;
 
-          // Add all child files to this subtree's file list
-          allFilesInSubtree.push(...childFiles);
+        // Add all child files to this subtree's file list
+        allFilesInSubtree.push(...childFiles);
 
-          // Calculate selection state from child files (bottom-up, no rescan needed!)
-          if (childFiles.length === 0) {
-            entry.selectionState = 'none';
-          } else {
-            const selectedCount = childFiles.filter((f) =>
-              state.selectedFiles.has(f),
-            ).length;
-            if (selectedCount === 0) {
-              entry.selectionState = 'none';
-            } else if (selectedCount === childFiles.length) {
-              entry.selectionState = 'full';
-            } else {
-              entry.selectionState = 'partial';
-            }
-          }
-
-          // Compute allConverted by checking immediate children only
-          // Get immediate children (depth = current depth + 1)
-          const immediateChildren = childResult.items.filter(
-            (child) => child.depth === depth + 1,
-          );
-
-          // Check immediate child folders for their allConverted status
-          const childFolders = immediateChildren.filter(
-            (child) => child.isDirectory,
-          );
-          const childFoldersConverted = childFolders.every(
-            (child) => child.allConverted,
-          );
-
-          // Check immediate child video files (exclude _converted files)
-          const videoFiles = immediateChildren.filter(
-            (child) =>
-              !child.isDirectory &&
-              FilePickerStateService.isVideoFile(child.name) &&
-              !FilePickerStateService.isConvertedFile(child.name),
-          );
-
-          // Build index from immediate children for checking converted versions
-          const immediateConvertedIndex =
-            FilePickerStateService.buildConvertedFilesIndex(immediateChildren);
-
-          // All immediate video files must be converted
-          const allFilesConverted =
-            videoFiles.length === 0 ||
-            videoFiles.every((file) =>
-              FilePickerStateService.hasConvertedVersion(
-                file,
-                immediateConvertedIndex,
-              ),
-            );
-
-          // Check if this folder has any video content at all (direct files or in subfolders)
-          const hasVideoFiles = videoFiles.length > 0;
-          const hasVideoFolders = childFolders.some(
-            (f) => f.allConverted === true,
-          );
-          const hasVideoContent = hasVideoFiles || hasVideoFolders;
-
-          // Only mark as allConverted if there's video content AND it's all converted
-          entry.allConverted =
-            hasVideoContent && allFilesConverted && childFoldersConverted;
-          result.push(entry);
-          // If expanded, flatten children into result
-          if (entry.isExpanded) {
-            result.push(...childResult.items);
-          }
+        // Calculate selection state from child files (bottom-up, no rescan needed!)
+        if (childFiles.length === 0) {
+          entry.selectionState = 'none';
         } else {
-          entry.selectionState = state.selectedFiles.has(entry.path)
-            ? 'full'
-            : 'none';
-          // Mark file as converted if it has a converted version using O(1) index lookup
-          entry.hasConvertedVersion =
-            FilePickerStateService.hasConvertedVersion(entry, convertedIndex);
-          // Add this file to the subtree's file list
-          allFilesInSubtree.push(entry.path);
-          result.push(entry);
+          const selectedCount = childFiles.filter((f) =>
+            state.selectedFiles.has(f),
+          ).length;
+          if (selectedCount === 0) {
+            entry.selectionState = 'none';
+          } else if (selectedCount === childFiles.length) {
+            entry.selectionState = 'full';
+          } else {
+            entry.selectionState = 'partial';
+          }
+        }
+
+        // Compute allConverted by checking immediate children only
+        // Get immediate children (depth = current depth + 1)
+        const immediateChildren = childResult.items.filter(
+          (child) => child.depth === depth + 1,
+        );
+
+        // Check immediate child folders for their allConverted status
+        const childFolders = immediateChildren.filter(
+          (child) => child.isDirectory,
+        );
+        const childFoldersConverted = childFolders.every(
+          (child) => child.allConverted,
+        );
+
+        // Check immediate child video files (exclude _converted files)
+        const videoFiles = immediateChildren.filter(
+          (child) =>
+            !child.isDirectory &&
+            FilePickerStateService.isVideoFile(child.name) &&
+            !FilePickerStateService.isConvertedFile(child.name),
+        );
+
+        // Build index from immediate children for checking converted versions
+        const immediateConvertedIndex =
+          FilePickerStateService.buildConvertedFilesIndex(immediateChildren);
+
+        // All immediate video files must be converted
+        const allFilesConverted =
+          videoFiles.length === 0 ||
+          videoFiles.every((file) =>
+            FilePickerStateService.hasConvertedVersion(
+              file,
+              immediateConvertedIndex,
+            ),
+          );
+
+        // Check if this folder has any video content at all (direct files or in subfolders)
+        const hasVideoFiles = videoFiles.length > 0;
+        const hasVideoFolders = childFolders.some(
+          (f) => f.allConverted === true,
+        );
+        const hasVideoContent = hasVideoFiles || hasVideoFolders;
+
+        // Only mark as allConverted if there's video content AND it's all converted
+        entry.allConverted =
+          hasVideoContent && allFilesConverted && childFoldersConverted;
+        result.push(entry);
+        // If expanded, flatten children into result
+        if (entry.isExpanded) {
+          result.push(...childResult.items);
         }
       }
+
+      // Process files
+      for (const entry of files) {
+        entry.depth = depth;
+        entry.selectionState = state.selectedFiles.has(entry.path)
+          ? 'full'
+          : 'none';
+        // Mark file as converted if it has a converted version using O(1) index lookup
+        entry.hasConvertedVersion = FilePickerStateService.hasConvertedVersion(
+          entry,
+          convertedIndex,
+        );
+        // Add this file to the subtree's file list
+        allFilesInSubtree.push(entry.path);
+        result.push(entry);
+      }
+
       return { items: result, allFiles: allFilesInSubtree };
     }
 
-    const treeResult = buildTree(state.currentPath, 0);
+    const treeResult = await buildTree(state.currentPath, 0);
 
     // Now that all items are collected, compute hasConvertedVersion for each file
     // (tree-based items already have allConverted set)
@@ -821,11 +893,11 @@ export class FilePickerStateService {
   /**
    * Build the full picker state response
    */
-  static buildStateResponse(
+  static async buildStateResponse(
     key: string,
     state: PickerStateData,
-  ): FilePickerState {
-    const items = this.buildItemsList(state);
+  ): Promise<FilePickerState> {
+    const items = await this.buildItemsList(state);
     const selectedCount = state.selectedFiles.size;
 
     return {
@@ -882,10 +954,10 @@ export class FilePickerStateService {
   /**
    * Toggle folder selection (selects/deselects all files in folder)
    */
-  static toggleFolderSelection(
+  static async toggleFolderSelection(
     state: PickerStateData,
     folderPath: string,
-  ): PickerStateData {
+  ): Promise<PickerStateData> {
     // First, ensure the folder is expanded so we can scan it
     const expandedFolders = new Set(state.expandedFolders);
     if (!expandedFolders.has(folderPath)) {
@@ -900,7 +972,7 @@ export class FilePickerStateService {
     const videosOnly = state.videosOnly || false;
     const searchQuery = state.searchQuery;
 
-    const allFiles = this.scanFolderForFilesWithFilters(
+    const allFiles = await this.scanFolderForFilesWithFilters(
       folderPath,
       showHidden,
       hideConverted,
@@ -944,13 +1016,13 @@ export class FilePickerStateService {
    * Select a range of files between startPath and endPath (inclusive)
    * Only selects files, not folders
    */
-  static selectRange(
+  static async selectRange(
     state: PickerStateData,
     startPath: string,
     endPath: string,
-  ): PickerStateData {
+  ): Promise<PickerStateData> {
     // Build the current items list to get the flat, ordered list
-    const items = this.buildItemsList(state);
+    const items = await this.buildItemsList(state);
 
     // Find indices of start and end paths
     const startIndex = items.findIndex((item) => item.path === startPath);

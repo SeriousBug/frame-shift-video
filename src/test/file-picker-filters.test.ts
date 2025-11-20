@@ -8,17 +8,17 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-describe('FilePickerStateService - Filters and Search', () => {
+describe('FilePickerStateService - Filters and Search', async () => {
   let testDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create a temporary test directory
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-picker-filters-'));
     // Set the base path for testing
     process.env.FRAME_SHIFT_HOME = testDir;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Clean up test directory
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true, force: true });
@@ -26,8 +26,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     delete process.env.FRAME_SHIFT_HOME;
   });
 
-  describe('videosOnly filter', () => {
-    beforeEach(() => {
+  describe('videosOnly filter', async () => {
+    beforeEach(async () => {
       // Create test structure with mixed file types
       fs.writeFileSync(path.join(testDir, 'movie.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'clip.mkv'), 'video');
@@ -36,10 +36,10 @@ describe('FilePickerStateService - Filters and Search', () => {
       fs.writeFileSync(path.join(testDir, 'data.json'), '{}');
     });
 
-    it('should show only video files when videosOnly is true', () => {
+    it('should show only video files when videosOnly is true', async () => {
       const state = FilePickerStateService.createEmpty();
       state.videosOnly = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('movie.mp4');
@@ -49,10 +49,10 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('data.json');
     });
 
-    it('should show all files when videosOnly is false', () => {
+    it('should show all files when videosOnly is false', async () => {
       const state = FilePickerStateService.createEmpty();
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('movie.mp4');
@@ -62,7 +62,7 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).toContain('data.json');
     });
 
-    it('should recognize various video extensions', () => {
+    it('should recognize various video extensions', async () => {
       // Create files with various video extensions
       fs.writeFileSync(path.join(testDir, 'test.avi'), 'video');
       fs.writeFileSync(path.join(testDir, 'test.mov'), 'video');
@@ -72,7 +72,7 @@ describe('FilePickerStateService - Filters and Search', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.videosOnly = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('test.avi');
@@ -83,8 +83,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('showHidden filter', () => {
-    beforeEach(() => {
+  describe('showHidden filter', async () => {
+    beforeEach(async () => {
       // Create test structure with hidden files
       fs.writeFileSync(path.join(testDir, 'visible.txt'), 'visible');
       fs.writeFileSync(path.join(testDir, '.hidden-file'), 'hidden');
@@ -95,11 +95,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       );
     });
 
-    it('should hide hidden files when showHidden is false', () => {
+    it('should hide hidden files when showHidden is false', async () => {
       const state = FilePickerStateService.createEmpty();
       state.showHidden = false;
       state.videosOnly = false; // Show all file types
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('visible.txt');
@@ -107,11 +107,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('.hidden-folder');
     });
 
-    it('should show hidden files when showHidden is true', () => {
+    it('should show hidden files when showHidden is true', async () => {
       const state = FilePickerStateService.createEmpty();
       state.showHidden = true;
       state.videosOnly = false; // Show all file types
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('visible.txt');
@@ -119,12 +119,12 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).toContain('.hidden-folder');
     });
 
-    it('should show hidden files in expanded folders when showHidden is true', () => {
+    it('should show hidden files in expanded folders when showHidden is true', async () => {
       const state = FilePickerStateService.createEmpty();
       state.showHidden = true;
       state.videosOnly = false; // Show all file types
       state.expandedFolders.add('.hidden-folder');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('.hidden-folder');
@@ -132,8 +132,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('hideConverted filter', () => {
-    beforeEach(() => {
+  describe('hideConverted filter', async () => {
+    beforeEach(async () => {
       // Create test structure with converted and non-converted videos
       fs.writeFileSync(path.join(testDir, 'movie1.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'movie1_converted.mp4'), 'converted');
@@ -143,11 +143,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       // Only converted version exists
     });
 
-    it('should hide converted files when hideConverted is true', () => {
+    it('should hide converted files when hideConverted is true', async () => {
       const state = FilePickerStateService.createEmpty();
       state.hideConverted = true;
       state.videosOnly = false; // Show all files for this test
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('movie1.mp4');
@@ -156,11 +156,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('movie3_converted.mkv');
     });
 
-    it('should show converted files when hideConverted is false', () => {
+    it('should show converted files when hideConverted is false', async () => {
       const state = FilePickerStateService.createEmpty();
       state.hideConverted = false;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items.map((item) => item.name);
       expect(fileNames).toContain('movie1.mp4');
@@ -169,11 +169,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).toContain('movie3_converted.mkv');
     });
 
-    it('should mark files with converted versions', () => {
+    it('should mark files with converted versions', async () => {
       const state = FilePickerStateService.createEmpty();
       state.hideConverted = true;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const movie1 = items.find((item) => item.name === 'movie1.mp4');
       const movie2 = items.find((item) => item.name === 'movie2.mp4');
@@ -183,8 +183,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('search functionality - simple mode (wildcards)', () => {
-    beforeEach(() => {
+  describe('search functionality - simple mode (wildcards)', async () => {
+    beforeEach(async () => {
       // Create test structure for search
       fs.writeFileSync(path.join(testDir, 'charlie-2024.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'charlie-2023.mkv'), 'video');
@@ -198,11 +198,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       fs.writeFileSync(path.join(testDir, 'movies', 'random.mp4'), 'video');
     });
 
-    it('should find files with simple substring search', () => {
+    it('should find files with simple substring search', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*'; // Simple mode wraps with wildcards
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -216,11 +216,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('random.mp4');
     });
 
-    it('should find files with year pattern', () => {
+    it('should find files with year pattern', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*2024*';
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -232,11 +232,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('alice-movie.avi');
     });
 
-    it('should be case insensitive', () => {
+    it('should be case insensitive', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*CHARLIE*'; // Uppercase search
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -247,11 +247,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).toContain('charlie-epic.mp4');
     });
 
-    it('should include parent folders in results when files match', () => {
+    it('should include parent folders in results when files match', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const folderNames = items
         .filter((item) => item.isDirectory)
@@ -262,8 +262,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('search functionality - advanced mode (glob patterns)', () => {
-    beforeEach(() => {
+  describe('search functionality - advanced mode (glob patterns)', async () => {
+    beforeEach(async () => {
       // Create test structure for advanced search
       fs.writeFileSync(path.join(testDir, 'video.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'video.mkv'), 'video');
@@ -273,11 +273,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       fs.writeFileSync(path.join(testDir, '2023-summer.mp4'), 'video');
     });
 
-    it('should match specific extension with wildcard', () => {
+    it('should match specific extension with wildcard', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*.mp4'; // Advanced mode pattern
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -290,11 +290,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('movie.avi');
     });
 
-    it('should match multiple extensions with brace expansion', () => {
+    it('should match multiple extensions with brace expansion', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*.{mp4,mkv}';
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -306,11 +306,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('movie.avi');
     });
 
-    it('should match year prefix pattern', () => {
+    it('should match year prefix pattern', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '2024-*';
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -322,11 +322,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('video.mp4');
     });
 
-    it('should match complex pattern with year and extensions', () => {
+    it('should match complex pattern with year and extensions', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '2024-*.{mp4,mkv}';
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -338,8 +338,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('combined filters - videosOnly + search', () => {
-    beforeEach(() => {
+  describe('combined filters - videosOnly + search', async () => {
+    beforeEach(async () => {
       // Mixed file types with search patterns
       fs.writeFileSync(path.join(testDir, 'charlie.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'charlie.txt'), 'text');
@@ -347,11 +347,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       fs.writeFileSync(path.join(testDir, 'charlie-notes.pdf'), 'pdf');
     });
 
-    it('should filter by both videosOnly and search pattern', () => {
+    it('should filter by both videosOnly and search pattern', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.videosOnly = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -367,14 +367,14 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('bob.mkv');
     });
 
-    it('should work with advanced patterns and videosOnly', () => {
+    it('should work with advanced patterns and videosOnly', async () => {
       fs.writeFileSync(path.join(testDir, 'test.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'test.txt'), 'text');
 
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*.mp4';
       state.videosOnly = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -387,8 +387,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('combined filters - showHidden + search', () => {
-    beforeEach(() => {
+  describe('combined filters - showHidden + search', async () => {
+    beforeEach(async () => {
       // Hidden and visible files with search patterns
       fs.writeFileSync(path.join(testDir, 'charlie.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, '.charlie-hidden.mp4'), 'video');
@@ -400,12 +400,12 @@ describe('FilePickerStateService - Filters and Search', () => {
       );
     });
 
-    it('should search only visible files when showHidden is false', () => {
+    it('should search only visible files when showHidden is false', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.showHidden = false;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -415,12 +415,12 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('.charlie-hidden.mp4');
     });
 
-    it('should search hidden files when showHidden is true', () => {
+    it('should search hidden files when showHidden is true', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.showHidden = true;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -440,8 +440,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('combined filters - hideConverted + search', () => {
-    beforeEach(() => {
+  describe('combined filters - hideConverted + search', async () => {
+    beforeEach(async () => {
       // Converted and non-converted files with search patterns
       fs.writeFileSync(path.join(testDir, 'charlie-2024.mp4'), 'video');
       fs.writeFileSync(
@@ -452,12 +452,12 @@ describe('FilePickerStateService - Filters and Search', () => {
       fs.writeFileSync(path.join(testDir, 'bob-2024.mp4'), 'video');
     });
 
-    it('should exclude converted files from search results when hideConverted is true', () => {
+    it('should exclude converted files from search results when hideConverted is true', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.hideConverted = true;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -468,12 +468,12 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('charlie-2024_converted.mp4');
     });
 
-    it('should include converted files in search results when hideConverted is false', () => {
+    it('should include converted files in search results when hideConverted is false', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.hideConverted = false;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -484,12 +484,12 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).toContain('charlie-2024_converted.mp4');
     });
 
-    it('should search for only converted files when pattern matches', () => {
+    it('should search for only converted files when pattern matches', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*_converted*';
       state.hideConverted = false;
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -501,8 +501,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('combined filters - all filters + search', () => {
-    beforeEach(() => {
+  describe('combined filters - all filters + search', async () => {
+    beforeEach(async () => {
       // Complex test structure with all filter types
       fs.writeFileSync(path.join(testDir, 'charlie-2024.mp4'), 'video');
       fs.writeFileSync(
@@ -519,13 +519,13 @@ describe('FilePickerStateService - Filters and Search', () => {
       );
     });
 
-    it('should apply all filters together: videosOnly + hideConverted + showHidden=false + search', () => {
+    it('should apply all filters together: videosOnly + hideConverted + showHidden=false + search', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.videosOnly = true;
       state.hideConverted = true;
       state.showHidden = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -542,13 +542,13 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('charlie-secret.mp4'); // showHidden=false (in hidden folder)
     });
 
-    it('should apply all filters together: videosOnly + hideConverted=false + showHidden=true + search', () => {
+    it('should apply all filters together: videosOnly + hideConverted=false + showHidden=true + search', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.videosOnly = true;
       state.hideConverted = false;
       state.showHidden = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -566,13 +566,13 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(fileNames).not.toContain('charlie-notes.txt');
     });
 
-    it('should work with no filters enabled and search', () => {
+    it('should work with no filters enabled and search', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*charlie*';
       state.videosOnly = false;
       state.hideConverted = false;
       state.showHidden = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)
@@ -588,22 +588,22 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('empty search results', () => {
-    beforeEach(() => {
+  describe('empty search results', async () => {
+    beforeEach(async () => {
       fs.writeFileSync(path.join(testDir, 'movie1.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'movie2.mkv'), 'video');
     });
 
-    it('should return empty results when search matches nothing', () => {
+    it('should return empty results when search matches nothing', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*nonexistent*';
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       expect(items.length).toBe(0);
     });
 
-    it('should return empty results when filters exclude everything', () => {
+    it('should return empty results when filters exclude everything', async () => {
       // Create a fresh test directory for this test
       const emptyTestDir = fs.mkdtempSync(
         path.join(os.tmpdir(), 'empty-test-'),
@@ -618,7 +618,7 @@ describe('FilePickerStateService - Filters and Search', () => {
         const state = FilePickerStateService.createEmpty();
         state.videosOnly = true; // Only videos
         state.searchQuery = ''; // No search
-        const items = FilePickerStateService.buildItemsList(state);
+        const items = await FilePickerStateService.buildItemsList(state);
 
         const fileItems = items.filter((item) => !item.isDirectory);
         // Should not include the txt file
@@ -631,8 +631,8 @@ describe('FilePickerStateService - Filters and Search', () => {
     });
   });
 
-  describe('nested folders with filters', () => {
-    beforeEach(() => {
+  describe('nested folders with filters', async () => {
+    beforeEach(async () => {
       // Create nested structure
       fs.mkdirSync(path.join(testDir, 'movies'));
       fs.mkdirSync(path.join(testDir, 'movies', 'charlie'));
@@ -651,11 +651,11 @@ describe('FilePickerStateService - Filters and Search', () => {
       );
     });
 
-    it('should search nested folders and include parent folders', () => {
+    it('should search nested folders and include parent folders', async () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*epic*'; // Search for a specific file
       state.videosOnly = false;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const itemNames = items.map((item) => item.name);
 
@@ -666,7 +666,7 @@ describe('FilePickerStateService - Filters and Search', () => {
       expect(itemNames).not.toContain('bob'); // No epic files in bob folder
     });
 
-    it('should apply videosOnly filter in nested folders', () => {
+    it('should apply videosOnly filter in nested folders', async () => {
       // Add non-video file in charlie folder
       fs.writeFileSync(
         path.join(testDir, 'movies', 'charlie', 'notes.txt'),
@@ -676,7 +676,7 @@ describe('FilePickerStateService - Filters and Search', () => {
       const state = FilePickerStateService.createEmpty();
       state.searchQuery = '*';
       state.videosOnly = true;
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const fileNames = items
         .filter((item) => !item.isDirectory)

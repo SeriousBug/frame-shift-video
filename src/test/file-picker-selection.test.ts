@@ -88,7 +88,7 @@ describe('File Picker - Select All Files in Folder', () => {
   }
 
   describe('Basic functionality', () => {
-    it('should select all files in a folder recursively', () => {
+    it('should select all files in a folder recursively', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -96,7 +96,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false; // Include all files for this test
 
       // Select all files in folderA
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -127,7 +127,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderB/video8.mp4')).toBe(false);
     });
 
-    it('should automatically expand the folder after selection', () => {
+    it('should automatically expand the folder after selection', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -136,7 +136,7 @@ describe('File Picker - Select All Files in Folder', () => {
 
       expect(state.expandedFolders.has('folderA')).toBe(false);
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -144,13 +144,13 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.expandedFolders.has('folderA')).toBe(true);
     });
 
-    it('should handle empty folders without error', () => {
+    it('should handle empty folders without error', async () => {
       fs.mkdirSync(path.join(testDir, 'emptyFolder'));
 
       const state = FilePickerStateService.createEmpty();
       state.currentPath = '';
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'emptyFolder',
       );
@@ -161,7 +161,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Toggle behavior', () => {
-    it('should deselect all files when all are already selected', () => {
+    it('should deselect all files when all are already selected', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -169,21 +169,22 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // First selection: select all
-      const selectedState = FilePickerStateService.toggleFolderSelection(
+      const selectedState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
       expect(selectedState.selectedFiles.size).toBe(6);
 
       // Second selection: deselect all
-      const deselectedState = FilePickerStateService.toggleFolderSelection(
-        selectedState,
-        'folderA',
-      );
+      const deselectedState =
+        await FilePickerStateService.toggleFolderSelection(
+          selectedState,
+          'folderA',
+        );
       expect(deselectedState.selectedFiles.size).toBe(0);
     });
 
-    it('should select remaining files when only some are selected', () => {
+    it('should select remaining files when only some are selected', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -194,7 +195,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.selectedFiles.add('folderA/video3.mp4');
 
       // Toggle folder selection should select the rest
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -204,7 +205,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderA/video4.avi')).toBe(true);
     });
 
-    it('should work independently for multiple folders', () => {
+    it('should work independently for multiple folders', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -212,21 +213,21 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // Select all in folderA
-      const stateA = FilePickerStateService.toggleFolderSelection(
+      const stateA = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
       expect(stateA.selectedFiles.size).toBe(6);
 
       // Select all in folderB (should add to existing)
-      const stateB = FilePickerStateService.toggleFolderSelection(
+      const stateB = await FilePickerStateService.toggleFolderSelection(
         stateA,
         'folderB',
       );
       expect(stateB.selectedFiles.size).toBe(7); // 6 from A + 1 from B
 
       // Deselect folderA (folderB should remain)
-      const stateC = FilePickerStateService.toggleFolderSelection(
+      const stateC = await FilePickerStateService.toggleFolderSelection(
         stateB,
         'folderA',
       );
@@ -236,14 +237,14 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Filter respect - videosOnly', () => {
-    it('should only select video files when videosOnly is enabled', () => {
+    it('should only select video files when videosOnly is enabled', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
       state.currentPath = '';
       state.videosOnly = true; // Only videos
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -268,7 +269,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Filter respect - showHidden', () => {
-    it('should exclude hidden files when showHidden is false', () => {
+    it('should exclude hidden files when showHidden is false', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -276,7 +277,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
       state.showHidden = false;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderC',
       );
@@ -287,7 +288,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderC/.hidden.mp4')).toBe(false);
     });
 
-    it('should include hidden files when showHidden is true', () => {
+    it('should include hidden files when showHidden is true', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -295,7 +296,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
       state.showHidden = true;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderC',
       );
@@ -308,7 +309,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Filter respect - hideConverted', () => {
-    it('should exclude converted files when hideConverted is true', () => {
+    it('should exclude converted files when hideConverted is true', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -316,7 +317,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
       state.hideConverted = true;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderD',
       );
@@ -330,7 +331,7 @@ describe('File Picker - Select All Files in Folder', () => {
       );
     });
 
-    it('should include converted files when hideConverted is false', () => {
+    it('should include converted files when hideConverted is false', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -338,7 +339,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
       state.hideConverted = false;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderD',
       );
@@ -354,7 +355,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Nested folder selection', () => {
-    it('should only select files within the specified folder', () => {
+    it('should only select files within the specified folder', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -362,7 +363,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // Select only the subfolder, not the parent
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA/subfolder',
       );
@@ -384,7 +385,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderA/video4.avi')).toBe(false);
     });
 
-    it('should handle deeply nested folders correctly', () => {
+    it('should handle deeply nested folders correctly', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -392,7 +393,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // Select the deepest folder
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA/subfolder/deepfolder',
       );
@@ -406,7 +407,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Combined filters', () => {
-    it('should respect multiple filters simultaneously', () => {
+    it('should respect multiple filters simultaneously', async () => {
       // Create a complex structure
       fs.mkdirSync(path.join(testDir, 'complex'));
       fs.writeFileSync(path.join(testDir, 'complex', 'video.mp4'), 'test');
@@ -424,7 +425,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.hideConverted = true;
       state.showHidden = false;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'complex',
       );
@@ -445,7 +446,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Edge cases', () => {
-    it('should handle folder with only subdirectories (no files)', () => {
+    it('should handle folder with only subdirectories (no files)', async () => {
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.mkdirSync(path.join(testDir, 'parent', 'child1'));
       fs.mkdirSync(path.join(testDir, 'parent', 'child2'));
@@ -454,7 +455,7 @@ describe('File Picker - Select All Files in Folder', () => {
       const state = FilePickerStateService.createEmpty();
       state.currentPath = '';
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'parent',
       );
@@ -462,7 +463,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.size).toBe(0);
     });
 
-    it('should handle folder with files at multiple nesting levels', () => {
+    it('should handle folder with files at multiple nesting levels', async () => {
       fs.mkdirSync(path.join(testDir, 'multi'));
       fs.writeFileSync(path.join(testDir, 'multi', 'level0.mp4'), 'test');
 
@@ -482,7 +483,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.currentPath = '';
       state.videosOnly = false;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'multi',
       );
@@ -495,7 +496,7 @@ describe('File Picker - Select All Files in Folder', () => {
       );
     });
 
-    it('should preserve selections from other folders', () => {
+    it('should preserve selections from other folders', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -507,7 +508,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.selectedFiles.add('video2.mkv');
 
       // Select all in folderA
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -520,7 +521,7 @@ describe('File Picker - Select All Files in Folder', () => {
   });
 
   describe('Potential bug scenarios', () => {
-    it('should not select files from parent directory', () => {
+    it('should not select files from parent directory', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -528,7 +529,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // Select subfolder
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA/subfolder',
       );
@@ -538,7 +539,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderA/video4.avi')).toBe(false);
     });
 
-    it('should not select files from sibling directories', () => {
+    it('should not select files from sibling directories', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -546,7 +547,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // Select folderA
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -556,7 +557,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderC/visible.mp4')).toBe(false);
     });
 
-    it('should handle paths with similar names correctly', () => {
+    it('should handle paths with similar names correctly', async () => {
       // Create folders with similar names to test prefix matching
       fs.mkdirSync(path.join(testDir, 'folder'));
       fs.writeFileSync(path.join(testDir, 'folder', 'file.mp4'), 'test');
@@ -572,7 +573,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.videosOnly = false;
 
       // Select only 'folderA'
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'folderA',
       );
@@ -584,7 +585,7 @@ describe('File Picker - Select All Files in Folder', () => {
       expect(newState.selectedFiles.has('folderAB/fileAB.mp4')).toBe(false);
     });
 
-    it('should correctly identify all files even with special characters in names', () => {
+    it('should correctly identify all files even with special characters in names', async () => {
       fs.mkdirSync(path.join(testDir, 'special'));
       fs.writeFileSync(
         path.join(testDir, 'special', 'file with spaces.mp4'),
@@ -603,7 +604,7 @@ describe('File Picker - Select All Files in Folder', () => {
       state.currentPath = '';
       state.videosOnly = false;
 
-      const newState = FilePickerStateService.toggleFolderSelection(
+      const newState = await FilePickerStateService.toggleFolderSelection(
         state,
         'special',
       );
