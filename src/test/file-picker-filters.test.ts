@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-describe('FilePickerStateService - Filters and Search', async () => {
+describe('FilePickerStateService - Filters and Search', () => {
   let testDir: string;
 
   beforeEach(async () => {
@@ -26,7 +26,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     delete process.env.FRAME_SHIFT_HOME;
   });
 
-  describe('videosOnly filter', async () => {
+  describe('videosOnly filter', () => {
     beforeEach(async () => {
       // Create test structure with mixed file types
       fs.writeFileSync(path.join(testDir, 'movie.mp4'), 'video');
@@ -83,7 +83,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('showHidden filter', async () => {
+  describe('showHidden filter', () => {
     beforeEach(async () => {
       // Create test structure with hidden files
       fs.writeFileSync(path.join(testDir, 'visible.txt'), 'visible');
@@ -132,7 +132,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('hideConverted filter', async () => {
+  describe('hideConverted filter', () => {
     beforeEach(async () => {
       // Create test structure with converted and non-converted videos
       fs.writeFileSync(path.join(testDir, 'movie1.mp4'), 'video');
@@ -183,7 +183,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('search functionality - simple mode (wildcards)', async () => {
+  describe('search functionality - simple mode (wildcards)', () => {
     beforeEach(async () => {
       // Create test structure for search
       fs.writeFileSync(path.join(testDir, 'charlie-2024.mp4'), 'video');
@@ -262,7 +262,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('search functionality - advanced mode (glob patterns)', async () => {
+  describe('search functionality - advanced mode (glob patterns)', () => {
     beforeEach(async () => {
       // Create test structure for advanced search
       fs.writeFileSync(path.join(testDir, 'video.mp4'), 'video');
@@ -338,7 +338,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('combined filters - videosOnly + search', async () => {
+  describe('combined filters - videosOnly + search', () => {
     beforeEach(async () => {
       // Mixed file types with search patterns
       fs.writeFileSync(path.join(testDir, 'charlie.mp4'), 'video');
@@ -387,7 +387,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('combined filters - showHidden + search', async () => {
+  describe('combined filters - showHidden + search', () => {
     beforeEach(async () => {
       // Hidden and visible files with search patterns
       fs.writeFileSync(path.join(testDir, 'charlie.mp4'), 'video');
@@ -440,7 +440,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('combined filters - hideConverted + search', async () => {
+  describe('combined filters - hideConverted + search', () => {
     beforeEach(async () => {
       // Converted and non-converted files with search patterns
       fs.writeFileSync(path.join(testDir, 'charlie-2024.mp4'), 'video');
@@ -501,7 +501,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('combined filters - all filters + search', async () => {
+  describe('combined filters - all filters + search', () => {
     beforeEach(async () => {
       // Complex test structure with all filter types
       fs.writeFileSync(path.join(testDir, 'charlie-2024.mp4'), 'video');
@@ -588,7 +588,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('empty search results', async () => {
+  describe('empty search results', () => {
     beforeEach(async () => {
       fs.writeFileSync(path.join(testDir, 'movie1.mp4'), 'video');
       fs.writeFileSync(path.join(testDir, 'movie2.mkv'), 'video');
@@ -631,7 +631,7 @@ describe('FilePickerStateService - Filters and Search', async () => {
     });
   });
 
-  describe('nested folders with filters', async () => {
+  describe('nested folders with filters', () => {
     beforeEach(async () => {
       // Create nested structure
       fs.mkdirSync(path.join(testDir, 'movies'));

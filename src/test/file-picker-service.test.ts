@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-describe('FilePickerStateService - allConverted feature', async () => {
+describe('FilePickerStateService - allConverted feature', () => {
   let testDir: string;
 
   beforeEach(async () => {
@@ -26,7 +26,7 @@ describe('FilePickerStateService - allConverted feature', async () => {
     delete process.env.FRAME_SHIFT_HOME;
   });
 
-  describe('single level folders', async () => {
+  describe('single level folders', () => {
     it('should mark folder as NOT converted when it has non-converted videos', async () => {
       // Create folder with non-converted video
       fs.mkdirSync(path.join(testDir, 'videos'));
@@ -112,7 +112,7 @@ describe('FilePickerStateService - allConverted feature', async () => {
     });
   });
 
-  describe('nested folders (2 levels)', async () => {
+  describe('nested folders (2 levels)', () => {
     it('should mark parent as NOT converted when child has non-converted videos', async () => {
       // Create nested structure with non-converted video
       fs.mkdirSync(path.join(testDir, 'parent'));
@@ -173,7 +173,7 @@ describe('FilePickerStateService - allConverted feature', async () => {
     });
   });
 
-  describe('deeply nested folders (3+ levels)', async () => {
+  describe('deeply nested folders (3+ levels)', () => {
     it('should correctly compute allConverted for deeply nested structure', async () => {
       // Create 3-level nested structure
       fs.mkdirSync(path.join(testDir, 'level1'));
@@ -233,7 +233,7 @@ describe('FilePickerStateService - allConverted feature', async () => {
     });
   });
 
-  describe('folders with mixed children (files and subfolders)', async () => {
+  describe('folders with mixed children (files and subfolders)', () => {
     it('should handle parent with direct files and subfolder correctly', async () => {
       // Parent has direct video + subfolder with video
       // Both are converted
@@ -359,7 +359,7 @@ describe('FilePickerStateService - allConverted feature', async () => {
     });
   });
 
-  describe('edge cases', async () => {
+  describe('edge cases', () => {
     it('should handle folder with only _converted files (no originals)', async () => {
       // Folder has only converted files, no originals
       fs.mkdirSync(path.join(testDir, 'converted-only'));
@@ -456,7 +456,7 @@ describe('FilePickerStateService - allConverted feature', async () => {
     });
   });
 
-  describe('complex nested scenarios', async () => {
+  describe('complex nested scenarios', () => {
     it('should handle complex tree with mixed conversion states at multiple levels', async () => {
       /**
        * Structure:

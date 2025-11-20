@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-describe('File Picker - Shift-Click Range Selection', async () => {
+describe('File Picker - Shift-Click Range Selection', () => {
   let testDir: string;
   let originalFrameShiftHome: string | undefined;
 
@@ -58,7 +58,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     fs.writeFileSync(path.join(testDir, 'folderB', 'video10.mp4'), 'test');
   }
 
-  describe('Basic range selection', async () => {
+  describe('Basic range selection', () => {
     it('should select all files between two paths (forward direction)', async () => {
       createTestStructure();
 
@@ -126,7 +126,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     });
   });
 
-  describe('Range selection with folders', async () => {
+  describe('Range selection with folders', () => {
     it('should skip folders and only select files in range', async () => {
       createTestStructure();
 
@@ -191,7 +191,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     });
   });
 
-  describe('Range selection preserves existing selections', async () => {
+  describe('Range selection preserves existing selections', () => {
     it('should add to existing selections, not replace them', async () => {
       createTestStructure();
 
@@ -218,7 +218,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     });
   });
 
-  describe('Edge cases', async () => {
+  describe('Edge cases', () => {
     it('should handle invalid start path gracefully', async () => {
       createTestStructure();
 
@@ -274,7 +274,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     });
   });
 
-  describe('Range selection with filters', async () => {
+  describe('Range selection with filters', () => {
     it('should respect current filter settings when building items list', async () => {
       // Create structure with mixed file types
       fs.writeFileSync(path.join(testDir, 'video1.mp4'), 'test');
@@ -333,7 +333,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     });
   });
 
-  describe('Complex scenarios', async () => {
+  describe('Complex scenarios', () => {
     it('should handle selecting across multiple folders', async () => {
       createTestStructure();
 
@@ -406,7 +406,7 @@ describe('File Picker - Shift-Click Range Selection', async () => {
     });
   });
 
-  describe('Real-world usage simulation', async () => {
+  describe('Real-world usage simulation', () => {
     it('should simulate typical user workflow: click, shift-click, shift-click again', async () => {
       createTestStructure();
 
