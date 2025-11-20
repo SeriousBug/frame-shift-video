@@ -11,14 +11,14 @@ import os from 'os';
 describe('FilePickerStateService - allConverted feature', () => {
   let testDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create a temporary test directory
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-picker-test-'));
     // Set the base path for testing
     process.env.FRAME_SHIFT_HOME = testDir;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Clean up test directory
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true, force: true });
@@ -27,7 +27,7 @@ describe('FilePickerStateService - allConverted feature', () => {
   });
 
   describe('single level folders', () => {
-    it('should mark folder as NOT converted when it has non-converted videos', () => {
+    it('should mark folder as NOT converted when it has non-converted videos', async () => {
       // Create folder with non-converted video
       fs.mkdirSync(path.join(testDir, 'videos'));
       fs.writeFileSync(
@@ -37,13 +37,13 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('videos');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const videosFolder = items.find((item) => item.name === 'videos');
       expect(videosFolder?.allConverted).toBe(false);
     });
 
-    it('should mark folder as converted when all videos have converted versions', () => {
+    it('should mark folder as converted when all videos have converted versions', async () => {
       // Create folder with converted video
       fs.mkdirSync(path.join(testDir, 'videos'));
       fs.writeFileSync(
@@ -57,25 +57,25 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('videos');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const videosFolder = items.find((item) => item.name === 'videos');
       expect(videosFolder?.allConverted).toBe(true);
     });
 
-    it('should NOT show checkmark for empty folders', () => {
+    it('should NOT show checkmark for empty folders', async () => {
       // Create empty folder
       fs.mkdirSync(path.join(testDir, 'empty'));
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('empty');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const emptyFolder = items.find((item) => item.name === 'empty');
       expect(emptyFolder?.allConverted).toBe(false);
     });
 
-    it('should NOT show checkmark for folders with only non-video files', () => {
+    it('should NOT show checkmark for folders with only non-video files', async () => {
       // Create folder with non-video files
       fs.mkdirSync(path.join(testDir, 'documents'));
       fs.writeFileSync(
@@ -86,13 +86,13 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('documents');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const documentsFolder = items.find((item) => item.name === 'documents');
       expect(documentsFolder?.allConverted).toBe(false);
     });
 
-    it('should handle mixed converted and non-converted videos correctly', () => {
+    it('should handle mixed converted and non-converted videos correctly', async () => {
       // Create folder with mixed videos
       fs.mkdirSync(path.join(testDir, 'mixed'));
       fs.writeFileSync(path.join(testDir, 'mixed', 'movie1.mp4'), 'video 1');
@@ -105,7 +105,7 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('mixed');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const mixedFolder = items.find((item) => item.name === 'mixed');
       expect(mixedFolder?.allConverted).toBe(false);
@@ -113,7 +113,7 @@ describe('FilePickerStateService - allConverted feature', () => {
   });
 
   describe('nested folders (2 levels)', () => {
-    it('should mark parent as NOT converted when child has non-converted videos', () => {
+    it('should mark parent as NOT converted when child has non-converted videos', async () => {
       // Create nested structure with non-converted video
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.mkdirSync(path.join(testDir, 'parent', 'child'));
@@ -125,7 +125,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('parent');
       state.expandedFolders.add('parent/child');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       const childFolder = items.find((item) => item.name === 'child');
@@ -134,7 +134,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       expect(parentFolder?.allConverted).toBe(false);
     });
 
-    it('should mark both parent and child as converted when all videos are converted', () => {
+    it('should mark both parent and child as converted when all videos are converted', async () => {
       // Create nested structure with all converted videos
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.mkdirSync(path.join(testDir, 'parent', 'child'));
@@ -150,7 +150,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('parent');
       state.expandedFolders.add('parent/child');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       const childFolder = items.find((item) => item.name === 'child');
@@ -159,14 +159,14 @@ describe('FilePickerStateService - allConverted feature', () => {
       expect(parentFolder?.allConverted).toBe(true);
     });
 
-    it('should NOT show checkmark on parent when child has no videos', () => {
+    it('should NOT show checkmark on parent when child has no videos', async () => {
       // Create parent with child that has no videos
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.mkdirSync(path.join(testDir, 'parent', 'empty-child'));
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('parent');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       expect(parentFolder?.allConverted).toBe(false);
@@ -174,7 +174,7 @@ describe('FilePickerStateService - allConverted feature', () => {
   });
 
   describe('deeply nested folders (3+ levels)', () => {
-    it('should correctly compute allConverted for deeply nested structure', () => {
+    it('should correctly compute allConverted for deeply nested structure', async () => {
       // Create 3-level nested structure
       fs.mkdirSync(path.join(testDir, 'level1'));
       fs.mkdirSync(path.join(testDir, 'level1', 'level2'));
@@ -192,7 +192,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       state.expandedFolders.add('level1');
       state.expandedFolders.add('level1/level2');
       state.expandedFolders.add('level1/level2/level3');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const level1 = items.find((item) => item.name === 'level1');
       const level2 = items.find((item) => item.name === 'level2');
@@ -203,7 +203,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       expect(level1?.allConverted).toBe(true);
     });
 
-    it('should mark all ancestors as NOT converted when deep child has non-converted video', () => {
+    it('should mark all ancestors as NOT converted when deep child has non-converted video', async () => {
       // Create 4-level nested structure with non-converted video at bottom
       fs.mkdirSync(path.join(testDir, 'a'));
       fs.mkdirSync(path.join(testDir, 'a', 'b'));
@@ -219,7 +219,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       state.expandedFolders.add('a/b');
       state.expandedFolders.add('a/b/c');
       state.expandedFolders.add('a/b/c/d');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const folderA = items.find((item) => item.name === 'a');
       const folderB = items.find((item) => item.name === 'b');
@@ -234,7 +234,7 @@ describe('FilePickerStateService - allConverted feature', () => {
   });
 
   describe('folders with mixed children (files and subfolders)', () => {
-    it('should handle parent with direct files and subfolder correctly', () => {
+    it('should handle parent with direct files and subfolder correctly', async () => {
       // Parent has direct video + subfolder with video
       // Both are converted
       fs.mkdirSync(path.join(testDir, 'parent'));
@@ -256,7 +256,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('parent');
       state.expandedFolders.add('parent/subfolder');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       const subfolder = items.find((item) => item.name === 'subfolder');
@@ -265,7 +265,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       expect(parentFolder?.allConverted).toBe(true);
     });
 
-    it('should fail parent when direct file is not converted but subfolder is', () => {
+    it('should fail parent when direct file is not converted but subfolder is', async () => {
       // Parent has non-converted direct video + converted subfolder
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.writeFileSync(path.join(testDir, 'parent', 'direct.mp4'), 'video');
@@ -283,7 +283,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('parent');
       state.expandedFolders.add('parent/subfolder');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       const subfolder = items.find((item) => item.name === 'subfolder');
@@ -292,7 +292,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       expect(parentFolder?.allConverted).toBe(false); // Direct file not converted
     });
 
-    it('should fail parent when subfolder is not converted but direct file is', () => {
+    it('should fail parent when subfolder is not converted but direct file is', async () => {
       // Parent has converted direct video + non-converted subfolder
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.writeFileSync(path.join(testDir, 'parent', 'direct.mp4'), 'video');
@@ -310,7 +310,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('parent');
       state.expandedFolders.add('parent/subfolder');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       const subfolder = items.find((item) => item.name === 'subfolder');
@@ -319,7 +319,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       expect(parentFolder?.allConverted).toBe(false); // Subfolder not converted
     });
 
-    it('should handle parent with multiple subfolders in mixed states', () => {
+    it('should handle parent with multiple subfolders in mixed states', async () => {
       // Parent has 2 subfolders: one converted, one not
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.mkdirSync(path.join(testDir, 'parent', 'converted-folder'));
@@ -343,7 +343,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       state.expandedFolders.add('parent');
       state.expandedFolders.add('parent/converted-folder');
       state.expandedFolders.add('parent/unconverted-folder');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const parentFolder = items.find((item) => item.name === 'parent');
       const convertedFolder = items.find(
@@ -360,7 +360,7 @@ describe('FilePickerStateService - allConverted feature', () => {
   });
 
   describe('edge cases', () => {
-    it('should handle folder with only _converted files (no originals)', () => {
+    it('should handle folder with only _converted files (no originals)', async () => {
       // Folder has only converted files, no originals
       fs.mkdirSync(path.join(testDir, 'converted-only'));
       fs.writeFileSync(
@@ -370,14 +370,14 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('converted-only');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const folder = items.find((item) => item.name === 'converted-only');
       // No original videos to convert, so no checkmark
       expect(folder?.allConverted).toBe(false);
     });
 
-    it('should handle various video file extensions', () => {
+    it('should handle various video file extensions', async () => {
       // Test multiple video extensions
       fs.mkdirSync(path.join(testDir, 'multi-format'));
       fs.writeFileSync(
@@ -404,13 +404,13 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('multi-format');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const folder = items.find((item) => item.name === 'multi-format');
       expect(folder?.allConverted).toBe(true);
     });
 
-    it('should ignore non-video files when computing allConverted', () => {
+    it('should ignore non-video files when computing allConverted', async () => {
       // Folder has videos (all converted) + non-video files
       fs.mkdirSync(path.join(testDir, 'mixed-types'));
       fs.writeFileSync(path.join(testDir, 'mixed-types', 'video.mp4'), 'video');
@@ -424,14 +424,14 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('mixed-types');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const folder = items.find((item) => item.name === 'mixed-types');
       // Non-video files should not affect the result
       expect(folder?.allConverted).toBe(true);
     });
 
-    it('should handle folder with mix of video types where some are not video extensions', () => {
+    it('should handle folder with mix of video types where some are not video extensions', async () => {
       // One real video converted, one non-video file
       fs.mkdirSync(path.join(testDir, 'partial-video'));
       fs.writeFileSync(
@@ -449,7 +449,7 @@ describe('FilePickerStateService - allConverted feature', () => {
 
       const state = FilePickerStateService.createEmpty();
       state.expandedFolders.add('partial-video');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const folder = items.find((item) => item.name === 'partial-video');
       expect(folder?.allConverted).toBe(true);
@@ -457,7 +457,7 @@ describe('FilePickerStateService - allConverted feature', () => {
   });
 
   describe('complex nested scenarios', () => {
-    it('should handle complex tree with mixed conversion states at multiple levels', () => {
+    it('should handle complex tree with mixed conversion states at multiple levels', async () => {
       /**
        * Structure:
        * root/
@@ -517,7 +517,7 @@ describe('FilePickerStateService - allConverted feature', () => {
       state.expandedFolders.add('root/subfolder1');
       state.expandedFolders.add('root/subfolder2');
       state.expandedFolders.add('root/subfolder2/deep');
-      const items = FilePickerStateService.buildItemsList(state);
+      const items = await FilePickerStateService.buildItemsList(state);
 
       const root = items.find((item) => item.name === 'root');
       const subfolder1 = items.find((item) => item.name === 'subfolder1');

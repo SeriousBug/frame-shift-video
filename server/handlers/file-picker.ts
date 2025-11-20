@@ -57,7 +57,10 @@ export async function getPickerStateHandler(
       stateKey = FilePickerStateService.save(state);
     }
 
-    const response = FilePickerStateService.buildStateResponse(stateKey, state);
+    const response = await FilePickerStateService.buildStateResponse(
+      stateKey,
+      state,
+    );
 
     logger.info('[SERVER] getPickerStateHandler returning', {
       stateKey,
@@ -172,7 +175,7 @@ export async function pickerActionHandler(
             },
           );
         }
-        newState = FilePickerStateService.toggleFolderSelection(
+        newState = await FilePickerStateService.toggleFolderSelection(
           state,
           action.path,
         );
@@ -190,7 +193,7 @@ export async function pickerActionHandler(
             },
           );
         }
-        newState = FilePickerStateService.selectRange(
+        newState = await FilePickerStateService.selectRange(
           state,
           action.startPath,
           action.endPath,
@@ -302,7 +305,7 @@ export async function pickerActionHandler(
 
     // Save new state and return response
     const newKey = FilePickerStateService.save(newState);
-    const response = FilePickerStateService.buildStateResponse(
+    const response = await FilePickerStateService.buildStateResponse(
       newKey,
       newState,
     );
