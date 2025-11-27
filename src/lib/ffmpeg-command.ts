@@ -100,6 +100,7 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
   args.push('-i', escapeFilePath(config.inputFile));
 
   // If custom command is provided, use it (but still validate)
+  // Custom commands handle their own stream mapping
   if (options.customCommand) {
     const customArgs = options.customCommand.trim().split(/\s+/);
     customArgs.forEach((arg) => args.push(escapeArgument(arg)));
@@ -110,6 +111,10 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     args.push(escapeFilePath(config.outputFile));
     return args;
   }
+
+  // Map all streams from input - without this, FFmpeg only selects one stream per type
+  // This ensures all audio tracks and subtitle tracks are included in the output
+  args.push('-map', '0');
 
   // Video codec
   if (options.basic.videoCodec !== 'copy') {
