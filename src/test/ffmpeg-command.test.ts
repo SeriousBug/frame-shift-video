@@ -80,6 +80,8 @@ describe('FFmpeg Command Generation', () => {
         'ffmpeg',
         '-i',
         'input.mkv',
+        '-map',
+        '0',
         '-c:v',
         'libx265',
         '-crf',
@@ -96,7 +98,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -c:v libx265 -crf 22 -preset slow -c:a copy -sn -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -map 0 -c:v libx265 -crf 22 -preset slow -c:a copy -sn -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');
@@ -440,6 +442,28 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).toContain('aac');
       expect(command.args).toContain('-b:a');
       expect(command.args).toContain('192k');
+    });
+
+    it('should include -map 0 to copy all audio and subtitle tracks', () => {
+      // Without -map 0, FFmpeg only selects one stream per type (one video, one audio, one subtitle)
+      // With -map 0, all streams from the input are included in the output
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'Map Test',
+      };
+
+      const command = generateFFmpegCommand(config);
+      const mapIndex = command.args.indexOf('-map');
+      expect(mapIndex).toBeGreaterThan(-1);
+      expect(command.args[mapIndex + 1]).toBe('0');
+
+      // Verify -map 0 comes after -i input and before codec options
+      const inputIndex = command.args.indexOf('-i');
+      const videoCodecIndex = command.args.indexOf('-c:v');
+      expect(mapIndex).toBeGreaterThan(inputIndex);
+      expect(mapIndex).toBeLessThan(videoCodecIndex);
     });
   });
 
