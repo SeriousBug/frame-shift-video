@@ -119,7 +119,7 @@ if (INSTANCE_TYPE === 'follower') {
   try {
     let leaderDistributor: LeaderDistributor | undefined;
 
-    // If leader mode, create distributor
+    // If leader mode, create distributor and sync with followers
     if (INSTANCE_TYPE === 'leader') {
       leaderDistributor = new LeaderDistributor({
         followerUrls: FOLLOWER_URLS!.split(',').map((url) => url.trim()),
@@ -129,23 +129,38 @@ if (INSTANCE_TYPE === 'follower') {
         followerCount: FOLLOWER_URLS!.split(',').length,
       });
 
-      // Sync with followers to recover state after restart
-      // This is done asynchronously so server can start immediately
-      (async () => {
-        try {
-          await leaderDistributor!.syncWithFollowers();
-        } catch (error) {
-          logger.error('[LeaderDistributor] Failed to sync with followers', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      })();
-    }
+      // Sync with followers before starting - this blocks until complete
+      // so we know follower state before scheduling any jobs
+      let activeJobIds: number[] = [];
+      try {
+        activeJobIds = await leaderDistributor.syncWithFollowers();
+      } catch (error) {
+        logger.error('[LeaderDistributor] Failed to sync with followers', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue anyway - some followers may still be reachable
+      }
 
-    processor = JobProcessor.getInstance({
-      checkInterval: 60000, // Check every minute
-      leaderDistributor,
-    });
+      // Create processor first
+      processor = JobProcessor.getInstance({
+        checkInterval: 60000, // Check every minute
+        leaderDistributor,
+      });
+
+      // Sync active jobs from followers to processor
+      if (activeJobIds.length > 0) {
+        processor.syncActiveJobs(activeJobIds);
+      }
+
+      // Start periodic sync (every 4 hours) to detect recovered followers
+      leaderDistributor.startPeriodicSync();
+    } else {
+      // Standalone mode
+      processor = JobProcessor.getInstance({
+        checkInterval: 60000, // Check every minute
+        leaderDistributor,
+      });
+    }
 
     // Set up event listeners for job processor to broadcast via WebSocket
     processor.on('job:start', (job: Job) => {

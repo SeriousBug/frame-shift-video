@@ -37,6 +37,9 @@ export interface LeaderDistributorEvents {
   progress: (progress: FFmpegProgress) => void;
 }
 
+/** Default interval for periodic sync (4 hours) */
+const DEFAULT_SYNC_INTERVAL = 4 * 60 * 60 * 1000;
+
 /**
  * Leader distributor
  * Distributes jobs to available follower instances
@@ -47,6 +50,10 @@ export class LeaderDistributor extends EventEmitter {
   private busyFollowers = new Set<string>();
   /** Map of jobId to followerId - tracks which follower is processing which job */
   private jobToFollower = new Map<number, string>();
+  /** Set of follower IDs that failed to sync and are considered dead */
+  private deadFollowers = new Set<string>();
+  /** Interval ID for periodic sync */
+  private syncIntervalId: NodeJS.Timeout | null = null;
 
   constructor(config: LeaderDistributorConfig) {
     super();
@@ -209,12 +216,15 @@ export class LeaderDistributor extends EventEmitter {
   }
 
   /**
-   * Get the first available (not busy) follower
+   * Get the first available (not busy and not dead) follower
    * Uses "first available" strategy as requested
    */
   private getAvailableFollower(): FollowerConfig | null {
     for (const follower of this.followers) {
-      if (!this.busyFollowers.has(follower.id)) {
+      if (
+        !this.busyFollowers.has(follower.id) &&
+        !this.deadFollowers.has(follower.id)
+      ) {
         return follower;
       }
     }
@@ -224,11 +234,17 @@ export class LeaderDistributor extends EventEmitter {
   /**
    * Get status of all followers
    */
-  getFollowerStatus(): Array<{ id: string; url: string; busy: boolean }> {
+  getFollowerStatus(): Array<{
+    id: string;
+    url: string;
+    busy: boolean;
+    dead: boolean;
+  }> {
     return this.followers.map((follower) => ({
       id: follower.id,
       url: follower.url,
       busy: this.busyFollowers.has(follower.id),
+      dead: this.deadFollowers.has(follower.id),
     }));
   }
 
@@ -328,9 +344,12 @@ export class LeaderDistributor extends EventEmitter {
   /**
    * Sync state with all followers
    * Called during leader initialization to recover state after restart
+   * Returns the list of active job IDs found on followers
    */
-  async syncWithFollowers(): Promise<void> {
+  async syncWithFollowers(): Promise<number[]> {
     logger.info('[LeaderDistributor] Syncing state with followers');
+
+    const activeJobIds: number[] = [];
 
     for (const follower of this.followers) {
       try {
@@ -344,14 +363,27 @@ export class LeaderDistributor extends EventEmitter {
         });
 
         if (!response.ok) {
-          logger.warn('[LeaderDistributor] Failed to get follower status', {
-            followerId: follower.id,
-            status: response.status,
-          });
+          logger.error(
+            '[LeaderDistributor] Failed to get follower status - marking as dead',
+            {
+              followerId: follower.id,
+              followerUrl: follower.url,
+              status: response.status,
+            },
+          );
+          this.deadFollowers.add(follower.id);
           continue;
         }
 
         const status = await response.json();
+
+        // Follower responded successfully - remove from dead list if it was there
+        if (this.deadFollowers.has(follower.id)) {
+          logger.info('[LeaderDistributor] Follower recovered', {
+            followerId: follower.id,
+          });
+          this.deadFollowers.delete(follower.id);
+        }
 
         logger.info('[LeaderDistributor] Follower status', {
           followerId: follower.id,
@@ -367,6 +399,7 @@ export class LeaderDistributor extends EventEmitter {
           // Track each active job
           for (const activeJob of status.activeJobs) {
             this.jobToFollower.set(activeJob.jobId, follower.id);
+            activeJobIds.push(activeJob.jobId);
 
             // Update job progress in database
             if (activeJob.progress > 0) {
@@ -383,17 +416,65 @@ export class LeaderDistributor extends EventEmitter {
           this.busyFollowers.delete(follower.id);
         }
       } catch (error: any) {
-        logger.error('[LeaderDistributor] Error syncing with follower', {
-          followerId: follower.id,
-          error: error.message,
-        });
-        // Don't throw - continue with other followers
+        logger.error(
+          '[LeaderDistributor] Error syncing with follower - marking as dead',
+          {
+            followerId: follower.id,
+            followerUrl: follower.url,
+            error: error.message,
+          },
+        );
+        // Mark follower as dead so we don't try to schedule jobs on it
+        this.deadFollowers.add(follower.id);
       }
     }
 
+    const aliveCount = this.followers.length - this.deadFollowers.size;
     logger.info('[LeaderDistributor] Sync complete', {
+      totalFollowers: this.followers.length,
+      aliveFollowers: aliveCount,
+      deadFollowers: this.deadFollowers.size,
       busyFollowerCount: this.busyFollowers.size,
       trackedJobCount: this.jobToFollower.size,
+      activeJobIds,
     });
+
+    return activeJobIds;
+  }
+
+  /**
+   * Start periodic sync to detect recovered followers
+   */
+  startPeriodicSync(intervalMs: number = DEFAULT_SYNC_INTERVAL): void {
+    if (this.syncIntervalId) {
+      clearInterval(this.syncIntervalId);
+    }
+
+    logger.info('[LeaderDistributor] Starting periodic sync', {
+      intervalMs,
+      intervalHours: intervalMs / (60 * 60 * 1000),
+    });
+
+    this.syncIntervalId = setInterval(async () => {
+      try {
+        logger.info('[LeaderDistributor] Running periodic sync');
+        await this.syncWithFollowers();
+      } catch (error: any) {
+        logger.error('[LeaderDistributor] Periodic sync failed', {
+          error: error.message,
+        });
+      }
+    }, intervalMs);
+  }
+
+  /**
+   * Stop periodic sync and clean up
+   */
+  stop(): void {
+    if (this.syncIntervalId) {
+      clearInterval(this.syncIntervalId);
+      this.syncIntervalId = null;
+    }
+    logger.info('[LeaderDistributor] Stopped');
   }
 }

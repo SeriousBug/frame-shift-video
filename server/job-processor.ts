@@ -222,6 +222,47 @@ export class JobProcessor extends EventEmitter {
   }
 
   /**
+   * Sync active job IDs from external source (e.g., from follower sync)
+   * Used in leader mode to restore state after restart
+   */
+  syncActiveJobs(jobIds: number[]): void {
+    // Add any jobs that aren't already tracked
+    for (const jobId of jobIds) {
+      if (!this.activeJobIds.has(jobId)) {
+        this.activeJobIds.add(jobId);
+        logger.info('[JobProcessor] Restored active job from sync', { jobId });
+      }
+    }
+
+    // Remove any jobs we thought were active but aren't on followers
+    for (const trackedJobId of this.activeJobIds) {
+      if (!jobIds.includes(trackedJobId)) {
+        // Check if the job is still in processing state in DB
+        const job = JobService.getById(trackedJobId);
+        if (job?.status === 'processing') {
+          // Job is marked processing but no follower is running it
+          // This could happen if a follower died while processing
+          logger.warn(
+            '[JobProcessor] Job marked processing but not on any follower',
+            { jobId: trackedJobId },
+          );
+          // Mark as failed since the follower that was processing it is gone
+          JobService.setError(
+            trackedJobId,
+            'Job lost - follower disconnected during processing',
+          );
+        }
+        this.activeJobIds.delete(trackedJobId);
+      }
+    }
+
+    logger.info('[JobProcessor] Active jobs synced', {
+      activeJobCount: this.activeJobIds.size,
+      activeJobIds: Array.from(this.activeJobIds),
+    });
+  }
+
+  /**
    * Cancel a specific job
    * If the job is currently processing, kill the FFmpeg process
    * If the job is pending, just update the status
@@ -302,10 +343,12 @@ export class JobProcessor extends EventEmitter {
       return false;
     }
 
-    // Leader mode: check if any follower is available
+    // Leader mode: check if any follower is available (not busy and not dead)
     if (this.config.leaderDistributor) {
       const followerStatus = this.config.leaderDistributor.getFollowerStatus();
-      const availableFollowers = followerStatus.filter((f) => !f.busy);
+      const availableFollowers = followerStatus.filter(
+        (f) => !f.busy && !f.dead,
+      );
       return availableFollowers.length > 0;
     }
 
