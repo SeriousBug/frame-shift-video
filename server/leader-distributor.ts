@@ -37,8 +37,17 @@ export interface LeaderDistributorEvents {
   progress: (progress: FFmpegProgress) => void;
 }
 
-/** Default interval for periodic sync (4 hours) */
+/** Default interval for periodic full sync (4 hours) */
 const DEFAULT_SYNC_INTERVAL = 4 * 60 * 60 * 1000;
+
+/** Default interval for checking dead followers (30 seconds) */
+const DEFAULT_DEAD_CHECK_INTERVAL = 30 * 1000;
+
+/** Number of retries for initial sync */
+const SYNC_RETRIES = 3;
+
+/** Delay between sync retries (2 seconds) */
+const SYNC_RETRY_DELAY = 2000;
 
 /**
  * Leader distributor
@@ -52,8 +61,10 @@ export class LeaderDistributor extends EventEmitter {
   private jobToFollower = new Map<number, string>();
   /** Set of follower IDs that failed to sync and are considered dead */
   private deadFollowers = new Set<string>();
-  /** Interval ID for periodic sync */
+  /** Interval ID for periodic full sync */
   private syncIntervalId: NodeJS.Timeout | null = null;
+  /** Interval ID for dead follower health checks */
+  private deadCheckIntervalId: NodeJS.Timeout | null = null;
 
   constructor(config: LeaderDistributorConfig) {
     super();
@@ -342,16 +353,14 @@ export class LeaderDistributor extends EventEmitter {
   }
 
   /**
-   * Sync state with all followers
-   * Called during leader initialization to recover state after restart
-   * Returns the list of active job IDs found on followers
+   * Try to sync with a single follower, with retries
+   * Returns the status if successful, null if all retries failed
    */
-  async syncWithFollowers(): Promise<number[]> {
-    logger.info('[LeaderDistributor] Syncing state with followers');
-
-    const activeJobIds: number[] = [];
-
-    for (const follower of this.followers) {
+  private async syncFollowerWithRetry(
+    follower: FollowerConfig,
+    retries: number = SYNC_RETRIES,
+  ): Promise<any | null> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const authHeader = generateAuthHeader('', this.config.sharedToken);
 
@@ -363,69 +372,96 @@ export class LeaderDistributor extends EventEmitter {
         });
 
         if (!response.ok) {
-          logger.error(
-            '[LeaderDistributor] Failed to get follower status - marking as dead',
-            {
-              followerId: follower.id,
-              followerUrl: follower.url,
-              status: response.status,
-            },
-          );
-          this.deadFollowers.add(follower.id);
-          continue;
+          throw new Error(`HTTP ${response.status}`);
         }
 
         const status = await response.json();
-
-        // Follower responded successfully - remove from dead list if it was there
-        if (this.deadFollowers.has(follower.id)) {
-          logger.info('[LeaderDistributor] Follower recovered', {
-            followerId: follower.id,
-          });
-          this.deadFollowers.delete(follower.id);
-        }
-
-        logger.info('[LeaderDistributor] Follower status', {
-          followerId: follower.id,
-          workerId: status.workerId,
-          busy: status.busy,
-          activeJobCount: status.activeJobs?.length ?? 0,
-        });
-
-        // Update our tracking based on follower state
-        if (status.busy && status.activeJobs?.length > 0) {
-          this.busyFollowers.add(follower.id);
-
-          // Track each active job
-          for (const activeJob of status.activeJobs) {
-            this.jobToFollower.set(activeJob.jobId, follower.id);
-            activeJobIds.push(activeJob.jobId);
-
-            // Update job progress in database
-            if (activeJob.progress > 0) {
-              JobService.updateProgress(activeJob.jobId, activeJob.progress);
-              logger.info('[LeaderDistributor] Restored job progress', {
-                jobId: activeJob.jobId,
-                progress: activeJob.progress,
-                followerId: follower.id,
-              });
-            }
-          }
-        } else {
-          // Follower is not busy, make sure it's not marked as busy
-          this.busyFollowers.delete(follower.id);
-        }
+        return status;
       } catch (error: any) {
-        logger.error(
-          '[LeaderDistributor] Error syncing with follower - marking as dead',
-          {
-            followerId: follower.id,
-            followerUrl: follower.url,
-            error: error.message,
-          },
-        );
-        // Mark follower as dead so we don't try to schedule jobs on it
+        if (attempt < retries) {
+          logger.warn(
+            `[LeaderDistributor] Sync attempt ${attempt}/${retries} failed, retrying...`,
+            {
+              followerId: follower.id,
+              error: error.message,
+            },
+          );
+          await new Promise((resolve) => setTimeout(resolve, SYNC_RETRY_DELAY));
+        } else {
+          logger.error(
+            `[LeaderDistributor] All ${retries} sync attempts failed`,
+            {
+              followerId: follower.id,
+              followerUrl: follower.url,
+              error: error.message,
+            },
+          );
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Sync state with all followers
+   * Called during leader initialization to recover state after restart
+   * Returns the list of active job IDs found on followers
+   */
+  async syncWithFollowers(): Promise<number[]> {
+    logger.info('[LeaderDistributor] Syncing state with followers');
+
+    const activeJobIds: number[] = [];
+
+    for (const follower of this.followers) {
+      const status = await this.syncFollowerWithRetry(follower);
+
+      if (!status) {
+        // All retries failed - mark as dead
+        logger.error('[LeaderDistributor] Marking follower as dead', {
+          followerId: follower.id,
+          followerUrl: follower.url,
+        });
         this.deadFollowers.add(follower.id);
+        continue;
+      }
+
+      // Follower responded successfully - remove from dead list if it was there
+      if (this.deadFollowers.has(follower.id)) {
+        logger.info('[LeaderDistributor] Follower recovered', {
+          followerId: follower.id,
+        });
+        this.deadFollowers.delete(follower.id);
+      }
+
+      logger.info('[LeaderDistributor] Follower status', {
+        followerId: follower.id,
+        workerId: status.workerId,
+        busy: status.busy,
+        activeJobCount: status.activeJobs?.length ?? 0,
+      });
+
+      // Update our tracking based on follower state
+      if (status.busy && status.activeJobs?.length > 0) {
+        this.busyFollowers.add(follower.id);
+
+        // Track each active job
+        for (const activeJob of status.activeJobs) {
+          this.jobToFollower.set(activeJob.jobId, follower.id);
+          activeJobIds.push(activeJob.jobId);
+
+          // Update job progress in database
+          if (activeJob.progress > 0) {
+            JobService.updateProgress(activeJob.jobId, activeJob.progress);
+            logger.info('[LeaderDistributor] Restored job progress', {
+              jobId: activeJob.jobId,
+              progress: activeJob.progress,
+              followerId: follower.id,
+            });
+          }
+        }
+      } else {
+        // Follower is not busy, make sure it's not marked as busy
+        this.busyFollowers.delete(follower.id);
       }
     }
 
@@ -443,28 +479,108 @@ export class LeaderDistributor extends EventEmitter {
   }
 
   /**
-   * Start periodic sync to detect recovered followers
+   * Check if dead followers have recovered
+   * This runs more frequently than full sync to quickly detect recovered followers
    */
-  startPeriodicSync(intervalMs: number = DEFAULT_SYNC_INTERVAL): void {
+  private async checkDeadFollowers(): Promise<void> {
+    if (this.deadFollowers.size === 0) {
+      return; // No dead followers to check
+    }
+
+    logger.debug('[LeaderDistributor] Checking dead followers', {
+      deadCount: this.deadFollowers.size,
+    });
+
+    for (const followerId of this.deadFollowers) {
+      const follower = this.followers.find((f) => f.id === followerId);
+      if (!follower) continue;
+
+      try {
+        const authHeader = generateAuthHeader('', this.config.sharedToken);
+        const response = await fetch(`${follower.url}/worker/status`, {
+          method: 'GET',
+          headers: {
+            'X-Auth': formatAuthHeader(authHeader),
+          },
+        });
+
+        if (response.ok) {
+          const status = await response.json();
+          // Follower is back online!
+          logger.info('[LeaderDistributor] Dead follower recovered!', {
+            followerId: follower.id,
+            followerUrl: follower.url,
+            workerId: status.workerId,
+          });
+          this.deadFollowers.delete(followerId);
+
+          // Update busy state based on current status
+          if (status.busy && status.activeJobs?.length > 0) {
+            this.busyFollowers.add(follower.id);
+            // Track any active jobs
+            for (const activeJob of status.activeJobs) {
+              this.jobToFollower.set(activeJob.jobId, follower.id);
+            }
+          } else {
+            this.busyFollowers.delete(follower.id);
+          }
+        }
+      } catch (error) {
+        // Still dead, that's expected
+        logger.debug('[LeaderDistributor] Follower still unreachable', {
+          followerId: follower.id,
+        });
+      }
+    }
+  }
+
+  /**
+   * Start periodic sync and dead follower health checks
+   */
+  startPeriodicSync(
+    fullSyncIntervalMs: number = DEFAULT_SYNC_INTERVAL,
+    deadCheckIntervalMs: number = DEFAULT_DEAD_CHECK_INTERVAL,
+  ): void {
+    // Clear existing intervals
     if (this.syncIntervalId) {
       clearInterval(this.syncIntervalId);
     }
+    if (this.deadCheckIntervalId) {
+      clearInterval(this.deadCheckIntervalId);
+    }
 
-    logger.info('[LeaderDistributor] Starting periodic sync', {
-      intervalMs,
-      intervalHours: intervalMs / (60 * 60 * 1000),
-    });
+    logger.info(
+      '[LeaderDistributor] Starting periodic sync and health checks',
+      {
+        fullSyncIntervalMs,
+        fullSyncIntervalHours: fullSyncIntervalMs / (60 * 60 * 1000),
+        deadCheckIntervalMs,
+        deadCheckIntervalSeconds: deadCheckIntervalMs / 1000,
+      },
+    );
 
+    // Full sync every few hours
     this.syncIntervalId = setInterval(async () => {
       try {
-        logger.info('[LeaderDistributor] Running periodic sync');
+        logger.info('[LeaderDistributor] Running periodic full sync');
         await this.syncWithFollowers();
       } catch (error: any) {
         logger.error('[LeaderDistributor] Periodic sync failed', {
           error: error.message,
         });
       }
-    }, intervalMs);
+    }, fullSyncIntervalMs);
+
+    // Quick health check for dead followers every 30 seconds
+    this.deadCheckIntervalId = setInterval(async () => {
+      try {
+        await this.checkDeadFollowers();
+      } catch (error: any) {
+        logger.error('[LeaderDistributor] Dead follower check failed', {
+          error: error.message,
+        });
+      }
+    }, deadCheckIntervalMs);
   }
 
   /**
@@ -474,6 +590,10 @@ export class LeaderDistributor extends EventEmitter {
     if (this.syncIntervalId) {
       clearInterval(this.syncIntervalId);
       this.syncIntervalId = null;
+    }
+    if (this.deadCheckIntervalId) {
+      clearInterval(this.deadCheckIntervalId);
+      this.deadCheckIntervalId = null;
     }
     logger.info('[LeaderDistributor] Stopped');
   }
