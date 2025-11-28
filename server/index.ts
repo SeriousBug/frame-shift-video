@@ -75,16 +75,19 @@ if (process.env.FFMPEG_THREADS) {
 
 // Clean up temporary files from previous runs BEFORE starting job processor
 // This must happen before the processor starts to avoid deleting files from new conversions
-const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
-try {
-  const deletedCount = await cleanupAllTempFiles(baseDir);
-  logger.info('[Startup] Temporary file cleanup complete', { deletedCount });
-} catch (error) {
-  logger.error('[Startup] Failed to clean up temporary files', {
-    error: error instanceof Error ? error.message : String(error),
-  });
-  captureException(error);
-  // Don't exit - continue with startup even if cleanup fails
+// Only run on leader/standalone - followers should not run cleanup to avoid race conditions
+if (INSTANCE_TYPE !== 'follower') {
+  const baseDir = process.env.FRAME_SHIFT_HOME || process.env.HOME || '/';
+  try {
+    const deletedCount = await cleanupAllTempFiles(baseDir);
+    logger.info('[Startup] Temporary file cleanup complete', { deletedCount });
+  } catch (error) {
+    logger.error('[Startup] Failed to clean up temporary files', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+    // Don't exit - continue with startup even if cleanup fails
+  }
 }
 
 // Initialize job processor (for standalone and leader instances)
@@ -178,30 +181,35 @@ if (INSTANCE_TYPE === 'follower') {
 }
 
 // Run file selections cleanup on startup and schedule daily cleanup
-try {
-  const deletedCount = FileSelectionService.cleanup();
-  logger.info('[FileSelections] Cleanup complete', { deletedCount });
+// Only run on leader/standalone - followers don't manage file selections
+if (INSTANCE_TYPE !== 'follower') {
+  try {
+    const deletedCount = FileSelectionService.cleanup();
+    logger.info('[FileSelections] Cleanup complete', { deletedCount });
 
-  // Run cleanup daily (every 24 hours)
-  setInterval(
-    () => {
-      try {
-        const count = FileSelectionService.cleanup();
-        logger.info('[FileSelections] Daily cleanup', { deletedCount: count });
-      } catch (error) {
-        logger.error('[FileSelections] Daily cleanup failed', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        captureException(error);
-      }
-    },
-    24 * 60 * 60 * 1000,
-  );
-} catch (error) {
-  logger.error('[FileSelections] Cleanup failed', {
-    error: error instanceof Error ? error.message : String(error),
-  });
-  captureException(error);
+    // Run cleanup daily (every 24 hours)
+    setInterval(
+      () => {
+        try {
+          const count = FileSelectionService.cleanup();
+          logger.info('[FileSelections] Daily cleanup', {
+            deletedCount: count,
+          });
+        } catch (error) {
+          logger.error('[FileSelections] Daily cleanup failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          captureException(error);
+        }
+      },
+      24 * 60 * 60 * 1000,
+    );
+  } catch (error) {
+    logger.error('[FileSelections] Cleanup failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+  }
 }
 
 // Create the HTTP server

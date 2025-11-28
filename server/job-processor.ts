@@ -68,6 +68,8 @@ export class JobProcessor extends EventEmitter {
   private isProcessing = false;
   private isShuttingDown = false;
   private lastCompletionNotificationSent = false;
+  /** Track active jobs in leader mode for concurrent processing */
+  private activeJobIds = new Set<number>();
 
   private constructor(config: JobProcessorConfig) {
     super();
@@ -98,6 +100,7 @@ export class JobProcessor extends EventEmitter {
   static resetInstance(): void {
     if (JobProcessor.instance) {
       JobProcessor.instance.stop();
+      JobProcessor.instance.activeJobIds.clear();
       JobProcessor.instance = null;
     }
   }
@@ -169,6 +172,18 @@ export class JobProcessor extends EventEmitter {
       this.currentJobId = null;
     }
 
+    // Reset all active jobs to pending (for leader mode)
+    for (const jobId of this.activeJobIds) {
+      const job = JobService.getById(jobId);
+      if (job && job.status !== 'cancelled') {
+        JobService.update(jobId, {
+          status: 'pending',
+          error_message: 'Job cancelled due to processor shutdown',
+        });
+      }
+    }
+    this.activeJobIds.clear();
+
     this.isProcessing = false;
     this.isShuttingDown = false;
     logger.info('[JobProcessor] Stopped');
@@ -194,10 +209,15 @@ export class JobProcessor extends EventEmitter {
   /**
    * Get the current processing state
    */
-  getState(): { isProcessing: boolean; currentJobId: number | null } {
+  getState(): {
+    isProcessing: boolean;
+    currentJobId: number | null;
+    activeJobIds: number[];
+  } {
     return {
-      isProcessing: this.isProcessing,
+      isProcessing: this.isProcessing || this.activeJobIds.size > 0,
       currentJobId: this.currentJobId,
+      activeJobIds: Array.from(this.activeJobIds),
     };
   }
 
@@ -239,6 +259,27 @@ export class JobProcessor extends EventEmitter {
   }
 
   /**
+   * Check if we can process more jobs
+   * In leader mode, we can process multiple jobs concurrently (one per follower)
+   * In standalone mode, we only process one job at a time
+   */
+  private canProcessMoreJobs(): boolean {
+    if (this.isShuttingDown) {
+      return false;
+    }
+
+    // Leader mode: check if any follower is available
+    if (this.config.leaderDistributor) {
+      const followerStatus = this.config.leaderDistributor.getFollowerStatus();
+      const availableFollowers = followerStatus.filter((f) => !f.busy);
+      return availableFollowers.length > 0;
+    }
+
+    // Standalone mode: only one job at a time
+    return !this.isProcessing;
+  }
+
+  /**
    * Check for pending jobs and process the next one
    * Note: This is intentionally non-async to prevent accidental awaiting.
    * The async work happens in an IIFE.
@@ -247,22 +288,29 @@ export class JobProcessor extends EventEmitter {
     logger.debug('[JobProcessor] checkForJobs called', {
       isProcessing: this.isProcessing,
       isShuttingDown: this.isShuttingDown,
+      activeJobs: this.activeJobIds.size,
     });
 
-    // Don't check if already processing or shutting down
-    if (this.isProcessing || this.isShuttingDown) {
-      logger.debug(
-        '[JobProcessor] Skipping check - already processing or shutting down',
-      );
+    // Don't check if shutting down or can't process more jobs
+    if (!this.canProcessMoreJobs()) {
+      logger.debug('[JobProcessor] Skipping check - cannot process more jobs');
       return;
     }
 
-    // Get next pending job
+    // Get next pending job (excluding ones we're already processing)
     const nextJob = JobService.getNextPendingJob();
 
     if (!nextJob) {
       // No pending jobs
       logger.debug('[JobProcessor] No pending jobs found');
+      return;
+    }
+
+    // Skip if we're already processing this job (shouldn't happen, but be safe)
+    if (this.activeJobIds.has(nextJob.id)) {
+      logger.debug('[JobProcessor] Job already being processed', {
+        jobId: nextJob.id,
+      });
       return;
     }
 
@@ -277,10 +325,18 @@ export class JobProcessor extends EventEmitter {
       jobName: nextJob.name,
     });
 
+    // Track this job as active
+    this.activeJobIds.add(nextJob.id);
+
     // Run async processing in IIFE (don't await - fire and forget)
     (async () => {
       await this.processJob(nextJob);
     })();
+
+    // In leader mode, immediately check for more jobs to distribute
+    if (this.config.leaderDistributor) {
+      setImmediate(() => this.checkForJobs());
+    }
   }
 
   /**
@@ -290,7 +346,11 @@ export class JobProcessor extends EventEmitter {
     return startSpan(
       { op: 'job.process', name: `Process job ${job.id}` },
       async () => {
-        this.isProcessing = true;
+        // In standalone mode, use isProcessing flag
+        // In leader mode, we use activeJobIds instead (already added in checkForJobs)
+        if (!this.config.leaderDistributor) {
+          this.isProcessing = true;
+        }
         this.currentJobId = job.id;
         this.emit('state:change', true);
 
@@ -510,10 +570,19 @@ export class JobProcessor extends EventEmitter {
           // Clean up
           this.executor = null;
           this.currentJobId = null;
-          this.isProcessing = false;
-          this.emit('state:change', false);
+          this.activeJobIds.delete(job.id);
 
-          logger.debug('[JobProcessor] Job finished, cleaning up');
+          // Only set isProcessing to false in standalone mode
+          // In leader mode, isProcessing is not used (we use activeJobIds instead)
+          if (!this.config.leaderDistributor) {
+            this.isProcessing = false;
+          }
+          this.emit('state:change', this.activeJobIds.size > 0);
+
+          logger.debug('[JobProcessor] Job finished, cleaning up', {
+            jobId: job.id,
+            remainingActiveJobs: this.activeJobIds.size,
+          });
 
           // Check if all jobs are complete and send notification
           if (!this.isShuttingDown) {
