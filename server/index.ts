@@ -220,8 +220,8 @@ const server = Bun.serve({
       return undefined;
     }
 
-    // Handle API routes
-    if (url.pathname.startsWith('/api')) {
+    // Handle API routes and worker endpoints
+    if (url.pathname.startsWith('/api') || url.pathname.startsWith('/worker')) {
       return setupRoutes(req);
     }
 
