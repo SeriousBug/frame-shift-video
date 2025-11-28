@@ -231,7 +231,7 @@ export async function jobsHandler(
       for (const job of processingJobs) {
         try {
           const processor = JobProcessor.getInstance();
-          processor.cancelJob(job.id);
+          await processor.cancelJob(job.id);
         } catch (error) {
           logger.error(`Failed to cancel job ${job.id}`, { error });
         }
@@ -681,7 +681,7 @@ export async function jobByIdHandler(
       if (job.status === 'processing') {
         try {
           const processor = JobProcessor.getInstance();
-          processor.cancelJob(jobId);
+          await processor.cancelJob(jobId);
         } catch (error) {
           logger.error('Failed to cancel job in processor', { error });
         }

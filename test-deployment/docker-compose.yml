@@ -12,7 +12,7 @@ services:
       - ../server:/app/server
       - ../src:/app/src
       # Shared media directory for testing
-      - ./test-media:/media
+      - ../test-videos:/media
       # Persistent database
       - ./leader-data:/app/data
     environment:
@@ -41,7 +41,7 @@ services:
       - ../server:/app/server
       - ../src:/app/src
       # CRITICAL: Same mount path as leader
-      - ./test-media:/media
+      - ../test-videos:/media
       # Persistent database
       - ./follower1-data:/app/data
     environment:
@@ -68,7 +68,7 @@ services:
       - ../server:/app/server
       - ../src:/app/src
       # CRITICAL: Same mount path as leader
-      - ./test-media:/media
+      - ../test-videos:/media
       # Persistent database
       - ./follower2-data:/app/data
     environment:

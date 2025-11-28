@@ -64,8 +64,26 @@ export interface FollowerExecutorConfig {
  */
 interface ActiveJob {
   jobId: number;
+  jobName: string;
   executor: FFmpegExecutor;
   abortController: AbortController;
+  lastProgress: JobProgressUpdate | null;
+}
+
+/**
+ * Follower status response
+ */
+export interface FollowerStatus {
+  workerId: string;
+  busy: boolean;
+  activeJobs: Array<{
+    jobId: number;
+    jobName: string;
+    progress: number;
+    frame: number;
+    fps: number;
+    speed: number;
+  }>;
 }
 
 /**
@@ -122,11 +140,14 @@ export class FollowerExecutor {
         const abortController = new AbortController();
 
         // Track this job
-        this.activeJobs.set(request.jobId, {
+        const activeJob: ActiveJob = {
           jobId: request.jobId,
+          jobName: request.jobName,
           executor,
           abortController,
-        });
+          lastProgress: null,
+        };
+        this.activeJobs.set(request.jobId, activeJob);
 
         try {
           // Track maximum frame count
@@ -138,15 +159,20 @@ export class FollowerExecutor {
               maxFrames = progress.frame;
             }
 
-            // Send progress update to leader
-            await this.sendProgressUpdate({
+            const progressUpdate: JobProgressUpdate = {
               jobId: request.jobId,
               progress: progress.progress,
               frame: progress.frame,
               fps: progress.fps,
               speed: progress.speed,
               eta: progress.eta,
-            });
+            };
+
+            // Store last progress for status queries
+            activeJob.lastProgress = progressUpdate;
+
+            // Send progress update to leader
+            await this.sendProgressUpdate(progressUpdate);
           });
 
           // Execute the FFmpeg command
@@ -251,6 +277,33 @@ export class FollowerExecutor {
    */
   isBusy(): boolean {
     return this.activeJobs.size > 0;
+  }
+
+  /**
+   * Get the worker ID
+   */
+  getWorkerId(): string {
+    return this.config.workerId;
+  }
+
+  /**
+   * Get current status of this follower
+   */
+  getStatus(): FollowerStatus {
+    const activeJobs = Array.from(this.activeJobs.values()).map((job) => ({
+      jobId: job.jobId,
+      jobName: job.jobName,
+      progress: job.lastProgress?.progress ?? 0,
+      frame: job.lastProgress?.frame ?? 0,
+      fps: job.lastProgress?.fps ?? 0,
+      speed: job.lastProgress?.speed ?? 0,
+    }));
+
+    return {
+      workerId: this.config.workerId,
+      busy: this.activeJobs.size > 0,
+      activeJobs,
+    };
   }
 
   /**

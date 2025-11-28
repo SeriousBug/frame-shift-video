@@ -128,6 +128,18 @@ if (INSTANCE_TYPE === 'follower') {
       logger.info('[LeaderDistributor] Initialized', {
         followerCount: FOLLOWER_URLS!.split(',').length,
       });
+
+      // Sync with followers to recover state after restart
+      // This is done asynchronously so server can start immediately
+      (async () => {
+        try {
+          await leaderDistributor!.syncWithFollowers();
+        } catch (error) {
+          logger.error('[LeaderDistributor] Failed to sync with followers', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
     }
 
     processor = JobProcessor.getInstance({

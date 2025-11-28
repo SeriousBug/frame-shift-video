@@ -45,6 +45,8 @@ export class LeaderDistributor extends EventEmitter {
   private config: LeaderDistributorConfig;
   private followers: FollowerConfig[];
   private busyFollowers = new Set<string>();
+  /** Map of jobId to followerId - tracks which follower is processing which job */
+  private jobToFollower = new Map<number, string>();
 
   constructor(config: LeaderDistributorConfig) {
     super();
@@ -93,8 +95,9 @@ export class LeaderDistributor extends EventEmitter {
       };
     }
 
-    // Mark follower as busy
+    // Mark follower as busy and track job assignment
     this.busyFollowers.add(follower.id);
+    this.jobToFollower.set(job.id, follower.id);
     logger.info('[LeaderDistributor] Assigning job to follower', {
       jobId: job.id,
       followerId: follower.id,
@@ -187,8 +190,9 @@ export class LeaderDistributor extends EventEmitter {
         error: `Failed to communicate with follower: ${error.message}`,
       };
     } finally {
-      // Mark follower as available again
+      // Mark follower as available again and clean up job tracking
       this.busyFollowers.delete(follower.id);
+      this.jobToFollower.delete(job.id);
     }
   }
 
@@ -235,5 +239,161 @@ export class LeaderDistributor extends EventEmitter {
   handleProgressUpdate(jobId: number, progress: FFmpegProgress): void {
     // Emit progress event (mimics FFmpegExecutor)
     this.emit('progress', progress);
+  }
+
+  /**
+   * Cancel a job running on a follower
+   * Returns true if cancellation was successful, false otherwise
+   */
+  async cancelJobOnFollower(jobId: number): Promise<boolean> {
+    const followerId = this.jobToFollower.get(jobId);
+    if (!followerId) {
+      logger.warn('[LeaderDistributor] Cannot cancel job - not tracked', {
+        jobId,
+      });
+      return false;
+    }
+
+    const follower = this.followers.find((f) => f.id === followerId);
+    if (!follower) {
+      logger.error(
+        '[LeaderDistributor] Cannot cancel job - follower not found',
+        {
+          jobId,
+          followerId,
+        },
+      );
+      return false;
+    }
+
+    try {
+      const payload = JSON.stringify({ jobId });
+      const authHeader = generateAuthHeader(payload, this.config.sharedToken);
+
+      const response = await fetch(`${follower.url}/worker/cancel/${jobId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Auth': formatAuthHeader(authHeader),
+        },
+        body: payload,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('[LeaderDistributor] Cancel request failed', {
+          jobId,
+          followerId,
+          status: response.status,
+          error: errorText,
+        });
+        return false;
+      }
+
+      const result = await response.json();
+      logger.info('[LeaderDistributor] Job cancellation result', {
+        jobId,
+        followerId,
+        cancelled: result.cancelled,
+      });
+
+      // Clean up tracking if cancelled
+      if (result.cancelled) {
+        this.busyFollowers.delete(followerId);
+        this.jobToFollower.delete(jobId);
+      }
+
+      return result.cancelled === true;
+    } catch (error: any) {
+      logger.error('[LeaderDistributor] Error cancelling job on follower', {
+        jobId,
+        followerId,
+        error: error.message,
+      });
+      captureException(error, {
+        tags: { context: 'leader-distributor-cancel' },
+        extra: { jobId, followerId },
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Get the follower ID that is processing a specific job
+   */
+  getFollowerForJob(jobId: number): string | undefined {
+    return this.jobToFollower.get(jobId);
+  }
+
+  /**
+   * Sync state with all followers
+   * Called during leader initialization to recover state after restart
+   */
+  async syncWithFollowers(): Promise<void> {
+    logger.info('[LeaderDistributor] Syncing state with followers');
+
+    for (const follower of this.followers) {
+      try {
+        const authHeader = generateAuthHeader('', this.config.sharedToken);
+
+        const response = await fetch(`${follower.url}/worker/status`, {
+          method: 'GET',
+          headers: {
+            'X-Auth': formatAuthHeader(authHeader),
+          },
+        });
+
+        if (!response.ok) {
+          logger.warn('[LeaderDistributor] Failed to get follower status', {
+            followerId: follower.id,
+            status: response.status,
+          });
+          continue;
+        }
+
+        const status = await response.json();
+
+        logger.info('[LeaderDistributor] Follower status', {
+          followerId: follower.id,
+          workerId: status.workerId,
+          busy: status.busy,
+          activeJobCount: status.activeJobs?.length ?? 0,
+        });
+
+        // Update our tracking based on follower state
+        if (status.busy && status.activeJobs?.length > 0) {
+          this.busyFollowers.add(follower.id);
+
+          // Track each active job
+          for (const activeJob of status.activeJobs) {
+            this.jobToFollower.set(activeJob.jobId, follower.id);
+
+            // Update job progress in database
+            if (activeJob.progress > 0) {
+              JobService.updateProgress(activeJob.jobId, activeJob.progress);
+              logger.info('[LeaderDistributor] Restored job progress', {
+                jobId: activeJob.jobId,
+                progress: activeJob.progress,
+                followerId: follower.id,
+              });
+            }
+          }
+        } else {
+          // Follower is not busy, make sure it's not marked as busy
+          this.busyFollowers.delete(follower.id);
+        }
+      } catch (error: any) {
+        logger.error('[LeaderDistributor] Error syncing with follower', {
+          followerId: follower.id,
+          error: error.message,
+        });
+        // Don't throw - continue with other followers
+      }
+    }
+
+    logger.info('[LeaderDistributor] Sync complete', {
+      busyFollowerCount: this.busyFollowers.size,
+      trackedJobCount: this.jobToFollower.size,
+    });
   }
 }

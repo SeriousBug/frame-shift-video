@@ -228,13 +228,47 @@ export class JobProcessor extends EventEmitter {
    * Note: Temp file cleanup is handled by the processJob method when
    * the FFmpeg process returns after being killed
    */
-  cancelJob(jobId: number): void {
+  async cancelJob(jobId: number): Promise<void> {
     const job = JobService.getById(jobId);
     if (!job) {
       throw new Error('Job not found', { cause: { jobId } });
     }
 
-    // If this is the current job being processed, kill it
+    // Handle leader mode - cancel on follower
+    if (this.config.leaderDistributor && this.activeJobIds.has(jobId)) {
+      logger.info('[JobProcessor] Cancelling job on follower', { jobId });
+      const cancelled =
+        await this.config.leaderDistributor.cancelJobOnFollower(jobId);
+
+      if (cancelled) {
+        // Remove from active jobs
+        this.activeJobIds.delete(jobId);
+        JobService.update(jobId, {
+          status: 'cancelled',
+          error_message: 'Job cancelled by user',
+        });
+        const updatedJob = JobService.getById(jobId);
+        if (updatedJob) {
+          this.emit('job:fail', updatedJob, 'Job cancelled by user');
+        }
+        logger.info('[JobProcessor] Job cancelled successfully on follower', {
+          jobId,
+        });
+      } else {
+        logger.warn('[JobProcessor] Failed to cancel job on follower', {
+          jobId,
+        });
+        // Still mark as cancelled in database even if follower cancel failed
+        JobService.update(jobId, {
+          status: 'cancelled',
+          error_message:
+            'Job cancelled by user (follower may still be processing)',
+        });
+      }
+      return;
+    }
+
+    // Standalone mode - if this is the current job being processed, kill it
     if (this.currentJobId === jobId && this.executor) {
       logger.info('[JobProcessor] Cancelling job', { jobId });
       this.executor.kill();

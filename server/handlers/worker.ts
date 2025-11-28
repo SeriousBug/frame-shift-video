@@ -5,9 +5,194 @@
 import { followerExecutor } from '../index';
 import { logger, captureException } from '../../src/lib/sentry';
 import { parseAuthHeader, verifyAuthHeader } from '../auth';
-import { ExecuteJobRequest } from '../follower-executor';
+import { ExecuteJobRequest, FollowerStatus } from '../follower-executor';
 import { JobService } from '../db-service';
 import { WSBroadcaster } from '../websocket';
+
+/**
+ * GET /worker/status
+ * Get the current status of this follower instance
+ */
+export async function getWorkerStatusHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    // Verify this is a follower instance
+    if (!followerExecutor) {
+      return new Response(
+        JSON.stringify({
+          error: 'This endpoint is only available on follower instances',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    // Verify authentication
+    const authHeaderValue = req.headers.get('X-Auth');
+    if (!authHeaderValue) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authentication header' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    const sharedToken = process.env.SHARED_TOKEN!;
+    // For GET requests, we verify using an empty payload
+    const authHeader = parseAuthHeader(authHeaderValue);
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication header format' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    if (!verifyAuthHeader('', authHeader, sharedToken)) {
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const status: FollowerStatus = followerExecutor.getStatus();
+
+    logger.debug('[Worker] Status requested', {
+      workerId: status.workerId,
+      busy: status.busy,
+      activeJobCount: status.activeJobs.length,
+    });
+
+    return new Response(JSON.stringify(status), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  } catch (error) {
+    logger.error('[Worker] Error getting status', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to get status',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
+
+/**
+ * POST /worker/cancel/:jobId
+ * Cancel a job running on this follower instance
+ */
+export async function cancelJobOnWorkerHandler(
+  req: Request,
+  jobId: number,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    // Verify this is a follower instance
+    if (!followerExecutor) {
+      return new Response(
+        JSON.stringify({
+          error: 'This endpoint is only available on follower instances',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    // Verify authentication
+    const authHeaderValue = req.headers.get('X-Auth');
+    if (!authHeaderValue) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authentication header' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    const body = await req.text();
+    const sharedToken = process.env.SHARED_TOKEN!;
+
+    const authHeader = parseAuthHeader(authHeaderValue);
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication header format' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    if (!verifyAuthHeader(body, authHeader, sharedToken)) {
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    logger.info('[Worker] Received cancel request', { jobId });
+
+    const cancelled = followerExecutor.cancelJob(jobId);
+
+    if (cancelled) {
+      logger.info('[Worker] Job cancelled successfully', { jobId });
+      return new Response(JSON.stringify({ success: true, cancelled: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    } else {
+      logger.warn('[Worker] Job not found or already completed', { jobId });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          cancelled: false,
+          message: 'Job not found or already completed',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+  } catch (error) {
+    logger.error('[Worker] Error cancelling job', {
+      jobId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to cancel job',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
 
 /**
  * POST /worker/execute

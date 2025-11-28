@@ -9,7 +9,12 @@ import {
   pickerActionHandler,
 } from './handlers/file-picker';
 import { testNotificationHandler } from './handlers/notifications';
-import { executeJobHandler, receiveProgressHandler } from './handlers/worker';
+import {
+  executeJobHandler,
+  receiveProgressHandler,
+  getWorkerStatusHandler,
+  cancelJobOnWorkerHandler,
+} from './handlers/worker';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
 
@@ -72,6 +77,14 @@ const wrappedExecuteJobHandler = withErrorHandler(
 const wrappedReceiveProgressHandler = withErrorHandler(
   receiveProgressHandler,
   'ReceiveProgressHandler',
+);
+const wrappedGetWorkerStatusHandler = withErrorHandler(
+  getWorkerStatusHandler,
+  'GetWorkerStatusHandler',
+);
+const wrappedCancelJobOnWorkerHandler = withErrorHandler(
+  cancelJobOnWorkerHandler,
+  'CancelJobOnWorkerHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -168,6 +181,18 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: POST /worker/execute (follower endpoint)
     if (pathname === '/worker/execute' && req.method === 'POST') {
       return await wrappedExecuteJobHandler(req, corsHeaders);
+    }
+
+    // Route: GET /worker/status (follower endpoint)
+    if (pathname === '/worker/status' && req.method === 'GET') {
+      return await wrappedGetWorkerStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /worker/cancel/:jobId (follower endpoint)
+    const workerCancelMatch = pathname.match(/^\/worker\/cancel\/(\d+)$/);
+    if (workerCancelMatch && req.method === 'POST') {
+      const jobId = parseInt(workerCancelMatch[1], 10);
+      return await wrappedCancelJobOnWorkerHandler(req, jobId, corsHeaders);
     }
 
     // Route: POST /api/jobs/:id/progress (leader endpoint to receive progress from followers)
