@@ -337,6 +337,27 @@ export async function fetchServerVersion(): Promise<{
 }
 
 /**
+ * Response for notification status endpoint
+ */
+export interface NotificationStatusResponse {
+  enabled: boolean;
+  methods: string[];
+}
+
+/**
+ * Get notification configuration status
+ */
+export async function fetchNotificationStatus(): Promise<NotificationStatusResponse> {
+  const response = await fetch(`${API_BASE}/notifications/status`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch notification status');
+  }
+
+  return response.json();
+}
+
+/**
  * Send a test notification
  */
 export async function sendTestNotification(): Promise<{

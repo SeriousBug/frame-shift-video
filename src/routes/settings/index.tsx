@@ -2,8 +2,10 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import {
   useFollowersStatus,
   useRetryFollowers,
+  useNotificationStatus,
   queryKeys,
 } from '@/lib/api-hooks';
+import { sendTestNotification } from '@/lib/api';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -15,9 +17,48 @@ export const Route = createFileRoute('/settings/')({
 
 function SettingsPage() {
   const { data: followersStatus, isLoading, error } = useFollowersStatus();
+  const {
+    data: notificationStatus,
+    isLoading: notificationLoading,
+    error: notificationError,
+  } = useNotificationStatus();
   const retryFollowers = useRetryFollowers();
   const [retryMessage, setRetryMessage] = useState<string | null>(null);
+  const [testNotificationStatus, setTestNotificationStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [testNotificationMessage, setTestNotificationMessage] = useState('');
   const queryClient = useQueryClient();
+
+  const handleTestNotification = async () => {
+    setTestNotificationStatus('loading');
+    setTestNotificationMessage('');
+
+    try {
+      const result = await sendTestNotification();
+      setTestNotificationStatus('success');
+      setTestNotificationMessage(result.message);
+
+      // Reset status after 3 seconds
+      setTimeout(() => {
+        setTestNotificationStatus('idle');
+        setTestNotificationMessage('');
+      }, 3000);
+    } catch (error) {
+      setTestNotificationStatus('error');
+      setTestNotificationMessage(
+        error instanceof Error
+          ? error.message
+          : 'Failed to send test notification',
+      );
+
+      // Reset status after 5 seconds
+      setTimeout(() => {
+        setTestNotificationStatus('idle');
+        setTestNotificationMessage('');
+      }, 5000);
+    }
+  };
 
   // WebSocket for real-time updates
   const wsRef = useRef<WebSocket | null>(null);
@@ -320,6 +361,129 @@ function SettingsPage() {
                     ))}
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        </AppErrorBoundary>
+
+        {/* Notifications Section */}
+        <AppErrorBoundary>
+          <div className="mt-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Notifications
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Get notified when all queued jobs have completed
+              </p>
+            </div>
+
+            <div className="p-6">
+              {notificationLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">
+                    Loading notification status...
+                  </span>
+                </div>
+              ) : notificationError ? (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+                  {notificationError instanceof Error
+                    ? notificationError.message
+                    : 'Failed to load notification status'}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Configuration Status */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Configured Methods
+                    </h3>
+                    {notificationStatus?.enabled ? (
+                      <div className="flex flex-wrap gap-2">
+                        {notificationStatus.methods.map((method) => (
+                          <span
+                            key={method}
+                            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400"
+                          >
+                            {method}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No notification methods configured
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Configuration Instructions */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      How to Configure
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Notifications are sent when the job queue is completely
+                      empty with no pending jobs remaining. Configure
+                      notifications using environment variables:
+                    </p>
+                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                      <li>
+                        <span className="font-medium">Discord:</span> Set{' '}
+                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                          DISCORD_WEBHOOK_URL
+                        </code>
+                      </li>
+                      <li>
+                        <span className="font-medium">Pushover:</span> Set{' '}
+                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                          PUSHOVER_API_TOKEN
+                        </code>{' '}
+                        and{' '}
+                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                          PUSHOVER_USER_KEY
+                        </code>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Test Button */}
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleTestNotification}
+                      disabled={
+                        !notificationStatus?.enabled ||
+                        testNotificationStatus === 'loading'
+                      }
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-2"
+                    >
+                      {testNotificationStatus === 'loading' ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        'Send Test Notification'
+                      )}
+                    </button>
+                    {!notificationStatus?.enabled && (
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Configure at least one notification method to test
+                      </span>
+                    )}
+                  </div>
+                  {testNotificationMessage && (
+                    <p
+                      className={`text-sm ${
+                        testNotificationStatus === 'success'
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {testNotificationMessage}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>

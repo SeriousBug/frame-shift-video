@@ -25,6 +25,7 @@ import {
   performPickerAction,
   fetchFollowersStatus,
   retryFollowers,
+  fetchNotificationStatus,
   type PickerAction,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
@@ -39,6 +40,7 @@ export const queryKeys = {
   fileSelections: (key: string) => ['file-selections', key] as const,
   pickerState: (key: string) => ['picker-state', key] as const,
   followersStatus: ['followers-status'] as const,
+  notificationStatus: ['notification-status'] as const,
 };
 
 /**
@@ -286,5 +288,15 @@ export function useRetryFollowers() {
       // Invalidate followers status to refetch
       queryClient.invalidateQueries({ queryKey: queryKeys.followersStatus });
     },
+  });
+}
+
+/**
+ * Hook to fetch notification status
+ */
+export function useNotificationStatus() {
+  return useQuery({
+    queryKey: queryKeys.notificationStatus,
+    queryFn: fetchNotificationStatus,
   });
 }

@@ -8,7 +8,10 @@ import {
   getPickerStateHandler,
   pickerActionHandler,
 } from './handlers/file-picker';
-import { testNotificationHandler } from './handlers/notifications';
+import {
+  testNotificationHandler,
+  notificationStatusHandler,
+} from './handlers/notifications';
 import {
   executeJobHandler,
   receiveProgressHandler,
@@ -73,6 +76,10 @@ const wrappedPickerActionHandler = withErrorHandler(
 const wrappedTestNotificationHandler = withErrorHandler(
   testNotificationHandler,
   'TestNotificationHandler',
+);
+const wrappedNotificationStatusHandler = withErrorHandler(
+  notificationStatusHandler,
+  'NotificationStatusHandler',
 );
 const wrappedExecuteJobHandler = withErrorHandler(
   executeJobHandler,
@@ -183,6 +190,11 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: GET /api/version (kept for backwards compatibility)
     if (pathname === '/api/version' && req.method === 'GET') {
       return getSettingsResponse(corsHeaders);
+    }
+
+    // Route: GET /api/notifications/status
+    if (pathname === '/api/notifications/status' && req.method === 'GET') {
+      return await wrappedNotificationStatusHandler(req, corsHeaders);
     }
 
     // Route: POST /api/notifications/test
