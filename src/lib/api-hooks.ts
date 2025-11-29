@@ -23,6 +23,8 @@ import {
   loadFileSelections,
   getPickerState,
   performPickerAction,
+  fetchFollowersStatus,
+  retryFollowers,
   type PickerAction,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
@@ -36,6 +38,7 @@ export const queryKeys = {
   files: (path: string) => ['files', path] as const,
   fileSelections: (key: string) => ['file-selections', key] as const,
   pickerState: (key: string) => ['picker-state', key] as const,
+  followersStatus: ['followers-status'] as const,
 };
 
 /**
@@ -257,4 +260,31 @@ export function useClearPickerState() {
     // Remove all picker-state queries from cache
     queryClient.removeQueries({ queryKey: ['picker-state'] });
   };
+}
+
+/**
+ * Hook to fetch followers status
+ */
+export function useFollowersStatus() {
+  return useQuery({
+    queryKey: queryKeys.followersStatus,
+    queryFn: fetchFollowersStatus,
+    // Fallback polling every 30 seconds (WebSocket provides real-time updates)
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook to retry syncing with dead followers
+ */
+export function useRetryFollowers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: retryFollowers,
+    onSuccess: () => {
+      // Invalidate followers status to refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.followersStatus });
+    },
+  });
 }

@@ -250,13 +250,26 @@ export class LeaderDistributor extends EventEmitter {
     url: string;
     busy: boolean;
     dead: boolean;
+    currentJobId: number | null;
   }> {
-    return this.followers.map((follower) => ({
-      id: follower.id,
-      url: follower.url,
-      busy: this.busyFollowers.has(follower.id),
-      dead: this.deadFollowers.has(follower.id),
-    }));
+    return this.followers.map((follower) => {
+      // Find the job this follower is processing
+      let currentJobId: number | null = null;
+      for (const [jobId, fId] of this.jobToFollower.entries()) {
+        if (fId === follower.id) {
+          currentJobId = jobId;
+          break;
+        }
+      }
+
+      return {
+        id: follower.id,
+        url: follower.url,
+        busy: this.busyFollowers.has(follower.id),
+        dead: this.deadFollowers.has(follower.id),
+        currentJobId,
+      };
+    });
   }
 
   /**

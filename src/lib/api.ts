@@ -356,3 +356,60 @@ export async function sendTestNotification(): Promise<{
 
   return response.json();
 }
+
+/**
+ * Follower status with job info
+ */
+export interface FollowerStatus {
+  id: string;
+  url: string;
+  busy: boolean;
+  dead: boolean;
+  currentJob: {
+    id: number;
+    name: string;
+    progress: number;
+  } | null;
+}
+
+/**
+ * Response for followers status endpoint
+ */
+export interface FollowersStatusResponse {
+  enabled: boolean;
+  followers: FollowerStatus[];
+  hasDeadFollowers: boolean;
+}
+
+/**
+ * Fetch followers status (leader mode only)
+ */
+export async function fetchFollowersStatus(): Promise<FollowersStatusResponse> {
+  const response = await fetch(`${API_BASE}/settings/followers`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch followers status');
+  }
+
+  return response.json();
+}
+
+/**
+ * Trigger retry sync for dead followers
+ */
+export async function retryFollowers(): Promise<{
+  success: boolean;
+  message: string;
+  hasDeadFollowers: boolean;
+}> {
+  const response = await fetch(`${API_BASE}/settings/followers/retry`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to retry followers');
+  }
+
+  return response.json();
+}

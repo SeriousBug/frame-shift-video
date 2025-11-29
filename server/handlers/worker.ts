@@ -2,12 +2,44 @@
  * Worker endpoints for follower instances
  */
 
-import { followerExecutor } from '../index';
+import { followerExecutor, leaderDistributor } from '../index';
 import { logger, captureException } from '../../src/lib/sentry';
 import { parseAuthHeader, verifyAuthHeader } from '../auth';
 import { ExecuteJobRequest, FollowerStatus } from '../follower-executor';
 import { JobService } from '../db-service';
 import { WSBroadcaster } from '../websocket';
+
+/**
+ * Helper to broadcast enriched follower status via WebSocket
+ */
+function broadcastFollowerStatus() {
+  if (!leaderDistributor) return;
+
+  const followerStatus = leaderDistributor.getFollowerStatus();
+  const enrichedStatus = followerStatus.map((follower) => {
+    let currentJob: { id: number; name: string; progress: number } | null =
+      null;
+    if (follower.currentJobId !== null) {
+      const job = JobService.getById(follower.currentJobId);
+      if (job) {
+        currentJob = {
+          id: job.id,
+          name: job.name,
+          progress: job.progress ?? 0,
+        };
+      }
+    }
+    return {
+      id: follower.id,
+      url: follower.url,
+      busy: follower.busy,
+      dead: follower.dead,
+      currentJob,
+    };
+  });
+
+  WSBroadcaster.broadcastFollowerStatus(enrichedStatus);
+}
 
 /**
  * GET /worker/status
@@ -375,6 +407,9 @@ export async function receiveProgressHandler(
       frame: update.frame,
       fps: update.fps,
     });
+
+    // Also broadcast follower status with updated progress
+    broadcastFollowerStatus();
 
     logger.debug('[Worker] Received progress update', {
       jobId,

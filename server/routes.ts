@@ -15,6 +15,10 @@ import {
   getWorkerStatusHandler,
   cancelJobOnWorkerHandler,
 } from './handlers/worker';
+import {
+  getFollowersStatusHandler,
+  retryFollowersHandler,
+} from './handlers/settings';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
 
@@ -85,6 +89,14 @@ const wrappedGetWorkerStatusHandler = withErrorHandler(
 const wrappedCancelJobOnWorkerHandler = withErrorHandler(
   cancelJobOnWorkerHandler,
   'CancelJobOnWorkerHandler',
+);
+const wrappedGetFollowersStatusHandler = withErrorHandler(
+  getFollowersStatusHandler,
+  'GetFollowersStatusHandler',
+);
+const wrappedRetryFollowersHandler = withErrorHandler(
+  retryFollowersHandler,
+  'RetryFollowersHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -176,6 +188,16 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: POST /api/notifications/test
     if (pathname === '/api/notifications/test' && req.method === 'POST') {
       return await wrappedTestNotificationHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/settings/followers
+    if (pathname === '/api/settings/followers' && req.method === 'GET') {
+      return await wrappedGetFollowersStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /api/settings/followers/retry
+    if (pathname === '/api/settings/followers/retry' && req.method === 'POST') {
+      return await wrappedRetryFollowersHandler(req, corsHeaders);
     }
 
     // Route: POST /worker/execute (follower endpoint)

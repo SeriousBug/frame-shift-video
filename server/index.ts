@@ -94,6 +94,7 @@ if (INSTANCE_TYPE !== 'follower') {
 // Follower instances don't run the job processor
 let processor: JobProcessor | null = null;
 export let followerExecutor: FollowerExecutor | null = null;
+export let leaderDistributor: LeaderDistributor | null = null;
 
 if (INSTANCE_TYPE === 'follower') {
   // Follower mode: Initialize follower executor
@@ -117,8 +118,6 @@ if (INSTANCE_TYPE === 'follower') {
 } else {
   // Standalone or Leader mode: Initialize job processor
   try {
-    let leaderDistributor: LeaderDistributor | undefined;
-
     // If leader mode, create distributor and sync with followers
     if (INSTANCE_TYPE === 'leader') {
       leaderDistributor = new LeaderDistributor({
@@ -144,7 +143,7 @@ if (INSTANCE_TYPE === 'follower') {
       // Create processor first
       processor = JobProcessor.getInstance({
         checkInterval: 60000, // Check every minute
-        leaderDistributor,
+        leaderDistributor: leaderDistributor ?? undefined,
       });
 
       // Sync active jobs from followers to processor
@@ -158,15 +157,46 @@ if (INSTANCE_TYPE === 'follower') {
       // Standalone mode
       processor = JobProcessor.getInstance({
         checkInterval: 60000, // Check every minute
-        leaderDistributor,
+        leaderDistributor: leaderDistributor ?? undefined,
       });
     }
+
+    // Helper to broadcast follower status (leader mode only)
+    const broadcastFollowerStatusIfLeader = () => {
+      if (!leaderDistributor) return;
+
+      const followerStatus = leaderDistributor.getFollowerStatus();
+      const enrichedStatus = followerStatus.map((follower) => {
+        let currentJob: { id: number; name: string; progress: number } | null =
+          null;
+        if (follower.currentJobId !== null) {
+          const job = JobService.getById(follower.currentJobId);
+          if (job) {
+            currentJob = {
+              id: job.id,
+              name: job.name,
+              progress: job.progress ?? 0,
+            };
+          }
+        }
+        return {
+          id: follower.id,
+          url: follower.url,
+          busy: follower.busy,
+          dead: follower.dead,
+          currentJob,
+        };
+      });
+
+      WSBroadcaster.broadcastFollowerStatus(enrichedStatus);
+    };
 
     // Set up event listeners for job processor to broadcast via WebSocket
     processor.on('job:start', (job: Job) => {
       logger.info('[JobProcessor] Job started', { jobId: job.id });
       WSBroadcaster.broadcastJobUpdate(job);
       WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+      broadcastFollowerStatusIfLeader();
     });
 
     processor.on('job:progress', (job: Job, progress: any) => {
@@ -175,13 +205,15 @@ if (INSTANCE_TYPE === 'follower') {
         frame: progress.frame,
         fps: progress.fps,
       });
-      // Note: Status counts don't change during progress, only when job status changes
+      // Also broadcast follower status since job progress changed
+      broadcastFollowerStatusIfLeader();
     });
 
     processor.on('job:complete', (job: Job) => {
       logger.info('[JobProcessor] Job completed', { jobId: job.id });
       WSBroadcaster.broadcastJobUpdate(job);
       WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+      broadcastFollowerStatusIfLeader();
     });
 
     processor.on('job:fail', (job: Job) => {
@@ -191,6 +223,7 @@ if (INSTANCE_TYPE === 'follower') {
       });
       WSBroadcaster.broadcastJobUpdate(job);
       WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
+      broadcastFollowerStatusIfLeader();
     });
 
     // Start the processor

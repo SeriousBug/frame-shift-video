@@ -81,7 +81,13 @@ function IndexComponent() {
           </AppErrorBoundary>
         </div>
 
-        <div className="mt-8 text-center">
+        <div className="mt-8 text-center flex items-center justify-center gap-4">
+          <Link
+            to="/settings"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-sm"
+          >
+            Settings
+          </Link>
           <button
             onClick={handleTestNotification}
             disabled={testNotificationStatus === 'loading'}
@@ -96,18 +102,18 @@ function IndexComponent() {
               'Test Notification'
             )}
           </button>
-          {testNotificationMessage && (
-            <p
-              className={`mt-2 text-sm ${
-                testNotificationStatus === 'success'
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-red-600 dark:text-red-400'
-              }`}
-            >
-              {testNotificationMessage}
-            </p>
-          )}
         </div>
+        {testNotificationMessage && (
+          <p
+            className={`mt-2 text-sm text-center ${
+              testNotificationStatus === 'success'
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            {testNotificationMessage}
+          </p>
+        )}
       </main>
     </div>
   );
