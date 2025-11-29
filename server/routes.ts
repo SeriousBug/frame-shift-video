@@ -8,7 +8,20 @@ import {
   getPickerStateHandler,
   pickerActionHandler,
 } from './handlers/file-picker';
-import { testNotificationHandler } from './handlers/notifications';
+import {
+  testNotificationHandler,
+  notificationStatusHandler,
+} from './handlers/notifications';
+import {
+  executeJobHandler,
+  receiveProgressHandler,
+  getWorkerStatusHandler,
+  cancelJobOnWorkerHandler,
+} from './handlers/worker';
+import {
+  getFollowersStatusHandler,
+  retryFollowersHandler,
+} from './handlers/settings';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
 
@@ -63,6 +76,34 @@ const wrappedPickerActionHandler = withErrorHandler(
 const wrappedTestNotificationHandler = withErrorHandler(
   testNotificationHandler,
   'TestNotificationHandler',
+);
+const wrappedNotificationStatusHandler = withErrorHandler(
+  notificationStatusHandler,
+  'NotificationStatusHandler',
+);
+const wrappedExecuteJobHandler = withErrorHandler(
+  executeJobHandler,
+  'ExecuteJobHandler',
+);
+const wrappedReceiveProgressHandler = withErrorHandler(
+  receiveProgressHandler,
+  'ReceiveProgressHandler',
+);
+const wrappedGetWorkerStatusHandler = withErrorHandler(
+  getWorkerStatusHandler,
+  'GetWorkerStatusHandler',
+);
+const wrappedCancelJobOnWorkerHandler = withErrorHandler(
+  cancelJobOnWorkerHandler,
+  'CancelJobOnWorkerHandler',
+);
+const wrappedGetFollowersStatusHandler = withErrorHandler(
+  getFollowersStatusHandler,
+  'GetFollowersStatusHandler',
+);
+const wrappedRetryFollowersHandler = withErrorHandler(
+  retryFollowersHandler,
+  'RetryFollowersHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -151,9 +192,48 @@ export async function setupRoutes(req: Request): Promise<Response> {
       return getSettingsResponse(corsHeaders);
     }
 
+    // Route: GET /api/notifications/status
+    if (pathname === '/api/notifications/status' && req.method === 'GET') {
+      return await wrappedNotificationStatusHandler(req, corsHeaders);
+    }
+
     // Route: POST /api/notifications/test
     if (pathname === '/api/notifications/test' && req.method === 'POST') {
       return await wrappedTestNotificationHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/settings/followers
+    if (pathname === '/api/settings/followers' && req.method === 'GET') {
+      return await wrappedGetFollowersStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /api/settings/followers/retry
+    if (pathname === '/api/settings/followers/retry' && req.method === 'POST') {
+      return await wrappedRetryFollowersHandler(req, corsHeaders);
+    }
+
+    // Route: POST /worker/execute (follower endpoint)
+    if (pathname === '/worker/execute' && req.method === 'POST') {
+      return await wrappedExecuteJobHandler(req, corsHeaders);
+    }
+
+    // Route: GET /worker/status (follower endpoint)
+    if (pathname === '/worker/status' && req.method === 'GET') {
+      return await wrappedGetWorkerStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /worker/cancel/:jobId (follower endpoint)
+    const workerCancelMatch = pathname.match(/^\/worker\/cancel\/(\d+)$/);
+    if (workerCancelMatch && req.method === 'POST') {
+      const jobId = parseInt(workerCancelMatch[1], 10);
+      return await wrappedCancelJobOnWorkerHandler(req, jobId, corsHeaders);
+    }
+
+    // Route: POST /api/jobs/:id/progress (leader endpoint to receive progress from followers)
+    const jobProgressMatch = pathname.match(/^\/api\/jobs\/(\d+)\/progress$/);
+    if (jobProgressMatch && req.method === 'POST') {
+      const jobId = parseInt(jobProgressMatch[1], 10);
+      return await wrappedReceiveProgressHandler(req, jobId, corsHeaders);
     }
 
     // 404 Not Found

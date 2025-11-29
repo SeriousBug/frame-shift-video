@@ -169,6 +169,12 @@ const MIGRATIONS = [
   `
     ALTER TABLE jobs ADD COLUMN ffmpeg_stderr TEXT;
   `,
+  // Migration 13: Add worker tracking fields for leader-follower architecture
+  `
+    ALTER TABLE jobs ADD COLUMN assigned_worker TEXT;
+    ALTER TABLE jobs ADD COLUMN worker_last_seen DATETIME;
+    CREATE INDEX IF NOT EXISTS idx_jobs_assigned_worker ON jobs(assigned_worker);
+  `,
 ];
 
 /**

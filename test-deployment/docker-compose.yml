@@ -1,0 +1,87 @@
+services:
+  # Leader instance - serves UI and manages jobs
+  frame-shift-leader:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: frame-shift-leader-test
+    ports:
+      - '3001:3001'
+    volumes:
+      # Mount code for development (changes reflected immediately)
+      - ../server:/app/server
+      - ../src:/app/src
+      # Shared media directory for testing
+      - ../test-videos:/media
+      # Persistent database
+      - ./leader-data:/app/data
+    environment:
+      - PORT=3001
+      - FRAME_SHIFT_HOME=/media
+      - INSTANCE_TYPE=leader
+      - SHARED_TOKEN=test-shared-token-change-in-production
+      - FOLLOWER_URLS=http://frame-shift-follower1:3001,http://frame-shift-follower2:3001
+      # Optional: Enable Sentry for testing
+      # - SENTRY_SERVER_DSN=your-dsn-here
+      # - SENTRY_ENVIRONMENT=test
+    restart: unless-stopped
+    networks:
+      - frame-shift-test
+
+  # Follower instance 1 - executes FFmpeg jobs
+  frame-shift-follower1:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: frame-shift-follower1-test
+    ports:
+      - '3002:3001'
+    volumes:
+      # Mount code for development
+      - ../server:/app/server
+      - ../src:/app/src
+      # CRITICAL: Same mount path as leader
+      - ../test-videos:/media
+      # Persistent database
+      - ./follower1-data:/app/data
+    environment:
+      - PORT=3001
+      - INSTANCE_TYPE=follower
+      - SHARED_TOKEN=test-shared-token-change-in-production
+      - LEADER_URL=http://frame-shift-leader:3001
+      # Control FFmpeg threads per follower
+      - FFMPEG_THREADS=4
+    restart: unless-stopped
+    networks:
+      - frame-shift-test
+
+  # Follower instance 2 - executes FFmpeg jobs
+  frame-shift-follower2:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: frame-shift-follower2-test
+    ports:
+      - '3003:3001'
+    volumes:
+      # Mount code for development
+      - ../server:/app/server
+      - ../src:/app/src
+      # CRITICAL: Same mount path as leader
+      - ../test-videos:/media
+      # Persistent database
+      - ./follower2-data:/app/data
+    environment:
+      - PORT=3001
+      - INSTANCE_TYPE=follower
+      - SHARED_TOKEN=test-shared-token-change-in-production
+      - LEADER_URL=http://frame-shift-leader:3001
+      # Control FFmpeg threads per follower
+      - FFMPEG_THREADS=4
+    restart: unless-stopped
+    networks:
+      - frame-shift-test
+
+networks:
+  frame-shift-test:
+    driver: bridge

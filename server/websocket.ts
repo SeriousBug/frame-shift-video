@@ -159,4 +159,30 @@ export const WSBroadcaster = {
   getClientCount() {
     return clients.size;
   },
+
+  broadcastFollowerStatus(
+    followers: Array<{
+      id: string;
+      url: string;
+      busy: boolean;
+      dead: boolean;
+      currentJob: { id: number; name: string; progress: number } | null;
+    }>,
+  ) {
+    const message = JSON.stringify({
+      type: 'followers:status',
+      data: { followers },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug('[WebSocket] Error sending followers:status to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        clients.delete(client);
+      }
+    });
+  },
 };
