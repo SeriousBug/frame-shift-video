@@ -15,6 +15,8 @@ import { serveStatic } from './static';
 import { FileSelectionService, JobService } from './db-service';
 import { cleanupAllTempFiles } from './temp-file-service';
 import { captureException } from '../src/lib/sentry';
+import { collectSystemStatus, type NodeSystemStatus } from './system-status';
+import { updateFollowerSystemStatus } from './handlers/settings';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -301,9 +303,61 @@ const server = Bun.serve({
 
 logger.info('[Server] Started successfully', { port: PORT });
 
+// System status monitoring interval (10 seconds)
+const SYSTEM_STATUS_INTERVAL = 10000;
+let systemStatusIntervalId: NodeJS.Timeout | null = null;
+
+// Start system status broadcasting (only on standalone/leader instances)
+if (INSTANCE_TYPE !== 'follower') {
+  // Determine node ID for local instance
+  const localNodeId = INSTANCE_TYPE === 'leader' ? 'leader' : 'standalone';
+
+  // Initial CPU sample (first call returns 0, this primes the calculation)
+  collectSystemStatus(localNodeId);
+
+  systemStatusIntervalId = setInterval(async () => {
+    try {
+      // Collect local system status
+      const localStatus = collectSystemStatus(localNodeId);
+      const nodes: NodeSystemStatus[] = [localStatus];
+
+      // For leader mode, fetch follower statuses
+      if (INSTANCE_TYPE === 'leader' && leaderDistributor) {
+        const followerStatuses =
+          await leaderDistributor.fetchFollowerSystemStatuses();
+
+        // Store the follower statuses for the API endpoint
+        for (const [followerId, status] of followerStatuses) {
+          updateFollowerSystemStatus(followerId, status);
+          nodes.push(status);
+        }
+      }
+
+      // Broadcast system status via WebSocket
+      WSBroadcaster.broadcastSystemStatus(INSTANCE_TYPE, nodes);
+
+      logger.debug('[SystemStatus] Broadcasted status update', {
+        instanceType: INSTANCE_TYPE,
+        nodeCount: nodes.length,
+      });
+    } catch (error) {
+      logger.error('[SystemStatus] Error collecting/broadcasting status', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, SYSTEM_STATUS_INTERVAL);
+
+  logger.info('[SystemStatus] Monitoring started', {
+    intervalMs: SYSTEM_STATUS_INTERVAL,
+  });
+}
+
 // Graceful shutdown
 process.on('SIGINT', () => {
   logger.info('[Server] Shutting down (SIGINT)');
+  if (systemStatusIntervalId) {
+    clearInterval(systemStatusIntervalId);
+  }
   if (processor) {
     processor.stop();
   }
@@ -313,6 +367,9 @@ process.on('SIGINT', () => {
 
 process.on('SIGTERM', () => {
   logger.info('[Server] Shutting down (SIGTERM)');
+  if (systemStatusIntervalId) {
+    clearInterval(systemStatusIntervalId);
+  }
   if (processor) {
     processor.stop();
   }

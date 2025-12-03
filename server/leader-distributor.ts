@@ -10,6 +10,7 @@ import { FFmpegProgress } from '../src/lib/ffmpeg-executor';
 import { JobService } from './db-service';
 import { logger, captureException } from '../src/lib/sentry';
 import { generateAuthHeader, formatAuthHeader } from './auth';
+import { type NodeSystemStatus } from './system-status';
 
 /**
  * Follower instance configuration
@@ -609,5 +610,57 @@ export class LeaderDistributor extends EventEmitter {
       this.deadCheckIntervalId = null;
     }
     logger.info('[LeaderDistributor] Stopped');
+  }
+
+  /**
+   * Fetch system status from all alive followers
+   * Returns a map of follower ID to their system status
+   */
+  async fetchFollowerSystemStatuses(): Promise<Map<string, NodeSystemStatus>> {
+    const results = new Map<string, NodeSystemStatus>();
+
+    const aliveFollowers = this.followers.filter(
+      (f) => !this.deadFollowers.has(f.id),
+    );
+
+    await Promise.all(
+      aliveFollowers.map(async (follower) => {
+        try {
+          const authHeader = generateAuthHeader('', this.config.sharedToken);
+
+          const response = await fetch(`${follower.url}/worker/system-status`, {
+            method: 'GET',
+            headers: {
+              'X-Auth': formatAuthHeader(authHeader),
+            },
+          });
+
+          if (response.ok) {
+            const status: NodeSystemStatus = await response.json();
+            // Ensure the nodeId matches our follower ID
+            status.nodeId = follower.id;
+            results.set(follower.id, status);
+          } else {
+            logger.warn(
+              '[LeaderDistributor] Failed to fetch system status from follower',
+              {
+                followerId: follower.id,
+                status: response.status,
+              },
+            );
+          }
+        } catch (error: any) {
+          logger.warn(
+            '[LeaderDistributor] Error fetching system status from follower',
+            {
+              followerId: follower.id,
+              error: error.message,
+            },
+          );
+        }
+      }),
+    );
+
+    return results;
   }
 }
