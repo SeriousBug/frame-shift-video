@@ -6,6 +6,7 @@ import {
   OutputFormat,
   EncodingPreset,
   AudioCodec,
+  AudioQuality,
   BitrateMode,
 } from '@/types/conversion';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
@@ -563,29 +564,50 @@ export function ConversionConfig({
                   </select>
                 </div>
 
-                {options.advanced.audio.codec !== 'copy' && (
+                {options.advanced.audio.codec !== 'copy' &&
+                  options.advanced.audio.codec !== 'flac' && (
+                    <div>
+                      <label
+                        htmlFor="audio-quality"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                      >
+                        Audio Quality
+                      </label>
+                      <select
+                        id="audio-quality"
+                        value={options.advanced.audio.quality}
+                        onChange={(e) =>
+                          updateAdvancedOption('audio', {
+                            ...options.advanced.audio,
+                            quality: e.target.value as AudioQuality,
+                          })
+                        }
+                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="low">Low - Smaller files</option>
+                        <option value="medium">Medium - Balanced</option>
+                        <option value="high">High - Best quality</option>
+                      </select>
+                    </div>
+                  )}
+                {options.advanced.audio.codec === 'flac' && (
                   <div>
-                    <label
-                      htmlFor="audio-bitrate"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                    >
-                      Audio Bitrate (kbps)
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Audio Quality
                     </label>
-                    <input
-                      id="audio-bitrate"
-                      type="number"
-                      value={options.advanced.audio.bitrate || ''}
-                      onChange={(e) =>
-                        updateAdvancedOption('audio', {
-                          ...options.advanced.audio,
-                          bitrate: e.target.value
-                            ? parseInt(e.target.value)
-                            : undefined,
-                        })
-                      }
-                      placeholder="e.g., 128"
-                      className="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Automatically determined
+                    </div>
+                  </div>
+                )}
+                {options.advanced.audio.codec === 'copy' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Audio Quality
+                    </label>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Same as source video
+                    </div>
                   </div>
                 )}
               </div>

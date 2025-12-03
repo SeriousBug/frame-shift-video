@@ -52,6 +52,18 @@ export type AudioCodec =
   | 'copy';
 
 /**
+ * Audio quality presets for simplified bitrate selection
+ * Maps to VBR settings for supported codecs (AAC, Opus) or CBR for AC3
+ */
+export type AudioQuality =
+  /** Lower quality, smaller file size */
+  | 'low'
+  /** Balanced quality and file size (default) */
+  | 'medium'
+  /** Higher quality, larger file size */
+  | 'high';
+
+/**
  * Bitrate control mode for video encoding
  */
 export type BitrateMode =
@@ -129,12 +141,11 @@ export interface AdvancedConversionOptions {
     /** Audio codec (maps to -c:a flag) */
     codec: AudioCodec;
     /**
-     * Audio bitrate in kbps (maps to -b:a flag)
-     * Opus: 96k (stereo), 128k (stereo high), 256k (5.1)
-     * AAC: 128k (stereo), 192k (stereo high), 384k (5.1)
-     * AC3: 192k (stereo), 448k (5.1 standard)
+     * Audio quality preset (low, medium, high)
+     * Maps to VBR quality settings for AAC/Opus, CBR for AC3
+     * Ignored for FLAC (always lossless) and copy mode
      */
-    bitrate?: number;
+    quality: AudioQuality;
     /** Sample rate in Hz (maps to -ar flag) */
     sampleRate?: number;
     /** Number of audio channels (maps to -ac flag) */
@@ -181,8 +192,8 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
       copyOriginal: true,
     },
     audio: {
-      codec: 'copy',
-      bitrate: 128,
+      codec: 'libopus',
+      quality: 'high',
     },
   },
 };

@@ -3,7 +3,54 @@
  */
 
 import path from 'path';
-import { ConversionOptions } from '@/types/conversion';
+import {
+  ConversionOptions,
+  AudioCodec,
+  AudioQuality,
+} from '@/types/conversion';
+
+/**
+ * Get FFmpeg audio encoding arguments based on codec and quality preset
+ *
+ * VBR support by codec:
+ * - AAC: Full VBR support using -q:a (0.1-2 scale, lower = better)
+ * - Opus: VBR by default, uses -compression_level (0-10, 0 = best quality)
+ * - AC3: CBR only, uses specific bitrates
+ * - FLAC: Lossless, no bitrate/quality settings needed
+ */
+function getAudioQualityArgs(
+  codec: AudioCodec,
+  quality: AudioQuality,
+): string[] {
+  switch (codec) {
+    case 'aac':
+      // AAC VBR quality scale: 0.1-2 (lower = higher quality)
+      const aacQuality = { low: '2', medium: '1.5', high: '1' }[quality];
+      return ['-q:a', aacQuality];
+
+    case 'libopus':
+      // Opus: VBR is default, compression_level 0-10 (0 = best quality, slowest)
+      const opusLevel = { low: '10', medium: '5', high: '0' }[quality];
+      return ['-compression_level', opusLevel];
+
+    case 'ac3':
+      // AC3: CBR only, use standard bitrates
+      // These work well for both stereo and 5.1 content
+      const ac3Bitrate = { low: '384k', medium: '448k', high: '640k' }[quality];
+      return ['-b:a', ac3Bitrate];
+
+    case 'flac':
+      // FLAC: Lossless, no bitrate settings - just use default compression
+      return [];
+
+    case 'copy':
+      // Copy mode: no additional settings
+      return [];
+
+    default:
+      return [];
+  }
+}
 
 /**
  * Individual FFmpeg job configuration for a single file
@@ -135,10 +182,12 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
   if (options.advanced.audio.codec !== 'copy') {
     args.push('-c:a', escapeArgument(options.advanced.audio.codec));
 
-    // Audio bitrate
-    if (options.advanced.audio.bitrate) {
-      args.push('-b:a', escapeArgument(`${options.advanced.audio.bitrate}k`));
-    }
+    // Audio quality (VBR for AAC/Opus, CBR for AC3, none for FLAC)
+    const qualityArgs = getAudioQualityArgs(
+      options.advanced.audio.codec,
+      options.advanced.audio.quality,
+    );
+    qualityArgs.forEach((arg) => args.push(escapeArgument(arg)));
 
     // Audio sample rate
     if (options.advanced.audio.sampleRate) {
