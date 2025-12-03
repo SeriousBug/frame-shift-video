@@ -7,6 +7,7 @@ import {
   DEFAULT_CONVERSION_OPTIONS,
   VideoCodec,
   AudioCodec,
+  AudioQuality,
   EncodingPreset,
   BitrateMode,
   OutputFormat,
@@ -35,8 +36,8 @@ describe('Conversion Types', () => {
             copyOriginal: true,
           },
           audio: {
-            codec: 'copy',
-            bitrate: 128,
+            codec: 'libopus',
+            quality: 'high',
           },
         },
       });
@@ -57,9 +58,9 @@ describe('Conversion Types', () => {
       // Should use CRF mode (quality-based)
       expect(defaults.advanced.bitrate.mode).toBe('crf');
 
-      // Audio should be copy (preserve original)
-      expect(defaults.advanced.audio.codec).toBe('copy');
-      expect(defaults.advanced.audio.bitrate).toBe(128);
+      // Audio should be Opus with high quality (best quality/size ratio)
+      expect(defaults.advanced.audio.codec).toBe('libopus');
+      expect(defaults.advanced.audio.quality).toBe('high');
     });
   });
 
@@ -161,7 +162,7 @@ describe('Conversion Types', () => {
           },
           audio: {
             codec: 'aac',
-            bitrate: 192,
+            quality: 'high',
             sampleRate: 48000,
             channels: 2,
           },
@@ -196,6 +197,7 @@ describe('Conversion Types', () => {
           },
           audio: {
             codec: 'copy',
+            quality: 'medium',
           },
         },
       };
@@ -225,28 +227,28 @@ describe('Conversion Types', () => {
     });
   });
 
-  describe('Audio bitrate recommendations', () => {
-    it('should have appropriate bitrates for different codecs', () => {
-      // Opus recommendations
-      const opusStereo = 128; // Good for stereo
-      const opus51 = 256; // Good for 5.1
+  describe('Audio quality presets', () => {
+    it('should have valid quality preset options', () => {
+      const validQualities: AudioQuality[] = ['low', 'medium', 'high'];
+      validQualities.forEach((quality) => {
+        expect(['low', 'medium', 'high']).toContain(quality);
+      });
+    });
 
-      expect(opusStereo).toBeGreaterThanOrEqual(96);
-      expect(opus51).toBeGreaterThanOrEqual(256);
+    it('should allow quality presets for all lossy codecs', () => {
+      // Quality presets work for AAC, Opus, and AC3
+      const lossyCodecs: AudioCodec[] = ['aac', 'libopus', 'ac3'];
+      const qualities: AudioQuality[] = ['low', 'medium', 'high'];
 
-      // AAC recommendations
-      const aacStereo = 128;
-      const aac51 = 384;
-
-      expect(aacStereo).toBeGreaterThanOrEqual(128);
-      expect(aac51).toBeGreaterThanOrEqual(384);
-
-      // AC3 recommendations
-      const ac3Stereo = 192;
-      const ac351 = 448;
-
-      expect(ac3Stereo).toBeGreaterThanOrEqual(192);
-      expect(ac351).toBeGreaterThanOrEqual(448);
+      lossyCodecs.forEach((codec) => {
+        qualities.forEach((quality) => {
+          const config = {
+            codec,
+            quality,
+          };
+          expect(config.quality).toBeDefined();
+        });
+      });
     });
   });
 });

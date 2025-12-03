@@ -89,7 +89,9 @@ describe('FFmpeg Command Generation', () => {
         '-preset',
         'slow',
         '-c:a',
-        'copy',
+        'libopus',
+        '-compression_level',
+        '0', // high quality
         '-sn', // No subtitles when subtitleCodecs is not provided
         '-progress',
         'pipe:1',
@@ -98,7 +100,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -map 0 -c:v libx265 -crf 22 -preset slow -c:a copy -sn -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -map 0 -c:v libx265 -crf 22 -preset slow -c:a libopus -compression_level 0 -sn -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');
@@ -420,7 +422,7 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).toContain('libsvtav1');
     });
 
-    it('should handle different audio codecs', () => {
+    it('should handle AAC codec with VBR quality', () => {
       const aacConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -430,7 +432,7 @@ describe('FFmpeg Command Generation', () => {
             ...basicOptions.advanced,
             audio: {
               codec: 'aac',
-              bitrate: 192,
+              quality: 'high',
             },
           },
         },
@@ -440,8 +442,85 @@ describe('FFmpeg Command Generation', () => {
       const command = generateFFmpegCommand(aacConfig);
       expect(command.args).toContain('-c:a');
       expect(command.args).toContain('aac');
+      // AAC uses -q:a for VBR quality
+      expect(command.args).toContain('-q:a');
+      expect(command.args).toContain('1'); // high quality = 1
+    });
+
+    it('should handle Opus codec with compression level', () => {
+      const opusConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.webm',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            audio: {
+              codec: 'libopus',
+              quality: 'high',
+            },
+          },
+        },
+        jobName: 'Opus Test',
+      };
+
+      const command = generateFFmpegCommand(opusConfig);
+      expect(command.args).toContain('-c:a');
+      expect(command.args).toContain('libopus');
+      // Opus uses -compression_level
+      expect(command.args).toContain('-compression_level');
+      expect(command.args).toContain('0'); // high quality = 0
+    });
+
+    it('should handle AC3 codec with CBR bitrate', () => {
+      const ac3Config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mkv',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            audio: {
+              codec: 'ac3',
+              quality: 'high',
+            },
+          },
+        },
+        jobName: 'AC3 Test',
+      };
+
+      const command = generateFFmpegCommand(ac3Config);
+      expect(command.args).toContain('-c:a');
+      expect(command.args).toContain('ac3');
+      // AC3 uses CBR bitrate
       expect(command.args).toContain('-b:a');
-      expect(command.args).toContain('192k');
+      expect(command.args).toContain('640k'); // high quality = 640k
+    });
+
+    it('should handle FLAC codec without quality settings', () => {
+      const flacConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mkv',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            audio: {
+              codec: 'flac',
+              quality: 'high', // Ignored for FLAC
+            },
+          },
+        },
+        jobName: 'FLAC Test',
+      };
+
+      const command = generateFFmpegCommand(flacConfig);
+      expect(command.args).toContain('-c:a');
+      expect(command.args).toContain('flac');
+      // FLAC is lossless, no quality/bitrate settings
+      expect(command.args).not.toContain('-q:a');
+      expect(command.args).not.toContain('-b:a');
+      expect(command.args).not.toContain('-compression_level');
     });
 
     it('should include -map 0 to copy all audio and subtitle tracks', () => {
@@ -468,7 +547,7 @@ describe('FFmpeg Command Generation', () => {
   });
 
   describe('Subtitle Handling', () => {
-    it('should copy subtitles when format is ASS', () => {
+    it('should convert ASS subtitles to ASS (text format)', () => {
       const assConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -479,11 +558,11 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(assConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should copy subtitles when format is SSA', () => {
+    it('should convert SSA subtitles to ASS (text format)', () => {
       const ssaConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -494,11 +573,11 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(ssaConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should copy subtitles when format is SRT', () => {
+    it('should convert SRT subtitles to ASS (text format)', () => {
       const srtConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -509,11 +588,11 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(srtConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should copy subtitles when format is SubRip', () => {
+    it('should convert SubRip subtitles to ASS (text format)', () => {
       const subripConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -524,7 +603,7 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(subripConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
