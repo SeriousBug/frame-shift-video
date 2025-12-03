@@ -434,3 +434,46 @@ export async function retryFollowers(): Promise<{
 
   return response.json();
 }
+
+/**
+ * System status for a single node
+ */
+export interface NodeSystemStatus {
+  /** Node identifier (e.g., "standalone", "leader", "follower-0") */
+  nodeId: string;
+  /** CPU usage percentage (0-100) */
+  cpuUsagePercent: number;
+  /** Number of CPU cores */
+  cpuCores: number;
+  /** Memory used in bytes */
+  memoryUsedBytes: number;
+  /** Total memory in bytes */
+  memoryTotalBytes: number;
+  /** Memory usage percentage (0-100) */
+  memoryUsagePercent: number;
+  /** Timestamp when this status was collected */
+  timestamp: number;
+}
+
+/**
+ * System status response
+ */
+export interface SystemStatusResponse {
+  /** Instance type: standalone, leader, or follower */
+  instanceType: 'standalone' | 'leader' | 'follower';
+  /** Status of all nodes */
+  nodes: NodeSystemStatus[];
+}
+
+/**
+ * Fetch system status for all nodes
+ */
+export async function fetchSystemStatus(): Promise<SystemStatusResponse> {
+  const response = await fetch(`${API_BASE}/settings/system-status`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch system status');
+  }
+
+  return response.json();
+}

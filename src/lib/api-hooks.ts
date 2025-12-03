@@ -26,6 +26,7 @@ import {
   fetchFollowersStatus,
   retryFollowers,
   fetchNotificationStatus,
+  fetchSystemStatus,
   type PickerAction,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
@@ -41,6 +42,7 @@ export const queryKeys = {
   pickerState: (key: string) => ['picker-state', key] as const,
   followersStatus: ['followers-status'] as const,
   notificationStatus: ['notification-status'] as const,
+  systemStatus: ['system-status'] as const,
 };
 
 /**
@@ -298,5 +300,17 @@ export function useNotificationStatus() {
   return useQuery({
     queryKey: queryKeys.notificationStatus,
     queryFn: fetchNotificationStatus,
+  });
+}
+
+/**
+ * Hook to fetch system status
+ */
+export function useSystemStatus() {
+  return useQuery({
+    queryKey: queryKeys.systemStatus,
+    queryFn: fetchSystemStatus,
+    // Fallback polling every 30 seconds (WebSocket provides real-time updates)
+    refetchInterval: 30000,
   });
 }

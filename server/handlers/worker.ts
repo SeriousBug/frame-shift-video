@@ -8,6 +8,7 @@ import { parseAuthHeader, verifyAuthHeader } from '../auth';
 import { ExecuteJobRequest, FollowerStatus } from '../follower-executor';
 import { JobService } from '../db-service';
 import { WSBroadcaster } from '../websocket';
+import { collectSystemStatus, type NodeSystemStatus } from '../system-status';
 
 /**
  * Helper to broadcast enriched follower status via WebSocket
@@ -431,6 +432,92 @@ export async function receiveProgressHandler(
     return new Response(
       JSON.stringify({
         error: 'Failed to update progress',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
+
+/**
+ * GET /worker/system-status
+ * Get system status (CPU, memory) of this follower instance
+ */
+export async function getWorkerSystemStatusHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    // Verify this is a follower instance
+    if (!followerExecutor) {
+      return new Response(
+        JSON.stringify({
+          error: 'This endpoint is only available on follower instances',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    // Verify authentication
+    const authHeaderValue = req.headers.get('X-Auth');
+    if (!authHeaderValue) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authentication header' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    const sharedToken = process.env.SHARED_TOKEN!;
+    // For GET requests, we verify using an empty payload
+    const authHeader = parseAuthHeader(authHeaderValue);
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication header format' }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    if (!verifyAuthHeader('', authHeader, sharedToken)) {
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const workerId = followerExecutor.getWorkerId();
+    const systemStatus = collectSystemStatus(workerId);
+
+    logger.debug('[Worker] System status requested', {
+      workerId,
+      cpuUsage: systemStatus.cpuUsagePercent,
+      memoryUsage: systemStatus.memoryUsagePercent,
+    });
+
+    return new Response(JSON.stringify(systemStatus), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  } catch (error) {
+    logger.error('[Worker] Error getting system status', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to get system status',
         details: error instanceof Error ? error.message : String(error),
       }),
       {

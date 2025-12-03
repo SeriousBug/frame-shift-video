@@ -1,6 +1,7 @@
 import { ServerWebSocket } from 'bun';
 import { Job } from '../src/types/database';
 import { logger, captureException } from '../src/lib/sentry';
+import { type NodeSystemStatus } from './system-status';
 
 interface WebSocketData {
   id: string;
@@ -179,6 +180,27 @@ export const WSBroadcaster = {
         client.send(message);
       } catch (error) {
         logger.debug('[WebSocket] Error sending followers:status to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        clients.delete(client);
+      }
+    });
+  },
+
+  broadcastSystemStatus(
+    instanceType: 'standalone' | 'leader' | 'follower',
+    nodes: NodeSystemStatus[],
+  ) {
+    const message = JSON.stringify({
+      type: 'system:status',
+      data: { instanceType, nodes },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug('[WebSocket] Error sending system:status to client', {
           error: error instanceof Error ? error.message : String(error),
         });
         clients.delete(client);

@@ -17,10 +17,12 @@ import {
   receiveProgressHandler,
   getWorkerStatusHandler,
   cancelJobOnWorkerHandler,
+  getWorkerSystemStatusHandler,
 } from './handlers/worker';
 import {
   getFollowersStatusHandler,
   retryFollowersHandler,
+  getSystemStatusHandler,
 } from './handlers/settings';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
@@ -97,6 +99,10 @@ const wrappedCancelJobOnWorkerHandler = withErrorHandler(
   cancelJobOnWorkerHandler,
   'CancelJobOnWorkerHandler',
 );
+const wrappedGetWorkerSystemStatusHandler = withErrorHandler(
+  getWorkerSystemStatusHandler,
+  'GetWorkerSystemStatusHandler',
+);
 const wrappedGetFollowersStatusHandler = withErrorHandler(
   getFollowersStatusHandler,
   'GetFollowersStatusHandler',
@@ -104,6 +110,10 @@ const wrappedGetFollowersStatusHandler = withErrorHandler(
 const wrappedRetryFollowersHandler = withErrorHandler(
   retryFollowersHandler,
   'RetryFollowersHandler',
+);
+const wrappedGetSystemStatusHandler = withErrorHandler(
+  getSystemStatusHandler,
+  'GetSystemStatusHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -212,6 +222,11 @@ export async function setupRoutes(req: Request): Promise<Response> {
       return await wrappedRetryFollowersHandler(req, corsHeaders);
     }
 
+    // Route: GET /api/settings/system-status
+    if (pathname === '/api/settings/system-status' && req.method === 'GET') {
+      return await wrappedGetSystemStatusHandler(req, corsHeaders);
+    }
+
     // Route: POST /worker/execute (follower endpoint)
     if (pathname === '/worker/execute' && req.method === 'POST') {
       return await wrappedExecuteJobHandler(req, corsHeaders);
@@ -220,6 +235,11 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: GET /worker/status (follower endpoint)
     if (pathname === '/worker/status' && req.method === 'GET') {
       return await wrappedGetWorkerStatusHandler(req, corsHeaders);
+    }
+
+    // Route: GET /worker/system-status (follower endpoint)
+    if (pathname === '/worker/system-status' && req.method === 'GET') {
+      return await wrappedGetWorkerSystemStatusHandler(req, corsHeaders);
     }
 
     // Route: POST /worker/cancel/:jobId (follower endpoint)

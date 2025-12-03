@@ -5,6 +5,11 @@
 import { leaderDistributor } from '../index';
 import { JobService } from '../db-service';
 import { logger, captureException } from '../../src/lib/sentry';
+import {
+  collectSystemStatus,
+  type NodeSystemStatus,
+  type SystemStatusResponse,
+} from '../system-status';
 
 /** Follower status with optional job info */
 export interface FollowerStatusResponse {
@@ -168,6 +173,115 @@ export async function retryFollowersHandler(
     return new Response(
       JSON.stringify({
         error: 'Failed to retry followers',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
+
+// Store follower system status received from followers
+const followerSystemStatus = new Map<string, NodeSystemStatus>();
+
+/**
+ * Update system status for a follower (called when follower reports status)
+ */
+export function updateFollowerSystemStatus(
+  followerId: string,
+  status: NodeSystemStatus,
+): void {
+  followerSystemStatus.set(followerId, status);
+}
+
+/**
+ * Clear system status for a follower (called when follower is marked as dead)
+ */
+export function clearFollowerSystemStatus(followerId: string): void {
+  followerSystemStatus.delete(followerId);
+}
+
+/**
+ * Get all stored follower system statuses
+ */
+export function getFollowerSystemStatuses(): Map<string, NodeSystemStatus> {
+  return followerSystemStatus;
+}
+
+/**
+ * GET /api/settings/system-status
+ * Get system status for all nodes
+ */
+export async function getSystemStatusHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    const instanceType = (process.env.INSTANCE_TYPE || 'standalone') as
+      | 'standalone'
+      | 'leader'
+      | 'follower';
+    const PORT = parseInt(process.env.PORT || '3001', 10);
+
+    // Determine node ID based on instance type
+    let nodeId: string;
+    if (instanceType === 'follower') {
+      nodeId = `follower-${PORT}`;
+    } else if (instanceType === 'leader') {
+      nodeId = 'leader';
+    } else {
+      nodeId = 'standalone';
+    }
+
+    // Collect local system status
+    const localStatus = collectSystemStatus(nodeId);
+    const nodes: NodeSystemStatus[] = [localStatus];
+
+    // For leader mode, include follower statuses
+    if (instanceType === 'leader' && leaderDistributor) {
+      const followerStatuses = leaderDistributor.getFollowerStatus();
+
+      for (const follower of followerStatuses) {
+        const storedStatus = followerSystemStatus.get(follower.id);
+        if (storedStatus && !follower.dead) {
+          // Use the stored status from the follower
+          nodes.push(storedStatus);
+        } else if (!follower.dead) {
+          // Follower is alive but we don't have status yet - add placeholder
+          nodes.push({
+            nodeId: follower.id,
+            cpuUsagePercent: 0,
+            cpuCores: 0,
+            memoryUsedBytes: 0,
+            memoryTotalBytes: 0,
+            memoryUsagePercent: 0,
+            timestamp: 0,
+          });
+        }
+        // Dead followers are excluded from the list
+      }
+    }
+
+    const response: SystemStatusResponse = {
+      instanceType,
+      nodes,
+    };
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  } catch (error) {
+    logger.error('[Settings] Error getting system status', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to get system status',
         details: error instanceof Error ? error.message : String(error),
       }),
       {
