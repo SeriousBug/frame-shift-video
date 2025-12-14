@@ -28,8 +28,8 @@ ARG VERSION
 
 WORKDIR /app
 
-# Install ffmpeg (Alpine version is much smaller)
-RUN apk add --no-cache ffmpeg
+# Install ffmpeg and tini (for proper PID 1 signal handling)
+RUN apk add --no-cache ffmpeg tini
 
 # Copy built frontend and bundled server from build stage
 COPY --from=build /app/dist ./dist
@@ -45,6 +45,9 @@ ENV NODE_ENV=production
 
 # Set app version for server
 ENV APP_VERSION=${VERSION}
+
+# Use tini as init to properly handle signals and reap zombies
+ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the bundled server
 CMD ["bun", "run", "dist/server.js"]
