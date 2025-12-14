@@ -50,7 +50,8 @@ services:
       - SHARED_TOKEN=test-shared-token-change-in-production
       - LEADER_URL=http://frame-shift-leader:3001
       # Control FFmpeg threads per follower
-      - FFMPEG_THREADS=4
+      - FFMPEG_DECODER_THREADS=4
+      - FFMPEG_ENCODER_THREADS=4
     restart: unless-stopped
     networks:
       - frame-shift-test
@@ -77,7 +78,8 @@ services:
       - SHARED_TOKEN=test-shared-token-change-in-production
       - LEADER_URL=http://frame-shift-leader:3001
       # Control FFmpeg threads per follower
-      - FFMPEG_THREADS=4
+      - FFMPEG_DECODER_THREADS=4
+      - FFMPEG_ENCODER_THREADS=4
     restart: unless-stopped
     networks:
       - frame-shift-test
