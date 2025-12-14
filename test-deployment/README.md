@@ -184,11 +184,12 @@ environment:
 
 ### Adjusting FFmpeg Threads
 
-Control how many threads each follower uses for encoding:
+Control how many threads each follower uses for decoding and encoding:
 
 ```yaml
 environment:
-  - FFMPEG_THREADS=8 # Adjust based on available CPU cores
+  - FFMPEG_DECODER_THREADS=4 # Threads for decoding input
+  - FFMPEG_ENCODER_THREADS=4 # Threads for encoding output
 ```
 
 ## Troubleshooting

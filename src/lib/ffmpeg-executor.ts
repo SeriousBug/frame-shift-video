@@ -187,10 +187,36 @@ export class FFmpegExecutor extends EventEmitter {
       return arg;
     });
 
-    // Prepend thread count if FFMPEG_THREADS is set
-    if (process.env.FFMPEG_THREADS) {
-      const threads = parseInt(process.env.FFMPEG_THREADS, 10);
-      processedArgs.unshift('-threads', threads.toString());
+    // Apply thread limiting if configured
+    // FFmpeg requires -threads in two places for full control:
+    // - Before -i: limits decoder threads
+    // - After -i: limits encoder threads
+    const decoderThreads = process.env.FFMPEG_DECODER_THREADS;
+    const encoderThreads = process.env.FFMPEG_ENCODER_THREADS;
+
+    if (decoderThreads || encoderThreads) {
+      const inputFlagIndex = processedArgs.indexOf('-i');
+
+      // Insert encoder threads AFTER the input file
+      if (
+        encoderThreads &&
+        inputFlagIndex !== -1 &&
+        inputFlagIndex + 1 < processedArgs.length
+      ) {
+        const threads = parseInt(encoderThreads, 10);
+        processedArgs.splice(
+          inputFlagIndex + 2,
+          0,
+          '-threads',
+          threads.toString(),
+        );
+      }
+
+      // Insert decoder threads BEFORE -i (at the beginning)
+      if (decoderThreads) {
+        const threads = parseInt(decoderThreads, 10);
+        processedArgs.unshift('-threads', threads.toString());
+      }
     }
 
     // Add dry run flag for testing

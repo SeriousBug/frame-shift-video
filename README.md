@@ -47,8 +47,9 @@ services:
       # Defaults to / if not specified
       - FRAME_SHIFT_HOME=/videos
 
-      # FFmpeg configuration (optional)
-      # - FFMPEG_THREADS=12
+      # FFmpeg thread limits (optional)
+      # - FFMPEG_DECODER_THREADS=4
+      # - FFMPEG_ENCODER_THREADS=4
 
       # Discord notifications (optional)
       # Get webhook URL from Discord Server Settings -> Integrations -> Webhooks
@@ -123,7 +124,7 @@ services:
       - INSTANCE_TYPE=follower
       - SHARED_TOKEN=your_secure_random_token_here # Must match leader
       - LEADER_URL=http://frame-shift-leader:3001
-      # Optional: FFMPEG_THREADS to control encoding threads
+      # Optional: FFMPEG_DECODER_THREADS and FFMPEG_ENCODER_THREADS to limit CPU usage
     restart: unless-stopped
 
   # Follower instance 2 - executes FFmpeg jobs
@@ -169,7 +170,8 @@ services:
 | `SHARED_TOKEN`            | Yes (leader/follower) | -                | Shared authentication token for distributed setup    |
 | `FOLLOWER_URLS`           | Yes (leader)          | -                | Comma-separated list of follower URLs                |
 | `LEADER_URL`              | Yes (follower)        | -                | URL of the leader instance                           |
-| `FFMPEG_THREADS`          | No                    | -                | Number of threads FFmpeg should use                  |
+| `FFMPEG_DECODER_THREADS`  | No                    | -                | Number of threads for FFmpeg decoding                |
+| `FFMPEG_ENCODER_THREADS`  | No                    | -                | Number of threads for FFmpeg encoding                |
 | `DISCORD_WEBHOOK_URL`     | No                    | -                | Discord webhook URL for notifications                |
 | `PUSHOVER_API_TOKEN`      | No                    | -                | Pushover application token                           |
 | `PUSHOVER_USER_KEY`       | No                    | -                | Pushover user key                                    |
