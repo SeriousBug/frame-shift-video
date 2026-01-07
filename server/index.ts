@@ -63,16 +63,25 @@ logger.info('[Config] Instance configuration', {
       : 0,
 });
 
-// Validate FFMPEG_THREADS environment variable if set
-if (process.env.FFMPEG_THREADS) {
-  const threads = parseInt(process.env.FFMPEG_THREADS, 10);
+// Validate FFmpeg thread environment variables if set
+function validateThreadEnv(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value) return undefined;
+  const threads = parseInt(value, 10);
   if (isNaN(threads) || threads <= 0) {
-    logger.error('[Config] Invalid FFMPEG_THREADS value', {
-      value: process.env.FFMPEG_THREADS,
-    });
+    logger.error(`[Config] Invalid ${name} value`, { value });
     process.exit(1);
   }
-  logger.info('[Config] FFmpeg threads configured', { threads });
+  return threads;
+}
+
+const decoderThreads = validateThreadEnv('FFMPEG_DECODER_THREADS');
+const encoderThreads = validateThreadEnv('FFMPEG_ENCODER_THREADS');
+if (decoderThreads || encoderThreads) {
+  logger.info('[Config] FFmpeg threads configured', {
+    decoderThreads,
+    encoderThreads,
+  });
 }
 
 // Clean up temporary files from previous runs BEFORE starting job processor
