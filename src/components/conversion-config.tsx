@@ -8,7 +8,9 @@ import {
   AudioCodec,
   AudioQuality,
   BitrateMode,
+  BitDepth,
 } from '@/types/conversion';
+import { useSettings } from '@/lib/api-hooks';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import Highlighter from 'react-highlight-words';
 
@@ -57,11 +59,15 @@ export function ConversionConfig({
   const [removedHistory, setRemovedHistory] = useState<string[]>([]);
   const MAX_UNDO_HISTORY = 10;
 
+  // Fetch server settings for FFmpeg capabilities
+  const { data: settings } = useSettings();
+
   // Refs for search
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const videoCodecRef = useRef<HTMLDivElement>(null);
   const outputFormatRef = useRef<HTMLDivElement>(null);
   const encodingPresetRef = useRef<HTMLDivElement>(null);
+  const bitDepthRef = useRef<HTMLDivElement>(null);
   const bitrateModeRef = useRef<HTMLDivElement>(null);
   const audioCodecRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +212,7 @@ export function ConversionConfig({
         text: 'encoding preset ultrafast superfast veryfast faster fast medium slow slower veryslow',
         ref: encodingPresetRef,
       },
+      { text: 'bit depth 8-bit 10-bit color', ref: bitDepthRef },
       { text: 'bitrate mode crf cbr vbr quality', ref: bitrateModeRef },
       { text: 'audio codec opus aac fdk ac3 flac copy', ref: audioCodecRef },
     ];
@@ -451,6 +458,44 @@ export function ConversionConfig({
                 <option value="slower">Slower - Best compression</option>
                 <option value="veryslow">Very Slow - Best compression</option>
               </select>
+            </div>
+
+            {/* Bit Depth */}
+            <div ref={bitDepthRef}>
+              <label
+                htmlFor="bit-depth"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Bit Depth
+              </label>
+              <select
+                id="bit-depth"
+                value={options.advanced.bitDepth}
+                onChange={(e) =>
+                  updateAdvancedOption('bitDepth', e.target.value as BitDepth)
+                }
+                disabled={options.basic.videoCodec === 'copy'}
+                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="8bit">
+                  8-bit - Smaller files, more compatible
+                </option>
+                <option
+                  value="10bit"
+                  disabled={
+                    options.basic.videoCodec === 'libx264' &&
+                    !settings?.ffmpeg?.x264_10bit
+                  }
+                >
+                  10-bit - Better quality, reduced banding
+                  {options.basic.videoCodec === 'libx264' &&
+                    !settings?.ffmpeg?.x264_10bit &&
+                    ' (not supported by your FFmpeg)'}
+                </option>
+              </select>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                10-bit provides smoother gradients and reduces banding artifacts
+              </div>
             </div>
 
             {/* Bitrate Control */}

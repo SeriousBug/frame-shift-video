@@ -3,7 +3,22 @@
 # Mock ffmpeg script for testing
 # This script simulates ffmpeg behavior for tests
 
-# Check if help was requested
+# Check if encoder help was requested (for capability detection)
+if [[ "$*" == *"-h encoder=libx264"* ]]; then
+    echo "ffmpeg version mock-test-1.0 Copyright (c) 2000-2025 the FFmpeg developers" >&2
+    echo "  built with Mock Test Configuration" >&2
+    echo "Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:"
+    echo "    General capabilities: dr1 delay threads"
+    echo "    Threading capabilities: other"
+    # Include yuv420p10le to simulate 10-bit support
+    echo "    Supported pixel formats: yuv420p yuvj420p yuv422p yuvj422p yuv444p yuvj444p nv12 nv16 nv21 yuv420p10le yuv422p10le yuv444p10le nv20le gray gray10le"
+    echo "libx264 AVOptions:"
+    echo "  -preset            <string>     E..V....... Set the encoding preset (default \"medium\")"
+    echo "  -crf               <float>      E..V....... Select the quality for constant quality mode"
+    exit 0
+fi
+
+# Check if general help was requested
 if [[ "$*" == *"-h"* ]] || [[ "$*" == *"--help"* ]] || [[ "$*" == *"-help"* ]]; then
     echo "Mock FFmpeg for testing"
     echo "frame-shift-video test version"

@@ -17,6 +17,7 @@ import { cleanupAllTempFiles } from './temp-file-service';
 import { captureException } from '../src/lib/sentry';
 import { collectSystemStatus, type NodeSystemStatus } from './system-status';
 import { updateFollowerSystemStatus } from './handlers/settings';
+import { detectFFmpegCapabilities } from './ffmpeg-capabilities';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -99,6 +100,16 @@ if (INSTANCE_TYPE !== 'follower') {
     captureException(error);
     // Don't exit - continue with startup even if cleanup fails
   }
+}
+
+// Detect FFmpeg capabilities at startup (cache for settings endpoint)
+try {
+  await detectFFmpegCapabilities();
+} catch (error) {
+  logger.error('[Startup] Failed to detect FFmpeg capabilities', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  // Don't exit - continue with defaults if detection fails
 }
 
 // Initialize job processor (for standalone and leader instances)

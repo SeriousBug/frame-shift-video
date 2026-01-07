@@ -75,6 +75,16 @@ export type BitrateMode =
   | 'vbr';
 
 /**
+ * Bit depth for video encoding (maps to -pix_fmt flag)
+ * 10-bit provides smoother gradients and reduced banding artifacts
+ */
+export type BitDepth =
+  /** 8-bit encoding - smaller files, more compatible (yuv420p) */
+  | '8bit'
+  /** 10-bit encoding - better quality, reduced banding (yuv420p10le) */
+  | '10bit';
+
+/**
  * Common video output formats
  */
 export type OutputFormat = 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov';
@@ -105,6 +115,9 @@ export interface BasicConversionOptions {
 export interface AdvancedConversionOptions {
   /** Encoding speed/efficiency preset (maps to -preset flag) */
   preset: EncodingPreset;
+
+  /** Bit depth for video encoding (maps to -pix_fmt flag) */
+  bitDepth: BitDepth;
 
   /** Bitrate control configuration */
   bitrate: {
@@ -182,6 +195,7 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
   },
   advanced: {
     preset: 'slow',
+    bitDepth: '10bit',
     bitrate: {
       mode: 'crf',
     },
