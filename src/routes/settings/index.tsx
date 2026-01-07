@@ -3,17 +3,46 @@ import {
   useFollowersStatus,
   useRetryFollowers,
   useNotificationStatus,
+  useSystemStatus,
   queryKeys,
 } from '@/lib/api-hooks';
 import { sendTestNotification } from '@/lib/api';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { FollowerStatus } from '@/lib/api';
+import type { FollowerStatus, NodeSystemStatus } from '@/lib/api';
+import { useSystemStatusStore } from '@/lib/system-status-store';
 
 export const Route = createFileRoute('/settings/')({
   component: SettingsPage,
 });
+
+/**
+ * Format bytes to human-readable string
+ */
+function formatBytes(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let unitIndex = 0;
+  let value = bytes;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+/**
+ * Format seconds ago for display
+ */
+function formatSecondsAgo(timestamp: number): string {
+  if (timestamp === 0) return '';
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 1) return 'just now';
+  if (seconds === 1) return '1 second ago';
+  return `${seconds} seconds ago`;
+}
 
 function SettingsPage() {
   const { data: followersStatus, isLoading, error } = useFollowersStatus();
@@ -22,13 +51,38 @@ function SettingsPage() {
     isLoading: notificationLoading,
     error: notificationError,
   } = useNotificationStatus();
+  const {
+    data: systemStatus,
+    isLoading: systemStatusLoading,
+    error: systemStatusError,
+  } = useSystemStatus();
   const retryFollowers = useRetryFollowers();
   const [retryMessage, setRetryMessage] = useState<string | null>(null);
   const [testNotificationStatus, setTestNotificationStatus] = useState<
     'idle' | 'loading' | 'success' | 'error'
   >('idle');
   const [testNotificationMessage, setTestNotificationMessage] = useState('');
+  const {
+    lastUpdate: lastSystemStatusUpdate,
+    setLastUpdate: setLastSystemStatusUpdate,
+  } = useSystemStatusStore();
+  const [, setTick] = useState(0); // Force re-render for "seconds ago" display
   const queryClient = useQueryClient();
+
+  // Update tick every second to refresh "seconds ago" display
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Set initial lastUpdate from the first node's timestamp when data loads
+  useEffect(() => {
+    if (systemStatus?.nodes?.[0]?.timestamp && lastSystemStatusUpdate === 0) {
+      setLastSystemStatusUpdate(systemStatus.nodes[0].timestamp);
+    }
+  }, [systemStatus, lastSystemStatusUpdate, setLastSystemStatusUpdate]);
 
   const handleTestNotification = async () => {
     setTestNotificationStatus('loading');
@@ -108,6 +162,17 @@ function SettingsPage() {
               };
             },
           );
+        } else if (message.type === 'system:status') {
+          // Update system status in the query cache
+          const { instanceType, nodes } = message.data;
+
+          queryClient.setQueryData(queryKeys.systemStatus, {
+            instanceType,
+            nodes,
+          });
+
+          // Track when we received this update
+          setLastSystemStatusUpdate(Date.now());
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
@@ -135,7 +200,7 @@ function SettingsPage() {
     };
 
     wsRef.current = ws;
-  }, [queryClient]);
+  }, [queryClient, setLastSystemStatusUpdate]);
 
   // Connect WebSocket on mount
   useEffect(() => {
@@ -183,6 +248,148 @@ function SettingsPage() {
       </header>
 
       <main>
+        {/* System Status Section */}
+        <AppErrorBoundary>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-8">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    System Status
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    CPU and memory usage for all nodes
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
+                  {lastSystemStatusUpdate > 0 && (
+                    <span className="text-gray-400 dark:text-gray-500">
+                      Updated {formatSecondsAgo(lastSystemStatusUpdate)}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        wsConnected ? 'bg-green-500' : 'bg-gray-400'
+                      }`}
+                    />
+                    <span className="text-gray-500 dark:text-gray-400">
+                      {wsConnected ? 'Live' : 'Connecting...'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {systemStatusLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="ml-3 text-gray-600 dark:text-gray-400">
+                    Loading system status...
+                  </span>
+                </div>
+              ) : systemStatusError ? (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+                  {systemStatusError instanceof Error
+                    ? systemStatusError.message
+                    : 'Failed to load system status'}
+                </div>
+              ) : systemStatus?.nodes.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  No system status available
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {systemStatus?.nodes.map((node) => (
+                    <div
+                      key={node.nodeId}
+                      className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-medium text-gray-900 dark:text-white">
+                          {node.nodeId === 'standalone'
+                            ? 'Server'
+                            : node.nodeId === 'leader'
+                              ? 'Leader'
+                              : node.nodeId.replace('follower-', 'Follower ')}
+                        </h3>
+                        {node.timestamp > 0 && (
+                          <span className="text-xs text-gray-400">
+                            {node.cpuCores} cores
+                          </span>
+                        )}
+                      </div>
+
+                      {node.timestamp === 0 ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Waiting for status update...
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* CPU Usage */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                CPU
+                              </span>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {node.cpuUsagePercent.toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full transition-all duration-300 ${
+                                  node.cpuUsagePercent > 80
+                                    ? 'bg-red-500'
+                                    : node.cpuUsagePercent > 60
+                                      ? 'bg-yellow-500'
+                                      : 'bg-green-500'
+                                }`}
+                                style={{
+                                  width: `${Math.min(node.cpuUsagePercent, 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Memory Usage */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                Memory
+                              </span>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {formatBytes(node.memoryUsedBytes)} /{' '}
+                                {formatBytes(node.memoryTotalBytes)}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full transition-all duration-300 ${
+                                  node.memoryUsagePercent > 80
+                                    ? 'bg-red-500'
+                                    : node.memoryUsagePercent > 60
+                                      ? 'bg-yellow-500'
+                                      : 'bg-green-500'
+                                }`}
+                                style={{
+                                  width: `${Math.min(node.memoryUsagePercent, 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </AppErrorBoundary>
+
+        {/* Follower Status Section */}
         <AppErrorBoundary>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
