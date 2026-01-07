@@ -88,6 +88,8 @@ describe('FFmpeg Command Generation', () => {
         '22',
         '-preset',
         'slow',
+        '-pix_fmt',
+        'yuv420p10le', // 10-bit default
         '-c:a',
         'libopus',
         '-compression_level',
@@ -100,7 +102,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -map 0 -c:v libx265 -crf 22 -preset slow -c:a libopus -compression_level 0 -sn -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -map 0 -c:v libx265 -crf 22 -preset slow -pix_fmt yuv420p10le -c:a libopus -compression_level 0 -sn -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');

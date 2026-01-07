@@ -7,6 +7,8 @@ import {
   ConversionOptions,
   AudioCodec,
   AudioQuality,
+  VideoCodec,
+  BitDepth,
 } from '@/types/conversion';
 
 /**
@@ -51,6 +53,17 @@ function getAudioQualityArgs(
       return [];
   }
 }
+
+/**
+ * Pixel format mapping for bit depth and codec combinations
+ * Maps codec and bit depth to the appropriate FFmpeg pixel format
+ */
+const pixelFormats: Record<VideoCodec, Record<BitDepth, string>> = {
+  libx265: { '8bit': 'yuv420p', '10bit': 'yuv420p10le' },
+  libx264: { '8bit': 'yuv420p', '10bit': 'yuv420p10le' }, // Note: requires 10-bit libx264 build
+  libsvtav1: { '8bit': 'yuv420p', '10bit': 'yuv420p10le' },
+  copy: { '8bit': '', '10bit': '' }, // No pixel format for copy
+};
 
 /**
  * Individual FFmpeg job configuration for a single file
@@ -174,6 +187,13 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
 
     // Preset for lossy codecs
     args.push('-preset', escapeArgument(options.advanced.preset));
+
+    // Pixel format based on bit depth
+    const pixFmt =
+      pixelFormats[options.basic.videoCodec][options.advanced.bitDepth];
+    if (pixFmt) {
+      args.push('-pix_fmt', pixFmt);
+    }
   } else {
     args.push('-c:v', 'copy');
   }

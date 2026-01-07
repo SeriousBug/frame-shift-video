@@ -26,6 +26,7 @@ describe('Conversion Types', () => {
         },
         advanced: {
           preset: 'slow',
+          bitDepth: '10bit',
           bitrate: {
             mode: 'crf',
           },

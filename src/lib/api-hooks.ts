@@ -27,6 +27,7 @@ import {
   retryFollowers,
   fetchNotificationStatus,
   fetchSystemStatus,
+  fetchSettings,
   type PickerAction,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
@@ -43,6 +44,7 @@ export const queryKeys = {
   followersStatus: ['followers-status'] as const,
   notificationStatus: ['notification-status'] as const,
   systemStatus: ['system-status'] as const,
+  settings: ['settings'] as const,
 };
 
 /**
@@ -312,5 +314,18 @@ export function useSystemStatus() {
     queryFn: fetchSystemStatus,
     // Fallback polling every 30 seconds (WebSocket provides real-time updates)
     refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook to fetch server settings including FFmpeg capabilities
+ * This is cached indefinitely since capabilities don't change at runtime
+ */
+export function useSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: fetchSettings,
+    staleTime: Infinity, // Never refetch - capabilities don't change at runtime
+    gcTime: Infinity, // Keep in cache forever
   });
 }

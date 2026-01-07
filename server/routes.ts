@@ -26,6 +26,7 @@ import {
 } from './handlers/settings';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
+import { getCachedCapabilities } from './ffmpeg-capabilities';
 
 function getSettingsResponse(corsHeaders: Record<string, string>): Response {
   const version = process.env.APP_VERSION || null;
@@ -43,6 +44,12 @@ function getSettingsResponse(corsHeaders: Record<string, string>): Response {
       sendDefaultPii: sentrySendDefaultPii,
       enableLogs: true,
     };
+  }
+
+  // Include FFmpeg capabilities (cached)
+  const ffmpegCapabilities = getCachedCapabilities();
+  if (ffmpegCapabilities) {
+    response.ffmpeg = ffmpegCapabilities;
   }
 
   return new Response(JSON.stringify(response), {

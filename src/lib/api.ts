@@ -337,6 +337,35 @@ export async function fetchServerVersion(): Promise<{
 }
 
 /**
+ * FFmpeg capabilities from the server
+ */
+export interface FFmpegCapabilities {
+  /** Whether libx264 supports 10-bit encoding (yuv420p10le) */
+  x264_10bit: boolean;
+}
+
+/**
+ * Settings response with FFmpeg capabilities
+ */
+export interface SettingsResponse {
+  version: string | null;
+  ffmpeg?: FFmpegCapabilities;
+}
+
+/**
+ * Fetch server settings including FFmpeg capabilities
+ */
+export async function fetchSettings(): Promise<SettingsResponse> {
+  const response = await fetch(`${API_BASE}/settings`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch settings');
+  }
+
+  return response.json();
+}
+
+/**
  * Response for notification status endpoint
  */
 export interface NotificationStatusResponse {
