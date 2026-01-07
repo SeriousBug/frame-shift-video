@@ -212,6 +212,9 @@ ${job.error_message}
               <span className="inline-flex items-center gap-1">
                 <span className="font-medium">Codec:</span>
                 {config.basic.videoCodec}
+                {config.advanced.bitDepth === '10bit' &&
+                  config.basic.videoCodec !== 'copy' &&
+                  ' (10-bit)'}
               </span>
               <span className="text-gray-400 dark:text-gray-600">•</span>
               <span className="inline-flex items-center gap-1">
