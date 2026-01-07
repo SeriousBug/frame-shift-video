@@ -128,6 +128,24 @@ export function JobCard({
     return durationSeconds > 0 ? job.total_frames / durationSeconds : 0;
   };
 
+  const getFFmpegCommand = (): string | null => {
+    if (!job.ffmpeg_command_json) return null;
+    try {
+      const parsed = JSON.parse(job.ffmpeg_command_json) as {
+        args: string[];
+        inputPath: string;
+        outputPath: string;
+      };
+      // Reconstruct the command from args, properly quoting args with spaces
+      const quotedArgs = parsed.args.map((arg) =>
+        arg.includes(' ') ? `"${arg}"` : arg,
+      );
+      return `ffmpeg ${quotedArgs.join(' ')}`;
+    } catch {
+      return null;
+    }
+  };
+
   const getDisplayStatus = () => {
     if (job.status === 'failed' && job.retried) {
       return 'Failed, Retried';
@@ -304,21 +322,31 @@ ${job.error_message}
             className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded px-1"
           >
             <span>{showStats ? '▼' : '▶'}</span>
-            <span>Conversion Stats</span>
+            <span>Conversion Details</span>
           </button>
           {showStats && (
-            <div className="flex gap-3 mt-1 text-xs text-gray-600 dark:text-gray-400 pl-4">
-              {getElapsedTime() !== null && (
-                <span>
-                  <span className="font-medium">Time:</span>{' '}
-                  {formatDuration(getElapsedTime()!)}
-                </span>
-              )}
-              {getAverageFps() !== null && (
-                <span>
-                  <span className="font-medium">Avg:</span>{' '}
-                  {getAverageFps()!.toFixed(1)} fps
-                </span>
+            <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 pl-4">
+              <div className="flex gap-3">
+                {getElapsedTime() !== null && (
+                  <span>
+                    <span className="font-medium">Time:</span>{' '}
+                    {formatDuration(getElapsedTime()!)}
+                  </span>
+                )}
+                {getAverageFps() !== null && (
+                  <span>
+                    <span className="font-medium">Avg:</span>{' '}
+                    {getAverageFps()!.toFixed(1)} fps
+                  </span>
+                )}
+              </div>
+              {getFFmpegCommand() && (
+                <div className="mt-2">
+                  <span className="font-medium">FFmpeg Command:</span>
+                  <pre className="mt-1 text-xs text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-900 p-2 rounded overflow-x-auto whitespace-pre-wrap break-all font-mono">
+                    {getFFmpegCommand()}
+                  </pre>
+                </div>
               )}
             </div>
           )}
@@ -351,6 +379,16 @@ ${job.error_message}
               <pre className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded font-mono whitespace-pre overflow-x-auto">
                 {job.error_message}
               </pre>
+              {getFFmpegCommand() && (
+                <div className="mt-2">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                    FFmpeg Command:
+                  </span>
+                  <pre className="mt-1 text-xs text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-900 p-2 rounded overflow-x-auto whitespace-pre-wrap break-all font-mono">
+                    {getFFmpegCommand()}
+                  </pre>
+                </div>
+              )}
               {job.ffmpeg_stderr && (
                 <div className="mt-2">
                   <button
