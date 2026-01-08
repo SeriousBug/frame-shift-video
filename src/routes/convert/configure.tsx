@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ConversionConfig } from '@/components/conversion-config';
 import { ConversionOptions } from '@/types/conversion';
 import {
   useFileSelections,
-  useCreateJobs,
+  useStartJobs,
+  useJobBatchStatus,
   useSaveFileSelections,
   useClearPickerState,
 } from '@/lib/api-hooks';
@@ -26,6 +27,7 @@ function ConfigurePage() {
   const { key: urlKey } = Route.useSearch();
   const [currentOptions, setCurrentOptions] =
     useState<ConversionOptions | null>(null);
+  const [activeBatchId, setActiveBatchId] = useState<number | null>(null);
 
   // In-page search
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -40,14 +42,35 @@ function ConfigurePage() {
 
   const files = fileSelectionsData?.files || [];
   const savedConfig = fileSelectionsData?.config;
-  const createJobsMutation = useCreateJobs();
+  const startJobsMutation = useStartJobs();
+  const { data: batchStatus } = useJobBatchStatus(activeBatchId);
   const saveFileSelectionsMutation = useSaveFileSelections();
   const clearPickerState = useClearPickerState();
 
-  const handleCancel = () => {
+  // Navigate home when batch completes
+  useEffect(() => {
+    if (batchStatus?.status === 'completed') {
+      console.log('[Configure Page] Batch completed, navigating home');
+      clearPickerState();
+      navigate({ to: '/', search: {} });
+    } else if (batchStatus?.status === 'failed') {
+      console.error('[Configure Page] Batch failed:', batchStatus.errorMessage);
+      setActiveBatchId(null);
+      alert(
+        `Failed to create conversion jobs: ${batchStatus.errorMessage || 'Unknown error'}`,
+      );
+    }
+  }, [
+    batchStatus?.status,
+    batchStatus?.errorMessage,
+    clearPickerState,
+    navigate,
+  ]);
+
+  const handleCancel = useCallback(() => {
     clearPickerState();
     navigate({ to: '/', search: {} });
-  };
+  }, [clearPickerState, navigate]);
 
   const handleStartConversion = async (options: ConversionOptions) => {
     console.log('[Configure Page] Starting conversion with options:', {
@@ -61,34 +84,28 @@ function ConfigurePage() {
     console.log('[Configure Page] Selected files:', options.selectedFiles);
 
     try {
-      const result = await createJobsMutation.mutateAsync(options);
-      console.log('[Configure Page] Jobs created successfully:', result);
+      const result = await startJobsMutation.mutateAsync(options);
+      console.log('[Configure Page] Job creation started:', result);
 
-      // Clear picker state and navigate back to home on success
-      clearPickerState();
-      navigate({ to: '/', search: {} });
+      // Set the batch ID to start tracking progress
+      setActiveBatchId(result.batchId);
     } catch (error) {
-      console.error('[Configure Page] ERROR: Failed to create conversion jobs');
+      console.error('[Configure Page] ERROR: Failed to start job creation');
       console.error('[Configure Page] Error details:', error);
       console.error(
         '[Configure Page] Error message:',
         error instanceof Error ? error.message : String(error),
       );
-      console.error(
-        '[Configure Page] Error stack:',
-        error instanceof Error ? error.stack : 'No stack trace',
-      );
-      console.error('[Configure Page] Options that failed:', {
-        fileCount: options.selectedFiles?.length || 0,
-        outputDir: options.outputDirectory,
-        format: options.format,
-      });
 
       alert(
-        `Failed to create conversion jobs: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to start job creation: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   };
+
+  // Determine if we're in "creating jobs" mode
+  const isCreatingJobs =
+    activeBatchId !== null && batchStatus?.status !== 'failed';
 
   const handleFilesChange = async (newFiles: string[]) => {
     // Save to server with current config and update URL
@@ -169,6 +186,34 @@ function ConfigurePage() {
         </div>
 
         <div className="p-6 border-t border-gray-200 dark:border-gray-600">
+          {/* Job creation progress indicator */}
+          {isCreatingJobs && batchStatus && (
+            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <div className="flex-1">
+                  <p className="text-blue-800 dark:text-blue-200 font-medium">
+                    Creating conversion jobs...
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    {batchStatus.createdCount} of {batchStatus.totalFiles} jobs
+                    created
+                  </p>
+                </div>
+              </div>
+              {batchStatus.totalFiles > 0 && (
+                <div className="mt-3 h-2 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 transition-all duration-300"
+                    style={{
+                      width: `${Math.round((batchStatus.createdCount / batchStatus.totalFiles) * 100)}%`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -178,7 +223,8 @@ function ConfigurePage() {
                   search: { key: urlKey },
                 })
               }
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
+              disabled={isCreatingJobs}
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ← Back to File Selection
             </button>
@@ -187,7 +233,8 @@ function ConfigurePage() {
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
+                disabled={isCreatingJobs}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -199,13 +246,16 @@ function ConfigurePage() {
                 disabled={
                   !currentOptions ||
                   files.length === 0 ||
-                  createJobsMutation.isPending
+                  startJobsMutation.isPending ||
+                  isCreatingJobs
                 }
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                {createJobsMutation.isPending
-                  ? 'Creating Jobs...'
-                  : 'Start Conversion'}
+                {startJobsMutation.isPending
+                  ? 'Starting...'
+                  : isCreatingJobs
+                    ? 'Creating Jobs...'
+                    : 'Start Conversion'}
               </button>
             </div>
           </div>

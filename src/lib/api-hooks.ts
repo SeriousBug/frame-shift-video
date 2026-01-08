@@ -14,6 +14,8 @@ import {
   fetchJobsPaginated,
   fetchJobsByStatus,
   createJobs,
+  startJobs,
+  getJobBatchStatus,
   markJobAsRetried,
   cancelJob,
   cancelAllJobs,
@@ -29,6 +31,7 @@ import {
   fetchSystemStatus,
   fetchSettings,
   type PickerAction,
+  type StartJobsResponse,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
 import { Job } from '@/types/database';
@@ -95,7 +98,7 @@ export function useJobsByStatus(status: Job['status']) {
 }
 
 /**
- * Hook to create new jobs
+ * Hook to create new jobs (legacy sync)
  */
 export function useCreateJobs() {
   const queryClient = useQueryClient();
@@ -112,6 +115,48 @@ export function useCreateJobs() {
     },
     onError: (error) => {
       console.error('[API Hook] Creating jobs mutation failed:', error);
+    },
+  });
+}
+
+/**
+ * Hook to start async job creation
+ * Returns immediately - progress is tracked via WebSocket
+ */
+export function useStartJobs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (options: ConversionOptions) => {
+      console.log('[API Hook] Starting async job creation');
+      return startJobs(options);
+    },
+    onSuccess: (data: StartJobsResponse) => {
+      console.log('[API Hook] Async job creation started:', data);
+      // Jobs will be created in background, query will be invalidated
+      // when job-creation:complete event is received
+    },
+    onError: (error) => {
+      console.error('[API Hook] Starting async job creation failed:', error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch job creation batch status
+ */
+export function useJobBatchStatus(batchId: number | null) {
+  return useQuery({
+    queryKey: ['job-batch', batchId],
+    queryFn: () => getJobBatchStatus(batchId!),
+    enabled: batchId !== null,
+    refetchInterval: (query) => {
+      // Poll while in progress
+      const status = query.state.data?.status;
+      if (status === 'pending' || status === 'in_progress') {
+        return 2000; // Poll every 2 seconds
+      }
+      return false; // Stop polling when complete
     },
   });
 }

@@ -718,3 +718,106 @@ export const FileSelectionService = {
     return Number(result.changes) || 0;
   },
 };
+
+/**
+ * Job creation batch record from database
+ */
+export interface JobCreationBatch {
+  id: number;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  total_files: number;
+  created_count: number;
+  picker_state_key: string | null;
+  config_json: string | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+/**
+ * Job creation batch table operations
+ */
+export const JobCreationBatchService = {
+  /**
+   * Create a new job creation batch
+   */
+  create(input: {
+    total_files: number;
+    picker_state_key?: string;
+    config_json?: string;
+  }): number {
+    const result = execute(
+      'INSERT INTO job_creation_batches (total_files, picker_state_key, config_json) VALUES (?, ?, ?)',
+      [
+        input.total_files,
+        input.picker_state_key || null,
+        input.config_json || null,
+      ],
+    );
+    return Number(result.lastInsertRowid);
+  },
+
+  /**
+   * Get a batch by ID
+   */
+  getById(id: number): JobCreationBatch | undefined {
+    return (
+      queryOne<JobCreationBatch>(
+        'SELECT * FROM job_creation_batches WHERE id = ?',
+        [id],
+      ) || undefined
+    );
+  },
+
+  /**
+   * Update batch status
+   */
+  updateStatus(
+    id: number,
+    status: JobCreationBatch['status'],
+    errorMessage?: string,
+  ): void {
+    if (status === 'completed' || status === 'failed') {
+      execute(
+        'UPDATE job_creation_batches SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, errorMessage || null, id],
+      );
+    } else {
+      execute(
+        'UPDATE job_creation_batches SET status = ?, error_message = ? WHERE id = ?',
+        [status, errorMessage || null, id],
+      );
+    }
+  },
+
+  /**
+   * Increment the created count
+   */
+  incrementCreatedCount(id: number): void {
+    execute(
+      'UPDATE job_creation_batches SET created_count = created_count + 1 WHERE id = ?',
+      [id],
+    );
+  },
+
+  /**
+   * Get all in-progress batches (for recovery on server restart)
+   */
+  getInProgressBatches(): JobCreationBatch[] {
+    return query<JobCreationBatch>(
+      "SELECT * FROM job_creation_batches WHERE status = 'in_progress' ORDER BY created_at ASC",
+    );
+  },
+
+  /**
+   * Get recent batches for a picker state key
+   */
+  getRecentByPickerKey(pickerStateKey: string): JobCreationBatch | undefined {
+    return (
+      queryOne<JobCreationBatch>(
+        "SELECT * FROM job_creation_batches WHERE picker_state_key = ? AND status IN ('pending', 'in_progress') ORDER BY created_at DESC LIMIT 1",
+        [pickerStateKey],
+      ) || undefined
+    );
+  },
+};

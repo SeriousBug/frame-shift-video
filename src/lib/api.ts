@@ -95,7 +95,7 @@ export async function fetchJobsByStatus(
 }
 
 /**
- * Create new jobs
+ * Create new jobs (legacy sync endpoint)
  */
 export async function createJobs(
   options: ConversionOptions,
@@ -121,6 +121,78 @@ export async function createJobs(
   const result = await response.json();
   console.log('[API Client] Create jobs result:', result);
   return result;
+}
+
+/**
+ * Response from async job creation endpoint
+ */
+export interface StartJobsResponse {
+  success: boolean;
+  batchId: number;
+  totalFiles: number;
+  message: string;
+}
+
+/**
+ * Start async job creation
+ * Returns immediately with batch ID - jobs are created in background
+ */
+export async function startJobs(
+  options: ConversionOptions,
+): Promise<StartJobsResponse> {
+  console.log(
+    '[API Client] Starting async job creation with options:',
+    options,
+  );
+
+  const response = await fetch(`${API_BASE}/jobs/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options),
+  });
+
+  console.log('[API Client] Start jobs response status:', response.status);
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error('[API Client] Start jobs error:', error);
+    throw new Error(error.error || 'Failed to start job creation');
+  }
+
+  const result = await response.json();
+  console.log('[API Client] Start jobs result:', result);
+  return result;
+}
+
+/**
+ * Job creation batch status
+ */
+export interface JobCreationBatchStatus {
+  id: number;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  totalFiles: number;
+  createdCount: number;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/**
+ * Get job creation batch status
+ */
+export async function getJobBatchStatus(
+  batchId: number,
+): Promise<JobCreationBatchStatus> {
+  const response = await fetch(`${API_BASE}/jobs/batch/${batchId}`);
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch batch status');
+  }
+
+  return response.json();
 }
 
 /**
