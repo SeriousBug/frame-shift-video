@@ -1,5 +1,10 @@
 import { filesHandler } from './handlers/files';
-import { jobsHandler, jobByIdHandler } from './handlers/jobs';
+import {
+  jobsHandler,
+  jobByIdHandler,
+  startJobsHandler,
+  getJobBatchHandler,
+} from './handlers/jobs';
 import {
   fileSelectionsHandler,
   fileSelectionByKeyHandler,
@@ -65,6 +70,14 @@ const wrappedJobsHandler = withErrorHandler(jobsHandler, 'JobsHandler');
 const wrappedJobByIdHandler = withErrorHandler(
   jobByIdHandler,
   'JobByIdHandler',
+);
+const wrappedStartJobsHandler = withErrorHandler(
+  startJobsHandler,
+  'StartJobsHandler',
+);
+const wrappedGetJobBatchHandler = withErrorHandler(
+  getJobBatchHandler,
+  'GetJobBatchHandler',
 );
 const wrappedFileSelectionsHandler = withErrorHandler(
   fileSelectionsHandler,
@@ -175,6 +188,18 @@ export async function setupRoutes(req: Request): Promise<Response> {
     if (jobIdMatch && req.method === 'PATCH') {
       const jobId = parseInt(jobIdMatch[1], 10);
       return await wrappedJobByIdHandler(req, jobId, corsHeaders);
+    }
+
+    // Route: POST /api/jobs/start (async job creation)
+    if (pathname === '/api/jobs/start' && req.method === 'POST') {
+      return await wrappedStartJobsHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/jobs/batch/:id (get batch status)
+    const jobBatchMatch = pathname.match(/^\/api\/jobs\/batch\/(\d+)$/);
+    if (jobBatchMatch && req.method === 'GET') {
+      const batchId = parseInt(jobBatchMatch[1], 10);
+      return await wrappedGetJobBatchHandler(req, batchId, corsHeaders);
     }
 
     // Route: POST /api/file-selections

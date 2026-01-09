@@ -18,6 +18,7 @@ import { captureException } from '../src/lib/sentry';
 import { collectSystemStatus, type NodeSystemStatus } from './system-status';
 import { updateFollowerSystemStatus } from './handlers/settings';
 import { detectFFmpegCapabilities } from './ffmpeg-capabilities';
+import { resumeInProgressBatches } from './job-creation-service';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const DIST_DIR = process.env.DIST_DIR || './dist';
@@ -288,6 +289,17 @@ if (INSTANCE_TYPE !== 'follower') {
     );
   } catch (error) {
     logger.error('[FileSelections] Cleanup failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    captureException(error);
+  }
+
+  // Handle any in-progress job creation batches that were interrupted
+  try {
+    await resumeInProgressBatches();
+    logger.info('[JobCreation] In-progress batches handled');
+  } catch (error) {
+    logger.error('[JobCreation] Failed to handle in-progress batches', {
       error: error instanceof Error ? error.message : String(error),
     });
     captureException(error);

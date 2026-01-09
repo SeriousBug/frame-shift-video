@@ -175,6 +175,22 @@ const MIGRATIONS = [
     ALTER TABLE jobs ADD COLUMN worker_last_seen DATETIME;
     CREATE INDEX IF NOT EXISTS idx_jobs_assigned_worker ON jobs(assigned_worker);
   `,
+  // Migration 14: Add job_creation_batches table for async job creation
+  `
+    CREATE TABLE IF NOT EXISTS job_creation_batches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      total_files INTEGER NOT NULL DEFAULT 0,
+      created_count INTEGER NOT NULL DEFAULT 0,
+      picker_state_key TEXT,
+      config_json TEXT,
+      error_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_job_creation_batches_status ON job_creation_batches(status);
+  `,
 ];
 
 /**
