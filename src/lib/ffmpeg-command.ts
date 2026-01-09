@@ -66,6 +66,16 @@ const pixelFormats: Record<VideoCodec, Record<BitDepth, string>> = {
 };
 
 /**
+ * Video stream info for codec assignment
+ */
+export interface VideoStreamInfo {
+  /** Index within video streams only (0 = first video, 1 = second video, etc.) */
+  videoIndex: number;
+  /** Whether this stream is an attached picture (cover art, thumbnail) */
+  isAttachedPic: boolean;
+}
+
+/**
  * Individual FFmpeg job configuration for a single file
  */
 export interface FFmpegJobConfig {
@@ -79,6 +89,8 @@ export interface FFmpegJobConfig {
   jobName: string;
   /** Detected subtitle codec formats from source file (e.g., ['ass', 'srt']) */
   subtitleCodecs?: string[];
+  /** Information about video streams (which are attached pictures vs main video) */
+  videoStreams?: VideoStreamInfo[];
 }
 
 /**
@@ -172,13 +184,54 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     return args;
   }
 
-  // Map all streams from input - without this, FFmpeg only selects one stream per type
-  // This ensures all audio tracks and subtitle tracks are included in the output
-  args.push('-map', '0');
+  // Map streams based on removeExtraVideoStreams setting:
+  // When enabled (default): Map only the first video stream to exclude attached pictures
+  // like cover art which often have odd dimensions incompatible with x265/x264
+  // When disabled: Map all streams with -map 0, but use stream-specific codecs to
+  // copy attached pictures instead of re-encoding them
+  const removeExtraVideoStreams =
+    options.advanced.removeExtraVideoStreams !== false; // Default to true if undefined
+  const videoStreams = config.videoStreams || [];
+  const hasAttachedPictures = videoStreams.some((s) => s.isAttachedPic);
+
+  if (removeExtraVideoStreams) {
+    // Map selectively:
+    // - First video stream only (0:v:0) - excludes attached pictures
+    // - All audio streams (0:a?) - the ? makes it optional if no audio exists
+    // - All subtitle streams (0:s?) - the ? makes it optional if no subtitles exist
+    args.push('-map', '0:v:0');
+    args.push('-map', '0:a?');
+    args.push('-map', '0:s?');
+  } else {
+    // Map all streams including attached pictures
+    args.push('-map', '0');
+  }
 
   // Video codec
+  // When keeping all streams and there are attached pictures, use stream-specific codecs:
+  // - Encode non-attached-picture video streams with the selected codec
+  // - Copy attached pictures to avoid dimension/encoding issues
+  const useStreamSpecificVideoCodec =
+    !removeExtraVideoStreams && hasAttachedPictures && videoStreams.length > 1;
+
   if (options.basic.videoCodec !== 'copy') {
-    args.push('-c:v', escapeArgument(options.basic.videoCodec));
+    if (useStreamSpecificVideoCodec) {
+      // Use stream-specific codecs based on whether each stream is an attached picture
+      for (const stream of videoStreams) {
+        if (stream.isAttachedPic) {
+          // Copy attached pictures (cover art) as-is
+          args.push(`-c:v:${stream.videoIndex}`, 'copy');
+        } else {
+          // Encode actual video streams with the selected codec
+          args.push(
+            `-c:v:${stream.videoIndex}`,
+            escapeArgument(options.basic.videoCodec),
+          );
+        }
+      }
+    } else {
+      args.push('-c:v', escapeArgument(options.basic.videoCodec));
+    }
 
     // Quality (CRF) for lossy codecs
     if (options.advanced.bitrate.mode === 'crf') {

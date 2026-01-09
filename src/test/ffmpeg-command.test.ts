@@ -81,7 +81,11 @@ describe('FFmpeg Command Generation', () => {
         '-i',
         'input.mkv',
         '-map',
-        '0',
+        '0:v:0', // First video stream only (excludes attached pics)
+        '-map',
+        '0:a?', // All audio streams (optional)
+        '-map',
+        '0:s?', // All subtitle streams (optional)
         '-c:v',
         'libx265',
         '-crf',
@@ -102,7 +106,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -map 0 -c:v libx265 -crf 22 -preset slow -pix_fmt yuv420p10le -c:a libopus -compression_level 0 -sn -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -crf 22 -preset slow -pix_fmt yuv420p10le -c:a libopus -compression_level 0 -sn -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');
@@ -525,9 +529,11 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).not.toContain('-compression_level');
     });
 
-    it('should include -map 0 to copy all audio and subtitle tracks', () => {
-      // Without -map 0, FFmpeg only selects one stream per type (one video, one audio, one subtitle)
-      // With -map 0, all streams from the input are included in the output
+    it('should map video, audio, and subtitle streams selectively', () => {
+      // Map streams selectively to:
+      // - Include only the first video stream (excludes attached pictures like cover art)
+      // - Include all audio streams
+      // - Include all subtitle streams
       const config: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -536,15 +542,128 @@ describe('FFmpeg Command Generation', () => {
       };
 
       const command = generateFFmpegCommand(config);
-      const mapIndex = command.args.indexOf('-map');
-      expect(mapIndex).toBeGreaterThan(-1);
-      expect(command.args[mapIndex + 1]).toBe('0');
 
-      // Verify -map 0 comes after -i input and before codec options
+      // Find all -map arguments
+      const mapArgs: string[] = [];
+      for (let i = 0; i < command.args.length; i++) {
+        if (command.args[i] === '-map') {
+          mapArgs.push(command.args[i + 1]);
+        }
+      }
+
+      // Should have three -map arguments: video, audio, subtitle
+      expect(mapArgs).toEqual(['0:v:0', '0:a?', '0:s?']);
+
+      // Verify -map comes after -i input and before codec options
       const inputIndex = command.args.indexOf('-i');
+      const firstMapIndex = command.args.indexOf('-map');
       const videoCodecIndex = command.args.indexOf('-c:v');
-      expect(mapIndex).toBeGreaterThan(inputIndex);
-      expect(mapIndex).toBeLessThan(videoCodecIndex);
+      expect(firstMapIndex).toBeGreaterThan(inputIndex);
+      expect(firstMapIndex).toBeLessThan(videoCodecIndex);
+    });
+
+    it('should map all streams when removeExtraVideoStreams is disabled', () => {
+      // When the option is disabled, use -map 0 to include all streams
+      // including attached pictures (cover art)
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            removeExtraVideoStreams: false,
+          },
+        },
+        jobName: 'Map All Streams Test',
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // Find all -map arguments
+      const mapArgs: string[] = [];
+      for (let i = 0; i < command.args.length; i++) {
+        if (command.args[i] === '-map') {
+          mapArgs.push(command.args[i + 1]);
+        }
+      }
+
+      // Should have single -map 0 argument
+      expect(mapArgs).toEqual(['0']);
+
+      // Verify -map comes after -i input and before codec options
+      const inputIndex = command.args.indexOf('-i');
+      const firstMapIndex = command.args.indexOf('-map');
+      const videoCodecIndex = command.args.indexOf('-c:v');
+      expect(firstMapIndex).toBeGreaterThan(inputIndex);
+      expect(firstMapIndex).toBeLessThan(videoCodecIndex);
+    });
+
+    it('should use stream-specific codecs when keeping all streams with attached pictures', () => {
+      // When removeExtraVideoStreams is disabled and there are attached pictures,
+      // encode the main video but copy attached pictures
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            removeExtraVideoStreams: false,
+          },
+        },
+        jobName: 'Stream-Specific Codec Test',
+        videoStreams: [
+          { videoIndex: 0, isAttachedPic: false }, // Main video
+          { videoIndex: 1, isAttachedPic: true }, // Cover art
+        ],
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // Should use stream-specific codecs
+      expect(command.args).toContain('-c:v:0');
+      expect(command.args).toContain('libx265');
+      expect(command.args).toContain('-c:v:1');
+      expect(command.args).toContain('copy');
+
+      // Should NOT have generic -c:v (without stream specifier)
+      const genericCodecIndex = command.args.findIndex(
+        (arg, i) => arg === '-c:v' && command.args[i + 1] !== undefined,
+      );
+      expect(genericCodecIndex).toBe(-1);
+    });
+
+    it('should handle attached picture as first video stream', () => {
+      // Edge case: attached picture appears before main video
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            removeExtraVideoStreams: false,
+          },
+        },
+        jobName: 'Attached Pic First Test',
+        videoStreams: [
+          { videoIndex: 0, isAttachedPic: true }, // Cover art first
+          { videoIndex: 1, isAttachedPic: false }, // Main video second
+        ],
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // First video stream (attached pic) should be copied
+      const cv0Index = command.args.indexOf('-c:v:0');
+      expect(cv0Index).toBeGreaterThan(-1);
+      expect(command.args[cv0Index + 1]).toBe('copy');
+
+      // Second video stream (main video) should be encoded
+      const cv1Index = command.args.indexOf('-c:v:1');
+      expect(cv1Index).toBeGreaterThan(-1);
+      expect(command.args[cv1Index + 1]).toBe('libx265');
     });
   });
 
