@@ -657,6 +657,51 @@ export function ConversionConfig({
                 )}
               </div>
             </div>
+
+            {/* Extra Video Streams Toggle */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label
+                    htmlFor="remove-extra-video-streams"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    Remove extra video streams
+                  </label>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Keep only the main video stream. Disable to preserve cover
+                    art and other embedded images.
+                  </div>
+                </div>
+                <button
+                  id="remove-extra-video-streams"
+                  type="button"
+                  role="switch"
+                  aria-checked={
+                    options.advanced.removeExtraVideoStreams !== false
+                  }
+                  onClick={() =>
+                    updateAdvancedOption(
+                      'removeExtraVideoStreams',
+                      options.advanced.removeExtraVideoStreams === false,
+                    )
+                  }
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    options.advanced.removeExtraVideoStreams !== false
+                      ? 'bg-blue-600'
+                      : 'bg-gray-200 dark:bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      options.advanced.removeExtraVideoStreams !== false
+                        ? 'translate-x-5'
+                        : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

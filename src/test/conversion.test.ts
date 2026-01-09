@@ -40,6 +40,7 @@ describe('Conversion Types', () => {
             codec: 'libopus',
             quality: 'high',
           },
+          removeExtraVideoStreams: true,
         },
       });
     });
@@ -167,6 +168,7 @@ describe('Conversion Types', () => {
             sampleRate: 48000,
             channels: 2,
           },
+          removeExtraVideoStreams: false,
         },
         customCommand: 'ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4',
       };
@@ -200,6 +202,7 @@ describe('Conversion Types', () => {
             codec: 'copy',
             quality: 'medium',
           },
+          removeExtraVideoStreams: true,
         },
       };
 

@@ -681,6 +681,77 @@ export async function getSubtitleFormats(inputPath: string): Promise<string[]> {
 }
 
 /**
+ * Video stream info for determining which streams are attached pictures
+ */
+export interface VideoStreamInfo {
+  /** Index within video streams only (0 = first video, 1 = second video, etc.) */
+  videoIndex: number;
+  /** Whether this stream is an attached picture (cover art, thumbnail) */
+  isAttachedPic: boolean;
+}
+
+/**
+ * Get information about all video streams in a file
+ * Returns array of video stream info, ordered by their appearance in the file
+ * The videoIndex corresponds to FFmpeg's -c:v:N stream specifier
+ */
+export async function getVideoStreamInfo(
+  inputPath: string,
+): Promise<VideoStreamInfo[]> {
+  return new Promise((resolve) => {
+    const ffprobe = spawn(
+      getFfprobe(),
+      [
+        '-v',
+        'error',
+        '-select_streams',
+        'v',
+        '-show_entries',
+        'stream=index:stream_disposition=attached_pic',
+        '-of',
+        'json',
+        inputPath,
+      ],
+      {
+        env: process.env,
+      },
+    );
+
+    let output = '';
+    ffprobe.stdout?.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      if (code === 0 && output.trim()) {
+        try {
+          const data = JSON.parse(output);
+          const streams = data.streams || [];
+          // Map each video stream to its info
+          // The order from ffprobe with -select_streams v gives us the video stream order
+          const videoStreams: VideoStreamInfo[] = streams.map(
+            (
+              stream: { disposition?: { attached_pic?: number } },
+              idx: number,
+            ) => ({
+              videoIndex: idx,
+              isAttachedPic: stream.disposition?.attached_pic === 1,
+            }),
+          );
+          resolve(videoStreams);
+        } catch {
+          resolve([]);
+        }
+      } else {
+        resolve([]);
+      }
+    });
+
+    ffprobe.on('error', () => resolve([]));
+  });
+}
+
+/**
  * Utility function to execute a single FFmpeg command
  */
 export async function executeFFmpegCommand(

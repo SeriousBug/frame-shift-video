@@ -164,6 +164,14 @@ export interface AdvancedConversionOptions {
     /** Number of audio channels (maps to -ac flag) */
     channels?: number;
   };
+
+  /**
+   * Remove extra video streams from output (e.g., attached pictures like cover art)
+   * When enabled, only the first video stream is included (maps to -map 0:v:0)
+   * When disabled, all video streams are included (maps to -map 0)
+   * Default: true (removes extra video streams to avoid encoding issues with odd-dimension cover art)
+   */
+  removeExtraVideoStreams: boolean;
 }
 
 /**
@@ -209,5 +217,6 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
       codec: 'libopus',
       quality: 'high',
     },
+    removeExtraVideoStreams: true,
   },
 };
