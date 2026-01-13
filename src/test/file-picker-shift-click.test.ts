@@ -12,7 +12,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   let testDir: string;
   let originalFrameShiftHome: string | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create a temporary test directory
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-picker-test-'));
 
@@ -21,7 +21,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
     process.env.FRAME_SHIFT_HOME = testDir;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Restore original FRAME_SHIFT_HOME
     if (originalFrameShiftHome !== undefined) {
       process.env.FRAME_SHIFT_HOME = originalFrameShiftHome;
@@ -59,7 +59,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   }
 
   describe('Basic range selection', () => {
-    it('should select all files between two paths (forward direction)', () => {
+    it('should select all files between two paths (forward direction)', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -67,7 +67,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.videosOnly = false;
 
       // Select range from video1.mp4 to video4.mp4
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video1.mp4',
         'video4.mp4',
@@ -84,7 +84,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.has('video5.mp4')).toBe(false);
     });
 
-    it('should select all files between two paths (backward direction)', () => {
+    it('should select all files between two paths (backward direction)', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -92,7 +92,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.videosOnly = false;
 
       // Select range from video4.mp4 to video1.mp4 (reversed)
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video4.mp4',
         'video1.mp4',
@@ -106,7 +106,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.has('video4.mp4')).toBe(true);
     });
 
-    it('should select a single file when start and end are the same', () => {
+    it('should select a single file when start and end are the same', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -114,7 +114,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.videosOnly = false;
 
       // Select range from video2.mp4 to video2.mp4
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video2.mp4',
         'video2.mp4',
@@ -127,7 +127,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   });
 
   describe('Range selection with folders', () => {
-    it('should skip folders and only select files in range', () => {
+    it('should skip folders and only select files in range', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -140,7 +140,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       // Note: Items are sorted with folders first, then root files
       // So the order is: folderA, folderA/video6-8, folderB, video1-5
       // Select range from folderA/video6.mp4 to video2.mp4
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'folderA/video6.mp4',
         'video2.mp4',
@@ -162,7 +162,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.has('folderA')).toBe(false);
     });
 
-    it('should work with files inside expanded folders', () => {
+    it('should work with files inside expanded folders', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -174,7 +174,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.expandedFolders.add('folderB');
 
       // Select range within folderA
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'folderA/video6.mp4',
         'folderA/video8.mp4',
@@ -192,7 +192,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   });
 
   describe('Range selection preserves existing selections', () => {
-    it('should add to existing selections, not replace them', () => {
+    it('should add to existing selections, not replace them', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -203,7 +203,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.selectedFiles.add('video1.mp4');
 
       // Select range from video3.mp4 to video5.mp4
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video3.mp4',
         'video5.mp4',
@@ -219,7 +219,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   });
 
   describe('Edge cases', () => {
-    it('should handle invalid start path gracefully', () => {
+    it('should handle invalid start path gracefully', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -227,7 +227,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.videosOnly = false;
 
       // Try to select range with non-existent start path
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'nonexistent.mp4',
         'video2.mp4',
@@ -237,7 +237,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.size).toBe(0);
     });
 
-    it('should handle invalid end path gracefully', () => {
+    it('should handle invalid end path gracefully', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -245,7 +245,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.videosOnly = false;
 
       // Try to select range with non-existent end path
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video1.mp4',
         'nonexistent.mp4',
@@ -255,7 +255,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.size).toBe(0);
     });
 
-    it('should handle both invalid paths gracefully', () => {
+    it('should handle both invalid paths gracefully', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -263,7 +263,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.videosOnly = false;
 
       // Try to select range with both paths non-existent
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'nonexistent1.mp4',
         'nonexistent2.mp4',
@@ -275,7 +275,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   });
 
   describe('Range selection with filters', () => {
-    it('should respect current filter settings when building items list', () => {
+    it('should respect current filter settings when building items list', async () => {
       // Create structure with mixed file types
       fs.writeFileSync(path.join(testDir, 'video1.mp4'), 'test');
       fs.writeFileSync(path.join(testDir, 'document.txt'), 'test');
@@ -289,7 +289,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
 
       // Select range from first video to last video
       // The items list will only include video files due to videosOnly filter
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video1.mp4',
         'video3.mp4',
@@ -305,7 +305,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.has('image.jpg')).toBe(false);
     });
 
-    it('should work with hideConverted filter', () => {
+    it('should work with hideConverted filter', async () => {
       fs.writeFileSync(path.join(testDir, 'video1.mp4'), 'test');
       fs.writeFileSync(path.join(testDir, 'video2.mp4'), 'test');
       fs.writeFileSync(path.join(testDir, 'video2_converted.mkv'), 'test');
@@ -317,7 +317,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       state.hideConverted = true;
 
       // Select range - converted file should be filtered out from items list
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'video1.mp4',
         'video3.mp4',
@@ -334,7 +334,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   });
 
   describe('Complex scenarios', () => {
-    it('should handle selecting across multiple folders', () => {
+    it('should handle selecting across multiple folders', async () => {
       createTestStructure();
 
       const state = FilePickerStateService.createEmpty();
@@ -347,7 +347,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
 
       // Items order: folderA, folderA/video6-8, folderB, folderB/video9-10, video1-5
       // Select range from folderA/video7.mp4 to video3.mp4
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'folderA/video7.mp4',
         'video3.mp4',
@@ -368,7 +368,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(newState.selectedFiles.has('video5.mp4')).toBe(false);
     });
 
-    it('should work with nested folder structure', () => {
+    it('should work with nested folder structure', async () => {
       // Create nested structure
       fs.mkdirSync(path.join(testDir, 'parent'));
       fs.writeFileSync(path.join(testDir, 'parent', 'file1.mp4'), 'test');
@@ -393,7 +393,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
 
       // Items order: parent, parent/child, parent/child/file2, parent/child/file3, parent/file1
       // Select range within nested structure from file2 to file1
-      const newState = FilePickerStateService.selectRange(
+      const newState = await FilePickerStateService.selectRange(
         state,
         'parent/child/file2.mp4',
         'parent/file1.mp4',
@@ -407,7 +407,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
   });
 
   describe('Real-world usage simulation', () => {
-    it('should simulate typical user workflow: click, shift-click, shift-click again', () => {
+    it('should simulate typical user workflow: click, shift-click, shift-click again', async () => {
       createTestStructure();
 
       let state = FilePickerStateService.createEmpty();
@@ -420,7 +420,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(state.selectedFiles.has('video2.mp4')).toBe(true);
 
       // Shift-click video4.mp4: should select range video2-video4
-      state = FilePickerStateService.selectRange(
+      state = await FilePickerStateService.selectRange(
         state,
         'video2.mp4',
         'video4.mp4',
@@ -431,7 +431,7 @@ describe('File Picker - Shift-Click Range Selection', () => {
       expect(state.selectedFiles.has('video4.mp4')).toBe(true);
 
       // Shift-click video5.mp4: should extend range to video5
-      state = FilePickerStateService.selectRange(
+      state = await FilePickerStateService.selectRange(
         state,
         'video4.mp4',
         'video5.mp4',

@@ -112,13 +112,13 @@ describe('FilePickerStateService - Performance Tests', () => {
     console.log('✅ Cleanup complete\n');
   });
 
-  it('should measure initial directory listing performance (root level)', () => {
+  it('should measure initial directory listing performance (root level)', async () => {
     console.log('🧪 Test: Initial directory listing (root)');
 
     const state = FilePickerStateService.createEmpty();
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -136,14 +136,14 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure performance with one folder expanded', () => {
+  it('should measure performance with one folder expanded', async () => {
     console.log('🧪 Test: One folder expanded');
 
     const state = FilePickerStateService.createEmpty();
     state.expandedFolders.add('folder_0_0');
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -159,7 +159,7 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure performance with deep folder hierarchy expanded', () => {
+  it('should measure performance with deep folder hierarchy expanded', async () => {
     console.log('🧪 Test: Deep folder hierarchy expanded');
 
     const state = FilePickerStateService.createEmpty();
@@ -170,7 +170,7 @@ describe('FilePickerStateService - Performance Tests', () => {
     state.expandedFolders.add('folder_0_0/folder_1_0/folder_2_0/folder_3_0');
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -187,14 +187,14 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure search performance (simple pattern)', () => {
+  it('should measure search performance (simple pattern)', async () => {
     console.log('🧪 Test: Search with simple pattern');
 
     const state = FilePickerStateService.createEmpty();
     state.searchQuery = '*.mp4';
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -213,14 +213,14 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure search performance (specific filename)', () => {
+  it('should measure search performance (specific filename)', async () => {
     console.log('🧪 Test: Search with specific filename');
 
     const state = FilePickerStateService.createEmpty();
     state.searchQuery = '*video_2_5*';
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -237,14 +237,14 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure folder selection toggle performance', () => {
+  it('should measure folder selection toggle performance', async () => {
     console.log('🧪 Test: Folder selection toggle');
 
     const state = FilePickerStateService.createEmpty();
     state.expandedFolders.add('folder_0_0');
 
     const start = performance.now();
-    const newState = FilePickerStateService.toggleFolderSelection(
+    const newState = await FilePickerStateService.toggleFolderSelection(
       state,
       'folder_0_0',
     );
@@ -263,14 +263,14 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure performance with videosOnly filter enabled', () => {
+  it('should measure performance with videosOnly filter enabled', async () => {
     console.log('🧪 Test: VideosOnly filter');
 
     const state = FilePickerStateService.createEmpty();
     state.videosOnly = true;
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -290,14 +290,14 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should measure performance with hideConverted filter enabled', () => {
+  it('should measure performance with hideConverted filter enabled', async () => {
     console.log('🧪 Test: HideConverted filter');
 
     const state = FilePickerStateService.createEmpty();
     state.hideConverted = true;
 
     const start = performance.now();
-    const items = FilePickerStateService.buildItemsList(state);
+    const items = await FilePickerStateService.buildItemsList(state);
     const end = performance.now();
 
     const duration = end - start;
@@ -320,7 +320,7 @@ describe('FilePickerStateService - Performance Tests', () => {
     }
   });
 
-  it('should compare performance: multiple expansions vs search', () => {
+  it('should compare performance: multiple expansions vs search', async () => {
     console.log('🧪 Test: Multiple expansions vs Search comparison');
 
     // Test 1: Multiple folder expansions
@@ -330,7 +330,8 @@ describe('FilePickerStateService - Performance Tests', () => {
     expandedState.expandedFolders.add('folder_0_2');
 
     const startExpanded = performance.now();
-    const expandedItems = FilePickerStateService.buildItemsList(expandedState);
+    const expandedItems =
+      await FilePickerStateService.buildItemsList(expandedState);
     const endExpanded = performance.now();
     const expandedDuration = endExpanded - startExpanded;
 
@@ -339,7 +340,8 @@ describe('FilePickerStateService - Performance Tests', () => {
     searchState.searchQuery = '*.mp4';
 
     const startSearch = performance.now();
-    const searchItems = FilePickerStateService.buildItemsList(searchState);
+    const searchItems =
+      await FilePickerStateService.buildItemsList(searchState);
     const endSearch = performance.now();
     const searchDuration = endSearch - startSearch;
 
