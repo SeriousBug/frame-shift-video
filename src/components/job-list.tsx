@@ -599,18 +599,24 @@ export function JobList() {
               <span>
                 processing {statusCounts.processing}{' '}
                 {statusCounts.processing === 1 ? 'job' : 'jobs'}
-                {statusCounts.pending > 0 && ', '}
+                {(statusCounts.pending > 0 || statusCounts.failed > 0) && ', '}
               </span>
             )}
             {statusCounts.pending > 0 && (
               <span>
                 {statusCounts.pending}{' '}
                 {statusCounts.pending === 1 ? 'job' : 'jobs'} pending
+                {statusCounts.failed > 0 && ', '}
               </span>
             )}
-            {statusCounts.processing === 0 && statusCounts.pending === 0 && (
-              <span>no active jobs</span>
+            {statusCounts.failed > 0 && (
+              <span className="text-red-600 dark:text-red-400">
+                {statusCounts.failed} failed
+              </span>
             )}
+            {statusCounts.processing === 0 &&
+              statusCounts.pending === 0 &&
+              statusCounts.failed === 0 && <span>no active jobs</span>}
           </div>
           <Menu.Root>
             <Menu.Trigger className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">

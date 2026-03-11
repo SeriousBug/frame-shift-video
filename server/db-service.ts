@@ -323,7 +323,7 @@ export const JobService = {
 
   getStatusCounts(): Record<string, number> {
     const results = query<{ status: string; count: number }>(
-      'SELECT status, COUNT(*) as count FROM jobs GROUP BY status',
+      'SELECT status, COUNT(*) as count FROM jobs WHERE cleared = 0 GROUP BY status',
     );
     const counts: Record<string, number> = {
       pending: 0,
