@@ -1,5 +1,9 @@
 # Bun configuration file
 
+[install]
+# Only install package versions published at least 7 days ago
+minimumReleaseAge = 604800
+
 [test]
 # Preload happy-dom and testing library setup
 preload = ["./happydom.ts", "./testing-library.ts", "./src/test/setup.ts"]
