@@ -20,14 +20,14 @@
   },
   "dependencies": {
     "@ark-ui/react": "^5.37.0",
-    "@sentry/bun": "^10.54.0",
-    "@sentry/react": "^10.54.0",
+    "@sentry/bun": "^10.56.0",
+    "@sentry/react": "^10.56.0",
     "@sentry/vite-plugin": "^4.9.1",
-    "@tanstack/react-query": "^5.100.14",
-    "@tanstack/react-query-devtools": "^5.100.14",
-    "@tanstack/react-router": "^1.170.8",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-query-devtools": "^5.101.0",
+    "@tanstack/react-router": "^1.170.11",
     "@tanstack/react-router-devtools": "^1.167.0",
-    "date-fns": "^4.3.0",
+    "date-fns": "^4.4.0",
     "lucide-react": "^0.546.0",
     "micromatch": "^4.0.8",
     "natural-orderby": "^5.0.0",
@@ -36,18 +36,18 @@
     "react-error-boundary": "^6.1.2",
     "react-highlight-words": "^0.21.0",
     "react-virtuoso": "^4.18.7",
-    "zustand": "^5.0.13"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.9.0",
     "@tailwindcss/postcss": "^4.3.0",
-    "@tanstack/router-plugin": "^1.168.11",
+    "@tanstack/router-plugin": "^1.168.14",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
     "@types/micromatch": "^4.0.10",
     "@types/node": "^20.19.41",
-    "@types/react": "^19.2.15",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
     "@types/react-highlight-words": "^0.20.1",
     "@vitejs/plugin-react": "^4.7.0",
@@ -56,6 +56,6 @@
     "prettier": "^3.8.3",
     "tailwindcss": "^4.3.0",
     "typescript": "^5.9.3",
-    "vite": "^6.4.2"
+    "vite": "^6.4.3"
   }
 }
