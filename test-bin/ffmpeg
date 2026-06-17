@@ -3,8 +3,31 @@
 # Mock ffmpeg script for testing
 # This script simulates ffmpeg behavior for tests
 
+# Parse args individually — avoids $* joining issues with different shell/bun versions
+HAS_ENCODER_HELP=false
+HAS_HELP=false
+HAS_VERSION=false
+HAS_PIPE_PROGRESS=false
+for arg in "$@"; do
+    case "$arg" in
+        -h) HAS_HELP=true ;;
+        --help|-help) HAS_HELP=true ;;
+        -version) HAS_VERSION=true ;;
+        pipe:1) HAS_PIPE_PROGRESS=true ;;
+        -h\ encoder=libx264) HAS_ENCODER_HELP=true ;;
+    esac
+done
+# Also check for encoder help via adjacent arg detection
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "-h" && "$arg" == "encoder=libx264" ]]; then
+        HAS_ENCODER_HELP=true
+    fi
+    prev="$arg"
+done
+
 # Check if encoder help was requested (for capability detection)
-if [[ "$*" == *"-h encoder=libx264"* ]]; then
+if $HAS_ENCODER_HELP || [[ "$*" == *"-h encoder=libx264"* ]]; then
     echo "ffmpeg version mock-test-1.0 Copyright (c) 2000-2025 the FFmpeg developers" >&2
     echo "  built with Mock Test Configuration" >&2
     echo "Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:"
@@ -19,21 +42,21 @@ if [[ "$*" == *"-h encoder=libx264"* ]]; then
 fi
 
 # Check if general help was requested
-if [[ "$*" == *"-h"* ]] || [[ "$*" == *"--help"* ]] || [[ "$*" == *"-help"* ]]; then
+if $HAS_HELP || [[ "$*" == *"-h"* ]] || [[ "$*" == *"--help"* ]] || [[ "$*" == *"-help"* ]]; then
     echo "Mock FFmpeg for testing"
     echo "frame-shift-video test version"
     exit 0
 fi
 
 # Check if version was requested
-if [[ "$*" == *"-version"* ]]; then
+if $HAS_VERSION || [[ "$*" == *"-version"* ]]; then
     echo "ffmpeg version mock-test-1.0"
     echo "Mock FFmpeg for frame-shift-video tests"
     exit 0
 fi
 
 # Simulate progress output if -progress pipe:1 is specified
-if [[ "$*" == *"-progress pipe:1"* ]]; then
+if $HAS_PIPE_PROGRESS || [[ "$*" == *"-progress pipe:1"* ]]; then
     # Send progress updates in real FFmpeg format
     
     # First progress update (based on real FFmpeg output)
