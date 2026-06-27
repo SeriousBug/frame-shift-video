@@ -5,12 +5,20 @@ import {
   createFFmpegJobs,
   generateFFmpegCommand,
 } from '../../src/lib/ffmpeg-command';
-import { getSubtitleFormats } from '../../src/lib/ffmpeg-executor';
-import { JobService, FileSelectionService } from '../db-service';
+import {
+  getSubtitleFormats,
+  getVideoStreamInfo,
+} from '../../src/lib/ffmpeg-executor';
+import {
+  JobService,
+  FileSelectionService,
+  JobCreationBatchService,
+} from '../db-service';
 import { JobProcessor } from '../job-processor';
 import { WSBroadcaster } from '../websocket';
 import { decodeCursor } from '../cursor-utils';
 import { logger, captureException } from '../../src/lib/sentry';
+import { startJobCreationBatch } from '../job-creation-service';
 
 /**
  * GET /api/jobs - Fetch jobs with cursor-based pagination
@@ -231,7 +239,7 @@ export async function jobsHandler(
       for (const job of processingJobs) {
         try {
           const processor = JobProcessor.getInstance();
-          processor.cancelJob(job.id);
+          await processor.cancelJob(job.id);
         } catch (error) {
           logger.error(`Failed to cancel job ${job.id}`, { error });
         }
@@ -410,21 +418,26 @@ export async function jobsHandler(
 
       for (const config of jobConfigs) {
         try {
-          // Detect subtitle formats from source file using FFprobe
-          const subtitleCodecs = await getSubtitleFormats(config.inputFile);
-          logger.info('[Jobs API] Detected subtitle formats', {
+          // Detect subtitle formats and video stream info from source file using FFprobe
+          const [subtitleCodecs, videoStreams] = await Promise.all([
+            getSubtitleFormats(config.inputFile),
+            getVideoStreamInfo(config.inputFile),
+          ]);
+          logger.info('[Jobs API] Detected stream info', {
             inputFile: config.inputFile,
             subtitleCodecs,
+            videoStreams,
           });
 
-          // Add subtitle codec information to the config
-          const configWithSubtitles = {
+          // Add stream information to the config
+          const configWithStreamInfo = {
             ...config,
             subtitleCodecs,
+            videoStreams,
           };
 
-          // Generate FFmpeg command for storage (with subtitle codec info)
-          const ffmpegCommand = generateFFmpegCommand(configWithSubtitles);
+          // Generate FFmpeg command for storage (with stream info)
+          const ffmpegCommand = generateFFmpegCommand(configWithStreamInfo);
 
           // Create job in database with JSON-encoded command and config key
           const jobId = JobService.create({
@@ -681,7 +694,7 @@ export async function jobByIdHandler(
       if (job.status === 'processing') {
         try {
           const processor = JobProcessor.getInstance();
-          processor.cancelJob(jobId);
+          await processor.cancelJob(jobId);
         } catch (error) {
           logger.error('Failed to cancel job in processor', { error });
         }
@@ -729,6 +742,136 @@ export async function jobByIdHandler(
     return new Response(
       JSON.stringify({
         error: 'Failed to update job',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
+
+/**
+ * POST /api/jobs/start - Start async job creation
+ * Request body:
+ *   - options: ConversionOptions (same as POST /api/jobs)
+ *
+ * Returns immediately with batch ID and total files count.
+ * Jobs are created in the background with progress updates via WebSocket.
+ */
+export async function startJobsHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    logger.info('[Jobs API] Received async job creation request');
+    const options: ConversionOptions = await req.json();
+
+    logger.info('[Jobs API] Parsed conversion options for async creation', {
+      fileCount: options.selectedFiles?.length || 0,
+      videoCodec: options.basic?.videoCodec,
+      outputFormat: options.basic?.outputFormat,
+    });
+
+    // Validate that files are selected
+    if (!options.selectedFiles || options.selectedFiles.length === 0) {
+      logger.warn('[Jobs API] No files selected for conversion');
+      return new Response(
+        JSON.stringify({ error: 'No files selected for conversion' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        },
+      );
+    }
+
+    const totalFiles = options.selectedFiles.length;
+
+    // Create batch record
+    const batchId = JobCreationBatchService.create({
+      total_files: totalFiles,
+      config_json: JSON.stringify(options),
+    });
+
+    logger.info('[Jobs API] Created job creation batch', {
+      batchId,
+      totalFiles,
+    });
+
+    // Start async processing - returns immediately
+    startJobCreationBatch(batchId);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        batchId,
+        totalFiles,
+        message: `Started creating ${totalFiles} conversion job(s)`,
+      }),
+      {
+        status: 202, // Accepted - processing started but not complete
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  } catch (error) {
+    logger.error('[Jobs API] ERROR starting async job creation', {
+      error,
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+    });
+    captureException(error);
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to start job creation',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
+
+/**
+ * GET /api/jobs/batch/:batchId - Get job creation batch status
+ */
+export async function getJobBatchHandler(
+  req: Request,
+  batchId: number,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    const batch = JobCreationBatchService.getById(batchId);
+
+    if (!batch) {
+      return new Response(JSON.stringify({ error: 'Batch not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        id: batch.id,
+        status: batch.status,
+        totalFiles: batch.total_files,
+        createdCount: batch.created_count,
+        errorMessage: batch.error_message,
+        createdAt: batch.created_at,
+        completedAt: batch.completed_at,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  } catch (error) {
+    logger.error('Error fetching batch status', { error, batchId });
+    captureException(error);
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to fetch batch status',
         details: error instanceof Error ? error.message : String(error),
       }),
       {

@@ -14,6 +14,33 @@ Self-hosted web service for queueing and managing FFmpeg video conversion jobs. 
 
 The Bun server is the single source of truth for job state and queue management.
 
+### Instance Types (Distributed Architecture)
+
+Frame Shift Video supports three instance types for distributed processing:
+
+**Standalone (default)**: Single server that does everything - serves UI, manages jobs, and runs FFmpeg.
+
+**Leader-Follower**: Distributed setup for horizontal scaling:
+
+- **Leader instance**: Serves the UI, creates jobs, manages the queue, but delegates FFmpeg execution to followers
+- **Follower instances**: Execute FFmpeg jobs received from the leader and report progress back
+
+**Key requirements for distributed setup:**
+
+- **Shared filesystem**: Leader and all followers MUST have access to the same filesystem with identical paths. Mount the same network drive/NFS on all instances.
+- **Authentication**: Leader and followers authenticate using a shared token (HMAC-based) to prevent unauthorized access.
+- **Job distribution**: Leader uses "first available" strategy to distribute jobs to followers.
+- **Failure handling**: If a follower fails or becomes unresponsive, the job is marked as failed (no automatic retry).
+
+Configuration via environment variables:
+
+- `INSTANCE_TYPE`: `standalone`, `leader`, or `follower`
+- `SHARED_TOKEN`: Required for leader/follower instances (must be identical on all instances)
+- `FOLLOWER_URLS`: Required for leader (comma-separated list of follower URLs)
+- `LEADER_URL`: Required for followers (URL of the leader instance)
+
+See `.env.example` for detailed configuration examples.
+
 ## Key Components (Terminology)
 
 - **File picker**: The page with "Select Files for Conversion" text (`/src/routes/convert/index.tsx`)
@@ -62,14 +89,17 @@ Database schema is defined in `/server/database.ts`. Migrations run automaticall
 
 ### Backend (`/server`)
 
-- **`index.ts`**: Main server entry point, HTTP + WebSocket setup
+- **`index.ts`**: Main server entry point, HTTP + WebSocket setup, instance type detection
 - **`routes.ts`**: API route definitions (see here for endpoint list)
 - **`websocket.ts`**: WebSocket server for real-time updates
 - **`database.ts`**: SQLite connection and schema
 - **`db-service.ts`**: Database query layer
-- **`job-processor.ts`**: Job queue manager, processes FFmpeg jobs
+- **`job-processor.ts`**: Job queue manager, processes FFmpeg jobs (standalone/leader)
+- **`leader-distributor.ts`**: Distributes jobs to follower instances (leader mode only)
+- **`follower-executor.ts`**: Executes jobs received from leader (follower mode only)
+- **`auth.ts`**: Authentication utilities for leader-follower communication
 - **`notification-service.ts`**: Notification integrations
-- **`/server/handlers/`**: API endpoint implementations (jobs, files, file selections)
+- **`/server/handlers/`**: API endpoint implementations (jobs, files, file selections, worker)
 
 ### Tests
 

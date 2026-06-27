@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { ConversionConfig } from '@/components/conversion-config';
 import { ConversionOptions } from '@/types/conversion';
 import {
   useFileSelections,
-  useCreateJobs,
+  useStartJobs,
   useSaveFileSelections,
   useClearPickerState,
 } from '@/lib/api-hooks';
@@ -40,52 +40,40 @@ function ConfigurePage() {
 
   const files = fileSelectionsData?.files || [];
   const savedConfig = fileSelectionsData?.config;
-  const createJobsMutation = useCreateJobs();
+  const startJobsMutation = useStartJobs();
   const saveFileSelectionsMutation = useSaveFileSelections();
   const clearPickerState = useClearPickerState();
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     clearPickerState();
     navigate({ to: '/', search: {} });
-  };
+  }, [clearPickerState, navigate]);
 
   const handleStartConversion = async (options: ConversionOptions) => {
     console.log('[Configure Page] Starting conversion with options:', {
       fileCount: options.selectedFiles?.length || 0,
-      outputDir: options.outputDirectory,
-      format: options.format,
-      videoCodec: options.videoCodec,
-      audioCodec: options.audioCodec,
-      quality: options.quality,
+      videoCodec: options.basic?.videoCodec,
+      outputFormat: options.basic?.outputFormat,
     });
     console.log('[Configure Page] Selected files:', options.selectedFiles);
 
     try {
-      const result = await createJobsMutation.mutateAsync(options);
-      console.log('[Configure Page] Jobs created successfully:', result);
+      const result = await startJobsMutation.mutateAsync(options);
+      console.log('[Configure Page] Job creation started:', result);
 
-      // Clear picker state and navigate back to home on success
+      // Navigate home immediately - progress will be shown on home page
       clearPickerState();
       navigate({ to: '/', search: {} });
     } catch (error) {
-      console.error('[Configure Page] ERROR: Failed to create conversion jobs');
+      console.error('[Configure Page] ERROR: Failed to start job creation');
       console.error('[Configure Page] Error details:', error);
       console.error(
         '[Configure Page] Error message:',
         error instanceof Error ? error.message : String(error),
       );
-      console.error(
-        '[Configure Page] Error stack:',
-        error instanceof Error ? error.stack : 'No stack trace',
-      );
-      console.error('[Configure Page] Options that failed:', {
-        fileCount: options.selectedFiles?.length || 0,
-        outputDir: options.outputDirectory,
-        format: options.format,
-      });
 
       alert(
-        `Failed to create conversion jobs: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to start job creation: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   };
@@ -178,7 +166,8 @@ function ConfigurePage() {
                   search: { key: urlKey },
                 })
               }
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
+              disabled={startJobsMutation.isPending}
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ← Back to File Selection
             </button>
@@ -187,7 +176,8 @@ function ConfigurePage() {
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
+                disabled={startJobsMutation.isPending}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -199,12 +189,12 @@ function ConfigurePage() {
                 disabled={
                   !currentOptions ||
                   files.length === 0 ||
-                  createJobsMutation.isPending
+                  startJobsMutation.isPending
                 }
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                {createJobsMutation.isPending
-                  ? 'Creating Jobs...'
+                {startJobsMutation.isPending
+                  ? 'Starting...'
                   : 'Start Conversion'}
               </button>
             </div>

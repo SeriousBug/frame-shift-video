@@ -52,6 +52,18 @@ export type AudioCodec =
   | 'copy';
 
 /**
+ * Audio quality presets for simplified bitrate selection
+ * Maps to VBR settings for supported codecs (AAC, Opus) or CBR for AC3
+ */
+export type AudioQuality =
+  /** Lower quality, smaller file size */
+  | 'low'
+  /** Balanced quality and file size (default) */
+  | 'medium'
+  /** Higher quality, larger file size */
+  | 'high';
+
+/**
  * Bitrate control mode for video encoding
  */
 export type BitrateMode =
@@ -61,6 +73,16 @@ export type BitrateMode =
   | 'cbr'
   /** Variable bitrate with target average (maps to -b:v with -maxrate/-bufsize) */
   | 'vbr';
+
+/**
+ * Bit depth for video encoding (maps to -pix_fmt flag)
+ * 10-bit provides smoother gradients and reduced banding artifacts
+ */
+export type BitDepth =
+  /** 8-bit encoding - smaller files, more compatible (yuv420p) */
+  | '8bit'
+  /** 10-bit encoding - better quality, reduced banding (yuv420p10le) */
+  | '10bit';
 
 /**
  * Common video output formats
@@ -93,6 +115,9 @@ export interface BasicConversionOptions {
 export interface AdvancedConversionOptions {
   /** Encoding speed/efficiency preset (maps to -preset flag) */
   preset: EncodingPreset;
+
+  /** Bit depth for video encoding (maps to -pix_fmt flag) */
+  bitDepth: BitDepth;
 
   /** Bitrate control configuration */
   bitrate: {
@@ -129,17 +154,24 @@ export interface AdvancedConversionOptions {
     /** Audio codec (maps to -c:a flag) */
     codec: AudioCodec;
     /**
-     * Audio bitrate in kbps (maps to -b:a flag)
-     * Opus: 96k (stereo), 128k (stereo high), 256k (5.1)
-     * AAC: 128k (stereo), 192k (stereo high), 384k (5.1)
-     * AC3: 192k (stereo), 448k (5.1 standard)
+     * Audio quality preset (low, medium, high)
+     * Maps to VBR quality settings for AAC/Opus, CBR for AC3
+     * Ignored for FLAC (always lossless) and copy mode
      */
-    bitrate?: number;
+    quality: AudioQuality;
     /** Sample rate in Hz (maps to -ar flag) */
     sampleRate?: number;
     /** Number of audio channels (maps to -ac flag) */
     channels?: number;
   };
+
+  /**
+   * Remove extra video streams from output (e.g., attached pictures like cover art)
+   * When enabled, only the first video stream is included (maps to -map 0:v:0)
+   * When disabled, all video streams are included (maps to -map 0)
+   * Default: true (removes extra video streams to avoid encoding issues with odd-dimension cover art)
+   */
+  removeExtraVideoStreams: boolean;
 }
 
 /**
@@ -171,6 +203,7 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
   },
   advanced: {
     preset: 'slow',
+    bitDepth: '10bit',
     bitrate: {
       mode: 'crf',
     },
@@ -181,8 +214,9 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
       copyOriginal: true,
     },
     audio: {
-      codec: 'copy',
-      bitrate: 128,
+      codec: 'libopus',
+      quality: 'high',
     },
+    removeExtraVideoStreams: true,
   },
 };

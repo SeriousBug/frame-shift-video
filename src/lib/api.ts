@@ -95,7 +95,7 @@ export async function fetchJobsByStatus(
 }
 
 /**
- * Create new jobs
+ * Create new jobs (legacy sync endpoint)
  */
 export async function createJobs(
   options: ConversionOptions,
@@ -121,6 +121,78 @@ export async function createJobs(
   const result = await response.json();
   console.log('[API Client] Create jobs result:', result);
   return result;
+}
+
+/**
+ * Response from async job creation endpoint
+ */
+export interface StartJobsResponse {
+  success: boolean;
+  batchId: number;
+  totalFiles: number;
+  message: string;
+}
+
+/**
+ * Start async job creation
+ * Returns immediately with batch ID - jobs are created in background
+ */
+export async function startJobs(
+  options: ConversionOptions,
+): Promise<StartJobsResponse> {
+  console.log(
+    '[API Client] Starting async job creation with options:',
+    options,
+  );
+
+  const response = await fetch(`${API_BASE}/jobs/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options),
+  });
+
+  console.log('[API Client] Start jobs response status:', response.status);
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error('[API Client] Start jobs error:', error);
+    throw new Error(error.error || 'Failed to start job creation');
+  }
+
+  const result = await response.json();
+  console.log('[API Client] Start jobs result:', result);
+  return result;
+}
+
+/**
+ * Job creation batch status
+ */
+export interface JobCreationBatchStatus {
+  id: number;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  totalFiles: number;
+  createdCount: number;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/**
+ * Get job creation batch status
+ */
+export async function getJobBatchStatus(
+  batchId: number,
+): Promise<JobCreationBatchStatus> {
+  const response = await fetch(`${API_BASE}/jobs/batch/${batchId}`);
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch batch status');
+  }
+
+  return response.json();
 }
 
 /**
@@ -337,6 +409,56 @@ export async function fetchServerVersion(): Promise<{
 }
 
 /**
+ * FFmpeg capabilities from the server
+ */
+export interface FFmpegCapabilities {
+  /** Whether libx264 supports 10-bit encoding (yuv420p10le) */
+  x264_10bit: boolean;
+}
+
+/**
+ * Settings response with FFmpeg capabilities
+ */
+export interface SettingsResponse {
+  version: string | null;
+  ffmpeg?: FFmpegCapabilities;
+}
+
+/**
+ * Fetch server settings including FFmpeg capabilities
+ */
+export async function fetchSettings(): Promise<SettingsResponse> {
+  const response = await fetch(`${API_BASE}/settings`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch settings');
+  }
+
+  return response.json();
+}
+
+/**
+ * Response for notification status endpoint
+ */
+export interface NotificationStatusResponse {
+  enabled: boolean;
+  methods: string[];
+}
+
+/**
+ * Get notification configuration status
+ */
+export async function fetchNotificationStatus(): Promise<NotificationStatusResponse> {
+  const response = await fetch(`${API_BASE}/notifications/status`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch notification status');
+  }
+
+  return response.json();
+}
+
+/**
  * Send a test notification
  */
 export async function sendTestNotification(): Promise<{
@@ -352,6 +474,106 @@ export async function sendTestNotification(): Promise<{
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to send test notification');
+  }
+
+  return response.json();
+}
+
+/**
+ * Follower status with job info
+ */
+export interface FollowerStatus {
+  id: string;
+  url: string;
+  busy: boolean;
+  dead: boolean;
+  currentJob: {
+    id: number;
+    name: string;
+    progress: number;
+  } | null;
+}
+
+/**
+ * Response for followers status endpoint
+ */
+export interface FollowersStatusResponse {
+  enabled: boolean;
+  followers: FollowerStatus[];
+  hasDeadFollowers: boolean;
+}
+
+/**
+ * Fetch followers status (leader mode only)
+ */
+export async function fetchFollowersStatus(): Promise<FollowersStatusResponse> {
+  const response = await fetch(`${API_BASE}/settings/followers`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch followers status');
+  }
+
+  return response.json();
+}
+
+/**
+ * Trigger retry sync for dead followers
+ */
+export async function retryFollowers(): Promise<{
+  success: boolean;
+  message: string;
+  hasDeadFollowers: boolean;
+}> {
+  const response = await fetch(`${API_BASE}/settings/followers/retry`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to retry followers');
+  }
+
+  return response.json();
+}
+
+/**
+ * System status for a single node
+ */
+export interface NodeSystemStatus {
+  /** Node identifier (e.g., "standalone", "leader", "follower-0") */
+  nodeId: string;
+  /** CPU usage percentage (0-100) */
+  cpuUsagePercent: number;
+  /** Number of CPU cores */
+  cpuCores: number;
+  /** Memory used in bytes */
+  memoryUsedBytes: number;
+  /** Total memory in bytes */
+  memoryTotalBytes: number;
+  /** Memory usage percentage (0-100) */
+  memoryUsagePercent: number;
+  /** Timestamp when this status was collected */
+  timestamp: number;
+}
+
+/**
+ * System status response
+ */
+export interface SystemStatusResponse {
+  /** Instance type: standalone, leader, or follower */
+  instanceType: 'standalone' | 'leader' | 'follower';
+  /** Status of all nodes */
+  nodes: NodeSystemStatus[];
+}
+
+/**
+ * Fetch system status for all nodes
+ */
+export async function fetchSystemStatus(): Promise<SystemStatusResponse> {
+  const response = await fetch(`${API_BASE}/settings/system-status`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch system status');
   }
 
   return response.json();

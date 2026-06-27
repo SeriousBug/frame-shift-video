@@ -18,6 +18,7 @@ import { notificationService } from './notification-service';
 import { WSBroadcaster } from './websocket';
 import { finalizeTempFile, cleanupTempFile } from './temp-file-service';
 import { logger, captureException, startSpan } from '../src/lib/sentry';
+import { LeaderDistributor } from './leader-distributor';
 
 /**
  * Job processor configuration
@@ -35,6 +36,8 @@ export interface JobProcessorConfig {
   outputsDir?: string;
   /** Interval in milliseconds to check for new jobs (default: 60000 = 1 minute) */
   checkInterval?: number;
+  /** If provided, use leader distributor instead of local execution */
+  leaderDistributor?: LeaderDistributor;
 }
 
 /**
@@ -65,6 +68,8 @@ export class JobProcessor extends EventEmitter {
   private isProcessing = false;
   private isShuttingDown = false;
   private lastCompletionNotificationSent = false;
+  /** Track active jobs in leader mode for concurrent processing */
+  private activeJobIds = new Set<number>();
 
   private constructor(config: JobProcessorConfig) {
     super();
@@ -95,6 +100,7 @@ export class JobProcessor extends EventEmitter {
   static resetInstance(): void {
     if (JobProcessor.instance) {
       JobProcessor.instance.stop();
+      JobProcessor.instance.activeJobIds.clear();
       JobProcessor.instance = null;
     }
   }
@@ -166,6 +172,18 @@ export class JobProcessor extends EventEmitter {
       this.currentJobId = null;
     }
 
+    // Reset all active jobs to pending (for leader mode)
+    for (const jobId of this.activeJobIds) {
+      const job = JobService.getById(jobId);
+      if (job && job.status !== 'cancelled') {
+        JobService.update(jobId, {
+          status: 'pending',
+          error_message: 'Job cancelled due to processor shutdown',
+        });
+      }
+    }
+    this.activeJobIds.clear();
+
     this.isProcessing = false;
     this.isShuttingDown = false;
     logger.info('[JobProcessor] Stopped');
@@ -191,11 +209,57 @@ export class JobProcessor extends EventEmitter {
   /**
    * Get the current processing state
    */
-  getState(): { isProcessing: boolean; currentJobId: number | null } {
+  getState(): {
+    isProcessing: boolean;
+    currentJobId: number | null;
+    activeJobIds: number[];
+  } {
     return {
-      isProcessing: this.isProcessing,
+      isProcessing: this.isProcessing || this.activeJobIds.size > 0,
       currentJobId: this.currentJobId,
+      activeJobIds: Array.from(this.activeJobIds),
     };
+  }
+
+  /**
+   * Sync active job IDs from external source (e.g., from follower sync)
+   * Used in leader mode to restore state after restart
+   */
+  syncActiveJobs(jobIds: number[]): void {
+    // Add any jobs that aren't already tracked
+    for (const jobId of jobIds) {
+      if (!this.activeJobIds.has(jobId)) {
+        this.activeJobIds.add(jobId);
+        logger.info('[JobProcessor] Restored active job from sync', { jobId });
+      }
+    }
+
+    // Remove any jobs we thought were active but aren't on followers
+    for (const trackedJobId of this.activeJobIds) {
+      if (!jobIds.includes(trackedJobId)) {
+        // Check if the job is still in processing state in DB
+        const job = JobService.getById(trackedJobId);
+        if (job?.status === 'processing') {
+          // Job is marked processing but no follower is running it
+          // This could happen if a follower died while processing
+          logger.warn(
+            '[JobProcessor] Job marked processing but not on any follower',
+            { jobId: trackedJobId },
+          );
+          // Mark as failed since the follower that was processing it is gone
+          JobService.setError(
+            trackedJobId,
+            'Job lost - follower disconnected during processing',
+          );
+        }
+        this.activeJobIds.delete(trackedJobId);
+      }
+    }
+
+    logger.info('[JobProcessor] Active jobs synced', {
+      activeJobCount: this.activeJobIds.size,
+      activeJobIds: Array.from(this.activeJobIds),
+    });
   }
 
   /**
@@ -205,13 +269,47 @@ export class JobProcessor extends EventEmitter {
    * Note: Temp file cleanup is handled by the processJob method when
    * the FFmpeg process returns after being killed
    */
-  cancelJob(jobId: number): void {
+  async cancelJob(jobId: number): Promise<void> {
     const job = JobService.getById(jobId);
     if (!job) {
       throw new Error('Job not found', { cause: { jobId } });
     }
 
-    // If this is the current job being processed, kill it
+    // Handle leader mode - cancel on follower
+    if (this.config.leaderDistributor && this.activeJobIds.has(jobId)) {
+      logger.info('[JobProcessor] Cancelling job on follower', { jobId });
+      const cancelled =
+        await this.config.leaderDistributor.cancelJobOnFollower(jobId);
+
+      if (cancelled) {
+        // Remove from active jobs
+        this.activeJobIds.delete(jobId);
+        JobService.update(jobId, {
+          status: 'cancelled',
+          error_message: 'Job cancelled by user',
+        });
+        const updatedJob = JobService.getById(jobId);
+        if (updatedJob) {
+          this.emit('job:fail', updatedJob, 'Job cancelled by user');
+        }
+        logger.info('[JobProcessor] Job cancelled successfully on follower', {
+          jobId,
+        });
+      } else {
+        logger.warn('[JobProcessor] Failed to cancel job on follower', {
+          jobId,
+        });
+        // Still mark as cancelled in database even if follower cancel failed
+        JobService.update(jobId, {
+          status: 'cancelled',
+          error_message:
+            'Job cancelled by user (follower may still be processing)',
+        });
+      }
+      return;
+    }
+
+    // Standalone mode - if this is the current job being processed, kill it
     if (this.currentJobId === jobId && this.executor) {
       logger.info('[JobProcessor] Cancelling job', { jobId });
       this.executor.kill();
@@ -236,6 +334,29 @@ export class JobProcessor extends EventEmitter {
   }
 
   /**
+   * Check if we can process more jobs
+   * In leader mode, we can process multiple jobs concurrently (one per follower)
+   * In standalone mode, we only process one job at a time
+   */
+  private canProcessMoreJobs(): boolean {
+    if (this.isShuttingDown) {
+      return false;
+    }
+
+    // Leader mode: check if any follower is available (not busy and not dead)
+    if (this.config.leaderDistributor) {
+      const followerStatus = this.config.leaderDistributor.getFollowerStatus();
+      const availableFollowers = followerStatus.filter(
+        (f) => !f.busy && !f.dead,
+      );
+      return availableFollowers.length > 0;
+    }
+
+    // Standalone mode: only one job at a time
+    return !this.isProcessing;
+  }
+
+  /**
    * Check for pending jobs and process the next one
    * Note: This is intentionally non-async to prevent accidental awaiting.
    * The async work happens in an IIFE.
@@ -244,22 +365,29 @@ export class JobProcessor extends EventEmitter {
     logger.debug('[JobProcessor] checkForJobs called', {
       isProcessing: this.isProcessing,
       isShuttingDown: this.isShuttingDown,
+      activeJobs: this.activeJobIds.size,
     });
 
-    // Don't check if already processing or shutting down
-    if (this.isProcessing || this.isShuttingDown) {
-      logger.debug(
-        '[JobProcessor] Skipping check - already processing or shutting down',
-      );
+    // Don't check if shutting down or can't process more jobs
+    if (!this.canProcessMoreJobs()) {
+      logger.debug('[JobProcessor] Skipping check - cannot process more jobs');
       return;
     }
 
-    // Get next pending job
+    // Get next pending job (excluding ones we're already processing)
     const nextJob = JobService.getNextPendingJob();
 
     if (!nextJob) {
       // No pending jobs
       logger.debug('[JobProcessor] No pending jobs found');
+      return;
+    }
+
+    // Skip if we're already processing this job (shouldn't happen, but be safe)
+    if (this.activeJobIds.has(nextJob.id)) {
+      logger.debug('[JobProcessor] Job already being processed', {
+        jobId: nextJob.id,
+      });
       return;
     }
 
@@ -274,10 +402,18 @@ export class JobProcessor extends EventEmitter {
       jobName: nextJob.name,
     });
 
+    // Track this job as active
+    this.activeJobIds.add(nextJob.id);
+
     // Run async processing in IIFE (don't await - fire and forget)
     (async () => {
       await this.processJob(nextJob);
     })();
+
+    // In leader mode, immediately check for more jobs to distribute
+    if (this.config.leaderDistributor) {
+      setImmediate(() => this.checkForJobs());
+    }
   }
 
   /**
@@ -287,7 +423,11 @@ export class JobProcessor extends EventEmitter {
     return startSpan(
       { op: 'job.process', name: `Process job ${job.id}` },
       async () => {
-        this.isProcessing = true;
+        // In standalone mode, use isProcessing flag
+        // In leader mode, we use activeJobIds instead (already added in checkForJobs)
+        if (!this.config.leaderDistributor) {
+          this.isProcessing = true;
+        }
         this.currentJobId = job.id;
         this.emit('state:change', true);
 
@@ -311,30 +451,52 @@ export class JobProcessor extends EventEmitter {
           // Parse FFmpeg command from job
           const command = this.parseJobCommand(job);
 
-          // Create executor (no timeout - jobs can run as long as needed)
-          this.executor = new FFmpegExecutor({
-            uploadsDir: this.config.uploadsDir,
-            outputsDir: this.config.outputsDir,
-          });
-
           // Track maximum frame count
           let maxFrames = 0;
 
-          // Set up progress tracking
-          this.executor.on('progress', (progress: FFmpegProgress) => {
-            // Track maximum frame count
-            if (progress.frame > maxFrames) {
-              maxFrames = progress.frame;
-            }
-            JobService.updateProgress(job.id, progress.progress);
-            const updatedJob = JobService.getById(job.id);
-            if (updatedJob) {
-              this.emit('job:progress', updatedJob, progress);
-            }
-          });
+          let result: FFmpegResult;
 
-          // Execute the command
-          const result: FFmpegResult = await this.executor.execute(command);
+          // Use leader distributor if configured, otherwise use local executor
+          if (this.config.leaderDistributor) {
+            // Leader mode: distribute to follower
+            const distributor = this.config.leaderDistributor;
+
+            // Set up progress tracking from distributor
+            distributor.on('progress', (progress: FFmpegProgress) => {
+              if (progress.frame > maxFrames) {
+                maxFrames = progress.frame;
+              }
+              JobService.updateProgress(job.id, progress.progress);
+              const updatedJob = JobService.getById(job.id);
+              if (updatedJob) {
+                this.emit('job:progress', updatedJob, progress);
+              }
+            });
+
+            // Execute on follower
+            result = await distributor.execute(command, job);
+          } else {
+            // Standalone mode: execute locally
+            this.executor = new FFmpegExecutor({
+              uploadsDir: this.config.uploadsDir,
+              outputsDir: this.config.outputsDir,
+            });
+
+            // Set up progress tracking
+            this.executor.on('progress', (progress: FFmpegProgress) => {
+              if (progress.frame > maxFrames) {
+                maxFrames = progress.frame;
+              }
+              JobService.updateProgress(job.id, progress.progress);
+              const updatedJob = JobService.getById(job.id);
+              if (updatedJob) {
+                this.emit('job:progress', updatedJob, progress);
+              }
+            });
+
+            // Execute the command
+            result = await this.executor.execute(command);
+          }
 
           // Handle result
           if (result.success) {
@@ -347,17 +509,28 @@ export class JobProcessor extends EventEmitter {
               maxFrames = result.finalProgress.frame;
             }
 
-            // Rename temporary file to final output path
+            // Handle file finalization
+            // For leader mode, result.output contains the final path (already finalized by follower)
+            // For standalone mode, result has tempPath and finalPath that need renaming
+            const isLeaderMode = this.config.leaderDistributor !== undefined;
+            const outputPath = isLeaderMode
+              ? result.output!
+              : result.finalPath!;
+
             try {
-              await finalizeTempFile(result.tempPath, result.finalPath);
-              JobService.complete(job.id, result.finalPath);
+              // Only finalize temp file if in standalone mode
+              if (!isLeaderMode) {
+                await finalizeTempFile(result.tempPath, result.finalPath);
+              }
+
+              JobService.complete(job.id, outputPath);
               JobService.update(job.id, {
                 end_time: endTime,
                 total_frames: maxFrames > 0 ? maxFrames : undefined,
               });
               logger.info('[JobProcessor] Job completed successfully', {
                 jobId: job.id,
-                outputPath: result.finalPath,
+                outputPath: outputPath,
                 totalFrames: maxFrames,
               });
               const completedJob = JobService.getById(job.id);
@@ -368,7 +541,12 @@ export class JobProcessor extends EventEmitter {
               // Failed to rename - treat as failure and clean up temp file
               const errorMessage =
                 error instanceof Error ? error.message : String(error);
-              await cleanupTempFile(result.tempPath);
+
+              // Only cleanup temp file if in standalone mode
+              if (!isLeaderMode && result.tempPath) {
+                await cleanupTempFile(result.tempPath);
+              }
+
               JobService.setError(
                 job.id,
                 `Failed to finalize output file: ${errorMessage}`,
@@ -395,8 +573,12 @@ export class JobProcessor extends EventEmitter {
             }
           } else {
             const endTime = new Date().toISOString();
-            // Clean up temporary file
-            await cleanupTempFile(result.tempPath);
+            const isLeaderMode = this.config.leaderDistributor !== undefined;
+
+            // Clean up temporary file (only in standalone mode)
+            if (!isLeaderMode && result.tempPath) {
+              await cleanupTempFile(result.tempPath);
+            }
 
             // Check if job was already cancelled (don't override cancelled status)
             const currentJob = JobService.getById(job.id);
@@ -465,10 +647,19 @@ export class JobProcessor extends EventEmitter {
           // Clean up
           this.executor = null;
           this.currentJobId = null;
-          this.isProcessing = false;
-          this.emit('state:change', false);
+          this.activeJobIds.delete(job.id);
 
-          logger.debug('[JobProcessor] Job finished, cleaning up');
+          // Only set isProcessing to false in standalone mode
+          // In leader mode, isProcessing is not used (we use activeJobIds instead)
+          if (!this.config.leaderDistributor) {
+            this.isProcessing = false;
+          }
+          this.emit('state:change', this.activeJobIds.size > 0);
+
+          logger.debug('[JobProcessor] Job finished, cleaning up', {
+            jobId: job.id,
+            remainingActiveJobs: this.activeJobIds.size,
+          });
 
           // Check if all jobs are complete and send notification
           if (!this.isShuttingDown) {

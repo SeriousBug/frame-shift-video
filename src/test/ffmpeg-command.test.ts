@@ -80,14 +80,24 @@ describe('FFmpeg Command Generation', () => {
         'ffmpeg',
         '-i',
         'input.mkv',
+        '-map',
+        '0:v:0', // First video stream only (excludes attached pics)
+        '-map',
+        '0:a?', // All audio streams (optional)
+        '-map',
+        '0:s?', // All subtitle streams (optional)
         '-c:v',
         'libx265',
         '-crf',
         '22',
         '-preset',
         'slow',
+        '-pix_fmt',
+        'yuv420p10le', // 10-bit default
         '-c:a',
-        'copy',
+        'libopus',
+        '-compression_level',
+        '0', // high quality
         '-sn', // No subtitles when subtitleCodecs is not provided
         '-progress',
         'pipe:1',
@@ -96,7 +106,7 @@ describe('FFmpeg Command Generation', () => {
       ]);
 
       expect(command.displayCommand).toBe(
-        'ffmpeg -i input.mkv -c:v libx265 -crf 22 -preset slow -c:a copy -sn -progress pipe:1 -y output.mp4',
+        'ffmpeg -i input.mkv -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -crf 22 -preset slow -pix_fmt yuv420p10le -c:a libopus -compression_level 0 -sn -progress pipe:1 -y output.mp4',
       );
       expect(command.inputPath).toBe('input.mkv');
       expect(command.outputPath).toBe('output.mp4');
@@ -418,7 +428,7 @@ describe('FFmpeg Command Generation', () => {
       expect(command.args).toContain('libsvtav1');
     });
 
-    it('should handle different audio codecs', () => {
+    it('should handle AAC codec with VBR quality', () => {
       const aacConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -428,7 +438,7 @@ describe('FFmpeg Command Generation', () => {
             ...basicOptions.advanced,
             audio: {
               codec: 'aac',
-              bitrate: 192,
+              quality: 'high',
             },
           },
         },
@@ -438,13 +448,227 @@ describe('FFmpeg Command Generation', () => {
       const command = generateFFmpegCommand(aacConfig);
       expect(command.args).toContain('-c:a');
       expect(command.args).toContain('aac');
+      // AAC uses -q:a for VBR quality
+      expect(command.args).toContain('-q:a');
+      expect(command.args).toContain('1'); // high quality = 1
+    });
+
+    it('should handle Opus codec with compression level', () => {
+      const opusConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.webm',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            audio: {
+              codec: 'libopus',
+              quality: 'high',
+            },
+          },
+        },
+        jobName: 'Opus Test',
+      };
+
+      const command = generateFFmpegCommand(opusConfig);
+      expect(command.args).toContain('-c:a');
+      expect(command.args).toContain('libopus');
+      // Opus uses -compression_level
+      expect(command.args).toContain('-compression_level');
+      expect(command.args).toContain('0'); // high quality = 0
+    });
+
+    it('should handle AC3 codec with CBR bitrate', () => {
+      const ac3Config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mkv',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            audio: {
+              codec: 'ac3',
+              quality: 'high',
+            },
+          },
+        },
+        jobName: 'AC3 Test',
+      };
+
+      const command = generateFFmpegCommand(ac3Config);
+      expect(command.args).toContain('-c:a');
+      expect(command.args).toContain('ac3');
+      // AC3 uses CBR bitrate
       expect(command.args).toContain('-b:a');
-      expect(command.args).toContain('192k');
+      expect(command.args).toContain('640k'); // high quality = 640k
+    });
+
+    it('should handle FLAC codec without quality settings', () => {
+      const flacConfig: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mkv',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            audio: {
+              codec: 'flac',
+              quality: 'high', // Ignored for FLAC
+            },
+          },
+        },
+        jobName: 'FLAC Test',
+      };
+
+      const command = generateFFmpegCommand(flacConfig);
+      expect(command.args).toContain('-c:a');
+      expect(command.args).toContain('flac');
+      // FLAC is lossless, no quality/bitrate settings
+      expect(command.args).not.toContain('-q:a');
+      expect(command.args).not.toContain('-b:a');
+      expect(command.args).not.toContain('-compression_level');
+    });
+
+    it('should map video, audio, and subtitle streams selectively', () => {
+      // Map streams selectively to:
+      // - Include only the first video stream (excludes attached pictures like cover art)
+      // - Include all audio streams
+      // - Include all subtitle streams
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: basicOptions,
+        jobName: 'Map Test',
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // Find all -map arguments
+      const mapArgs: string[] = [];
+      for (let i = 0; i < command.args.length; i++) {
+        if (command.args[i] === '-map') {
+          mapArgs.push(command.args[i + 1]);
+        }
+      }
+
+      // Should have three -map arguments: video, audio, subtitle
+      expect(mapArgs).toEqual(['0:v:0', '0:a?', '0:s?']);
+
+      // Verify -map comes after -i input and before codec options
+      const inputIndex = command.args.indexOf('-i');
+      const firstMapIndex = command.args.indexOf('-map');
+      const videoCodecIndex = command.args.indexOf('-c:v');
+      expect(firstMapIndex).toBeGreaterThan(inputIndex);
+      expect(firstMapIndex).toBeLessThan(videoCodecIndex);
+    });
+
+    it('should map all streams when removeExtraVideoStreams is disabled', () => {
+      // When the option is disabled, use -map 0 to include all streams
+      // including attached pictures (cover art)
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            removeExtraVideoStreams: false,
+          },
+        },
+        jobName: 'Map All Streams Test',
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // Find all -map arguments
+      const mapArgs: string[] = [];
+      for (let i = 0; i < command.args.length; i++) {
+        if (command.args[i] === '-map') {
+          mapArgs.push(command.args[i + 1]);
+        }
+      }
+
+      // Should have single -map 0 argument
+      expect(mapArgs).toEqual(['0']);
+
+      // Verify -map comes after -i input and before codec options
+      const inputIndex = command.args.indexOf('-i');
+      const firstMapIndex = command.args.indexOf('-map');
+      const videoCodecIndex = command.args.indexOf('-c:v');
+      expect(firstMapIndex).toBeGreaterThan(inputIndex);
+      expect(firstMapIndex).toBeLessThan(videoCodecIndex);
+    });
+
+    it('should use stream-specific codecs when keeping all streams with attached pictures', () => {
+      // When removeExtraVideoStreams is disabled and there are attached pictures,
+      // encode the main video but copy attached pictures
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            removeExtraVideoStreams: false,
+          },
+        },
+        jobName: 'Stream-Specific Codec Test',
+        videoStreams: [
+          { videoIndex: 0, isAttachedPic: false }, // Main video
+          { videoIndex: 1, isAttachedPic: true }, // Cover art
+        ],
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // Should use stream-specific codecs
+      expect(command.args).toContain('-c:v:0');
+      expect(command.args).toContain('libx265');
+      expect(command.args).toContain('-c:v:1');
+      expect(command.args).toContain('copy');
+
+      // Should NOT have generic -c:v (without stream specifier)
+      const genericCodecIndex = command.args.findIndex(
+        (arg, i) => arg === '-c:v' && command.args[i + 1] !== undefined,
+      );
+      expect(genericCodecIndex).toBe(-1);
+    });
+
+    it('should handle attached picture as first video stream', () => {
+      // Edge case: attached picture appears before main video
+      const config: FFmpegJobConfig = {
+        inputFile: 'input.mkv',
+        outputFile: 'output.mp4',
+        options: {
+          ...basicOptions,
+          advanced: {
+            ...basicOptions.advanced,
+            removeExtraVideoStreams: false,
+          },
+        },
+        jobName: 'Attached Pic First Test',
+        videoStreams: [
+          { videoIndex: 0, isAttachedPic: true }, // Cover art first
+          { videoIndex: 1, isAttachedPic: false }, // Main video second
+        ],
+      };
+
+      const command = generateFFmpegCommand(config);
+
+      // First video stream (attached pic) should be copied
+      const cv0Index = command.args.indexOf('-c:v:0');
+      expect(cv0Index).toBeGreaterThan(-1);
+      expect(command.args[cv0Index + 1]).toBe('copy');
+
+      // Second video stream (main video) should be encoded
+      const cv1Index = command.args.indexOf('-c:v:1');
+      expect(cv1Index).toBeGreaterThan(-1);
+      expect(command.args[cv1Index + 1]).toBe('libx265');
     });
   });
 
   describe('Subtitle Handling', () => {
-    it('should copy subtitles when format is ASS', () => {
+    it('should convert ASS subtitles to ASS (text format)', () => {
       const assConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -455,11 +679,11 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(assConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should copy subtitles when format is SSA', () => {
+    it('should convert SSA subtitles to ASS (text format)', () => {
       const ssaConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -470,11 +694,11 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(ssaConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should copy subtitles when format is SRT', () => {
+    it('should convert SRT subtitles to ASS (text format)', () => {
       const srtConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -485,11 +709,11 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(srtConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 
-    it('should copy subtitles when format is SubRip', () => {
+    it('should convert SubRip subtitles to ASS (text format)', () => {
       const subripConfig: FFmpegJobConfig = {
         inputFile: 'input.mkv',
         outputFile: 'output.mp4',
@@ -500,7 +724,7 @@ describe('FFmpeg Command Generation', () => {
 
       const command = generateFFmpegCommand(subripConfig);
       expect(command.args).toContain('-c:s');
-      expect(command.args).toContain('copy');
+      expect(command.args).toContain('ass');
       expect(command.args).not.toContain('-sn');
     });
 

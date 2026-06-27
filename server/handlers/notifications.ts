@@ -2,6 +2,51 @@ import { notificationService } from '../notification-service';
 import { JobService } from '../db-service';
 import { logger, captureException } from '../../src/lib/sentry';
 
+/** Response for GET /api/notifications/status */
+export interface NotificationStatusResponse {
+  enabled: boolean;
+  methods: string[];
+}
+
+/**
+ * GET /api/notifications/status - Get notification configuration status
+ */
+export async function notificationStatusHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  try {
+    const enabled = notificationService.isEnabled();
+    const methods = notificationService.getConfiguredMethods();
+
+    return new Response(
+      JSON.stringify({
+        enabled,
+        methods,
+      } satisfies NotificationStatusResponse),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  } catch (error) {
+    logger.error('[NotificationHandler] Failed to get notification status', {
+      error,
+    });
+    captureException(error);
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to get notification status',
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      },
+    );
+  }
+}
+
 /**
  * POST /api/notifications/test - Send a test notification
  */

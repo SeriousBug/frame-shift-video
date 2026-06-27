@@ -3,7 +3,77 @@
  */
 
 import path from 'path';
-import { ConversionOptions } from '@/types/conversion';
+import {
+  ConversionOptions,
+  AudioCodec,
+  AudioQuality,
+  VideoCodec,
+  BitDepth,
+} from '@/types/conversion';
+
+/**
+ * Get FFmpeg audio encoding arguments based on codec and quality preset
+ *
+ * VBR support by codec:
+ * - AAC: Full VBR support using -q:a (0.1-2 scale, lower = better)
+ * - Opus: VBR by default, uses -compression_level (0-10, 0 = best quality)
+ * - AC3: CBR only, uses specific bitrates
+ * - FLAC: Lossless, no bitrate/quality settings needed
+ */
+function getAudioQualityArgs(
+  codec: AudioCodec,
+  quality: AudioQuality,
+): string[] {
+  switch (codec) {
+    case 'aac':
+      // AAC VBR quality scale: 0.1-2 (lower = higher quality)
+      const aacQuality = { low: '2', medium: '1.5', high: '1' }[quality];
+      return ['-q:a', aacQuality];
+
+    case 'libopus':
+      // Opus: VBR is default, compression_level 0-10 (0 = best quality, slowest)
+      const opusLevel = { low: '10', medium: '5', high: '0' }[quality];
+      return ['-compression_level', opusLevel];
+
+    case 'ac3':
+      // AC3: CBR only, use standard bitrates
+      // These work well for both stereo and 5.1 content
+      const ac3Bitrate = { low: '384k', medium: '448k', high: '640k' }[quality];
+      return ['-b:a', ac3Bitrate];
+
+    case 'flac':
+      // FLAC: Lossless, no bitrate settings - just use default compression
+      return [];
+
+    case 'copy':
+      // Copy mode: no additional settings
+      return [];
+
+    default:
+      return [];
+  }
+}
+
+/**
+ * Pixel format mapping for bit depth and codec combinations
+ * Maps codec and bit depth to the appropriate FFmpeg pixel format
+ */
+const pixelFormats: Record<VideoCodec, Record<BitDepth, string>> = {
+  libx265: { '8bit': 'yuv420p', '10bit': 'yuv420p10le' },
+  libx264: { '8bit': 'yuv420p', '10bit': 'yuv420p10le' }, // Note: requires 10-bit libx264 build
+  libsvtav1: { '8bit': 'yuv420p', '10bit': 'yuv420p10le' },
+  copy: { '8bit': '', '10bit': '' }, // No pixel format for copy
+};
+
+/**
+ * Video stream info for codec assignment
+ */
+export interface VideoStreamInfo {
+  /** Index within video streams only (0 = first video, 1 = second video, etc.) */
+  videoIndex: number;
+  /** Whether this stream is an attached picture (cover art, thumbnail) */
+  isAttachedPic: boolean;
+}
 
 /**
  * Individual FFmpeg job configuration for a single file
@@ -19,6 +89,8 @@ export interface FFmpegJobConfig {
   jobName: string;
   /** Detected subtitle codec formats from source file (e.g., ['ass', 'srt']) */
   subtitleCodecs?: string[];
+  /** Information about video streams (which are attached pictures vs main video) */
+  videoStreams?: VideoStreamInfo[];
 }
 
 /**
@@ -100,6 +172,7 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
   args.push('-i', escapeFilePath(config.inputFile));
 
   // If custom command is provided, use it (but still validate)
+  // Custom commands handle their own stream mapping
   if (options.customCommand) {
     const customArgs = options.customCommand.trim().split(/\s+/);
     customArgs.forEach((arg) => args.push(escapeArgument(arg)));
@@ -111,9 +184,54 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     return args;
   }
 
+  // Map streams based on removeExtraVideoStreams setting:
+  // When enabled (default): Map only the first video stream to exclude attached pictures
+  // like cover art which often have odd dimensions incompatible with x265/x264
+  // When disabled: Map all streams with -map 0, but use stream-specific codecs to
+  // copy attached pictures instead of re-encoding them
+  const removeExtraVideoStreams =
+    options.advanced.removeExtraVideoStreams !== false; // Default to true if undefined
+  const videoStreams = config.videoStreams || [];
+  const hasAttachedPictures = videoStreams.some((s) => s.isAttachedPic);
+
+  if (removeExtraVideoStreams) {
+    // Map selectively:
+    // - First video stream only (0:v:0) - excludes attached pictures
+    // - All audio streams (0:a?) - the ? makes it optional if no audio exists
+    // - All subtitle streams (0:s?) - the ? makes it optional if no subtitles exist
+    args.push('-map', '0:v:0');
+    args.push('-map', '0:a?');
+    args.push('-map', '0:s?');
+  } else {
+    // Map all streams including attached pictures
+    args.push('-map', '0');
+  }
+
   // Video codec
+  // When keeping all streams and there are attached pictures, use stream-specific codecs:
+  // - Encode non-attached-picture video streams with the selected codec
+  // - Copy attached pictures to avoid dimension/encoding issues
+  const useStreamSpecificVideoCodec =
+    !removeExtraVideoStreams && hasAttachedPictures && videoStreams.length > 1;
+
   if (options.basic.videoCodec !== 'copy') {
-    args.push('-c:v', escapeArgument(options.basic.videoCodec));
+    if (useStreamSpecificVideoCodec) {
+      // Use stream-specific codecs based on whether each stream is an attached picture
+      for (const stream of videoStreams) {
+        if (stream.isAttachedPic) {
+          // Copy attached pictures (cover art) as-is
+          args.push(`-c:v:${stream.videoIndex}`, 'copy');
+        } else {
+          // Encode actual video streams with the selected codec
+          args.push(
+            `-c:v:${stream.videoIndex}`,
+            escapeArgument(options.basic.videoCodec),
+          );
+        }
+      }
+    } else {
+      args.push('-c:v', escapeArgument(options.basic.videoCodec));
+    }
 
     // Quality (CRF) for lossy codecs
     if (options.advanced.bitrate.mode === 'crf') {
@@ -122,6 +240,13 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
 
     // Preset for lossy codecs
     args.push('-preset', escapeArgument(options.advanced.preset));
+
+    // Pixel format based on bit depth
+    const pixFmt =
+      pixelFormats[options.basic.videoCodec][options.advanced.bitDepth];
+    if (pixFmt) {
+      args.push('-pix_fmt', pixFmt);
+    }
   } else {
     args.push('-c:v', 'copy');
   }
@@ -130,10 +255,12 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
   if (options.advanced.audio.codec !== 'copy') {
     args.push('-c:a', escapeArgument(options.advanced.audio.codec));
 
-    // Audio bitrate
-    if (options.advanced.audio.bitrate) {
-      args.push('-b:a', escapeArgument(`${options.advanced.audio.bitrate}k`));
-    }
+    // Audio quality (VBR for AAC/Opus, CBR for AC3, none for FLAC)
+    const qualityArgs = getAudioQualityArgs(
+      options.advanced.audio.codec,
+      options.advanced.audio.quality,
+    );
+    qualityArgs.forEach((arg) => args.push(escapeArgument(arg)));
 
     // Audio sample rate
     if (options.advanced.audio.sampleRate) {

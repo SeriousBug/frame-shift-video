@@ -142,6 +142,20 @@ export class NotificationService {
   }
 
   /**
+   * Get list of configured notification methods (without revealing secrets)
+   */
+  getConfiguredMethods(): string[] {
+    const methods: string[] = [];
+    if (this.config.discord) {
+      methods.push('Discord');
+    }
+    if (this.config.pushover) {
+      methods.push('Pushover');
+    }
+    return methods;
+  }
+
+  /**
    * Send notification that all jobs are complete
    */
   async notifyAllJobsComplete(

@@ -1,0 +1,11 @@
+# Data directories (SQLite databases)
+leader-data/
+follower1-data/
+follower2-data/
+
+# Test media files
+test-media/
+
+# Docker volumes
+*.sqlite
+*.sqlite-*

@@ -14,6 +14,8 @@ import {
   fetchJobsPaginated,
   fetchJobsByStatus,
   createJobs,
+  startJobs,
+  getJobBatchStatus,
   markJobAsRetried,
   cancelJob,
   cancelAllJobs,
@@ -23,7 +25,13 @@ import {
   loadFileSelections,
   getPickerState,
   performPickerAction,
+  fetchFollowersStatus,
+  retryFollowers,
+  fetchNotificationStatus,
+  fetchSystemStatus,
+  fetchSettings,
   type PickerAction,
+  type StartJobsResponse,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
 import { Job } from '@/types/database';
@@ -36,6 +44,10 @@ export const queryKeys = {
   files: (path: string) => ['files', path] as const,
   fileSelections: (key: string) => ['file-selections', key] as const,
   pickerState: (key: string) => ['picker-state', key] as const,
+  followersStatus: ['followers-status'] as const,
+  notificationStatus: ['notification-status'] as const,
+  systemStatus: ['system-status'] as const,
+  settings: ['settings'] as const,
 };
 
 /**
@@ -86,7 +98,7 @@ export function useJobsByStatus(status: Job['status']) {
 }
 
 /**
- * Hook to create new jobs
+ * Hook to create new jobs (legacy sync)
  */
 export function useCreateJobs() {
   const queryClient = useQueryClient();
@@ -103,6 +115,48 @@ export function useCreateJobs() {
     },
     onError: (error) => {
       console.error('[API Hook] Creating jobs mutation failed:', error);
+    },
+  });
+}
+
+/**
+ * Hook to start async job creation
+ * Returns immediately - progress is tracked via WebSocket
+ */
+export function useStartJobs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (options: ConversionOptions) => {
+      console.log('[API Hook] Starting async job creation');
+      return startJobs(options);
+    },
+    onSuccess: (data: StartJobsResponse) => {
+      console.log('[API Hook] Async job creation started:', data);
+      // Jobs will be created in background, query will be invalidated
+      // when job-creation:complete event is received
+    },
+    onError: (error) => {
+      console.error('[API Hook] Starting async job creation failed:', error);
+    },
+  });
+}
+
+/**
+ * Hook to fetch job creation batch status
+ */
+export function useJobBatchStatus(batchId: number | null) {
+  return useQuery({
+    queryKey: ['job-batch', batchId],
+    queryFn: () => getJobBatchStatus(batchId!),
+    enabled: batchId !== null,
+    refetchInterval: (query) => {
+      // Poll while in progress
+      const status = query.state.data?.status;
+      if (status === 'pending' || status === 'in_progress') {
+        return 2000; // Poll every 2 seconds
+      }
+      return false; // Stop polling when complete
     },
   });
 }
@@ -257,4 +311,66 @@ export function useClearPickerState() {
     // Remove all picker-state queries from cache
     queryClient.removeQueries({ queryKey: ['picker-state'] });
   };
+}
+
+/**
+ * Hook to fetch followers status
+ */
+export function useFollowersStatus() {
+  return useQuery({
+    queryKey: queryKeys.followersStatus,
+    queryFn: fetchFollowersStatus,
+    // Fallback polling every 30 seconds (WebSocket provides real-time updates)
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook to retry syncing with dead followers
+ */
+export function useRetryFollowers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: retryFollowers,
+    onSuccess: () => {
+      // Invalidate followers status to refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.followersStatus });
+    },
+  });
+}
+
+/**
+ * Hook to fetch notification status
+ */
+export function useNotificationStatus() {
+  return useQuery({
+    queryKey: queryKeys.notificationStatus,
+    queryFn: fetchNotificationStatus,
+  });
+}
+
+/**
+ * Hook to fetch system status
+ */
+export function useSystemStatus() {
+  return useQuery({
+    queryKey: queryKeys.systemStatus,
+    queryFn: fetchSystemStatus,
+    // Fallback polling every 30 seconds (WebSocket provides real-time updates)
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook to fetch server settings including FFmpeg capabilities
+ * This is cached indefinitely since capabilities don't change at runtime
+ */
+export function useSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: fetchSettings,
+    staleTime: Infinity, // Never refetch - capabilities don't change at runtime
+    gcTime: Infinity, // Keep in cache forever
+  });
 }

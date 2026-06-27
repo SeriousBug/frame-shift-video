@@ -1,6 +1,7 @@
 import { ServerWebSocket } from 'bun';
 import { Job } from '../src/types/database';
 import { logger, captureException } from '../src/lib/sentry';
+import { type NodeSystemStatus } from './system-status';
 
 interface WebSocketData {
   id: string;
@@ -158,5 +159,129 @@ export const WSBroadcaster = {
 
   getClientCount() {
     return clients.size;
+  },
+
+  broadcastFollowerStatus(
+    followers: Array<{
+      id: string;
+      url: string;
+      busy: boolean;
+      dead: boolean;
+      currentJob: { id: number; name: string; progress: number } | null;
+    }>,
+  ) {
+    const message = JSON.stringify({
+      type: 'followers:status',
+      data: { followers },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug('[WebSocket] Error sending followers:status to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        clients.delete(client);
+      }
+    });
+  },
+
+  broadcastSystemStatus(
+    instanceType: 'standalone' | 'leader' | 'follower',
+    nodes: NodeSystemStatus[],
+  ) {
+    const message = JSON.stringify({
+      type: 'system:status',
+      data: { instanceType, nodes },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug('[WebSocket] Error sending system:status to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        clients.delete(client);
+      }
+    });
+  },
+
+  /**
+   * Broadcast job creation batch progress
+   */
+  broadcastJobCreationProgress(
+    batchId: number,
+    createdCount: number,
+    totalCount: number,
+  ) {
+    const message = JSON.stringify({
+      type: 'job-creation:progress',
+      data: { batchId, createdCount, totalCount },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug(
+          '[WebSocket] Error sending job-creation:progress to client',
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        clients.delete(client);
+      }
+    });
+  },
+
+  /**
+   * Broadcast job creation batch completion
+   */
+  broadcastJobCreationComplete(
+    batchId: number,
+    jobIds: number[],
+    totalCreated: number,
+  ) {
+    const message = JSON.stringify({
+      type: 'job-creation:complete',
+      data: { batchId, jobIds, totalCreated },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug(
+          '[WebSocket] Error sending job-creation:complete to client',
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        clients.delete(client);
+      }
+    });
+  },
+
+  /**
+   * Broadcast job creation batch error
+   */
+  broadcastJobCreationError(batchId: number, error: string) {
+    const message = JSON.stringify({
+      type: 'job-creation:error',
+      data: { batchId, error },
+    });
+
+    clients.forEach((client) => {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.debug('[WebSocket] Error sending job-creation:error to client', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        clients.delete(client);
+      }
+    });
   },
 };

@@ -187,10 +187,36 @@ export class FFmpegExecutor extends EventEmitter {
       return arg;
     });
 
-    // Prepend thread count if FFMPEG_THREADS is set
-    if (process.env.FFMPEG_THREADS) {
-      const threads = parseInt(process.env.FFMPEG_THREADS, 10);
-      processedArgs.unshift('-threads', threads.toString());
+    // Apply thread limiting if configured
+    // FFmpeg requires -threads in two places for full control:
+    // - Before -i: limits decoder threads
+    // - After -i: limits encoder threads
+    const decoderThreads = process.env.FFMPEG_DECODER_THREADS;
+    const encoderThreads = process.env.FFMPEG_ENCODER_THREADS;
+
+    if (decoderThreads || encoderThreads) {
+      const inputFlagIndex = processedArgs.indexOf('-i');
+
+      // Insert encoder threads AFTER the input file
+      if (
+        encoderThreads &&
+        inputFlagIndex !== -1 &&
+        inputFlagIndex + 1 < processedArgs.length
+      ) {
+        const threads = parseInt(encoderThreads, 10);
+        processedArgs.splice(
+          inputFlagIndex + 2,
+          0,
+          '-threads',
+          threads.toString(),
+        );
+      }
+
+      // Insert decoder threads BEFORE -i (at the beginning)
+      if (decoderThreads) {
+        const threads = parseInt(decoderThreads, 10);
+        processedArgs.unshift('-threads', threads.toString());
+      }
     }
 
     // Add dry run flag for testing
@@ -646,6 +672,77 @@ export async function getSubtitleFormats(inputPath: string): Promise<string[]> {
         resolve(codecs);
       } else {
         // No subtitle streams or error - return empty array
+        resolve([]);
+      }
+    });
+
+    ffprobe.on('error', () => resolve([]));
+  });
+}
+
+/**
+ * Video stream info for determining which streams are attached pictures
+ */
+export interface VideoStreamInfo {
+  /** Index within video streams only (0 = first video, 1 = second video, etc.) */
+  videoIndex: number;
+  /** Whether this stream is an attached picture (cover art, thumbnail) */
+  isAttachedPic: boolean;
+}
+
+/**
+ * Get information about all video streams in a file
+ * Returns array of video stream info, ordered by their appearance in the file
+ * The videoIndex corresponds to FFmpeg's -c:v:N stream specifier
+ */
+export async function getVideoStreamInfo(
+  inputPath: string,
+): Promise<VideoStreamInfo[]> {
+  return new Promise((resolve) => {
+    const ffprobe = spawn(
+      getFfprobe(),
+      [
+        '-v',
+        'error',
+        '-select_streams',
+        'v',
+        '-show_entries',
+        'stream=index:stream_disposition=attached_pic',
+        '-of',
+        'json',
+        inputPath,
+      ],
+      {
+        env: process.env,
+      },
+    );
+
+    let output = '';
+    ffprobe.stdout?.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      if (code === 0 && output.trim()) {
+        try {
+          const data = JSON.parse(output);
+          const streams = data.streams || [];
+          // Map each video stream to its info
+          // The order from ffprobe with -select_streams v gives us the video stream order
+          const videoStreams: VideoStreamInfo[] = streams.map(
+            (
+              stream: { disposition?: { attached_pic?: number } },
+              idx: number,
+            ) => ({
+              videoIndex: idx,
+              isAttachedPic: stream.disposition?.attached_pic === 1,
+            }),
+          );
+          resolve(videoStreams);
+        } catch {
+          resolve([]);
+        }
+      } else {
         resolve([]);
       }
     });

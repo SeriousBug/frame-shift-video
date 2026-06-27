@@ -6,8 +6,11 @@ import {
   OutputFormat,
   EncodingPreset,
   AudioCodec,
+  AudioQuality,
   BitrateMode,
+  BitDepth,
 } from '@/types/conversion';
+import { useSettings } from '@/lib/api-hooks';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import Highlighter from 'react-highlight-words';
 
@@ -56,11 +59,15 @@ export function ConversionConfig({
   const [removedHistory, setRemovedHistory] = useState<string[]>([]);
   const MAX_UNDO_HISTORY = 10;
 
+  // Fetch server settings for FFmpeg capabilities
+  const { data: settings } = useSettings();
+
   // Refs for search
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const videoCodecRef = useRef<HTMLDivElement>(null);
   const outputFormatRef = useRef<HTMLDivElement>(null);
   const encodingPresetRef = useRef<HTMLDivElement>(null);
+  const bitDepthRef = useRef<HTMLDivElement>(null);
   const bitrateModeRef = useRef<HTMLDivElement>(null);
   const audioCodecRef = useRef<HTMLDivElement>(null);
 
@@ -205,6 +212,7 @@ export function ConversionConfig({
         text: 'encoding preset ultrafast superfast veryfast faster fast medium slow slower veryslow',
         ref: encodingPresetRef,
       },
+      { text: 'bit depth 8-bit 10-bit color', ref: bitDepthRef },
       { text: 'bitrate mode crf cbr vbr quality', ref: bitrateModeRef },
       { text: 'audio codec opus aac fdk ac3 flac copy', ref: audioCodecRef },
     ];
@@ -452,6 +460,44 @@ export function ConversionConfig({
               </select>
             </div>
 
+            {/* Bit Depth */}
+            <div ref={bitDepthRef}>
+              <label
+                htmlFor="bit-depth"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Bit Depth
+              </label>
+              <select
+                id="bit-depth"
+                value={options.advanced.bitDepth}
+                onChange={(e) =>
+                  updateAdvancedOption('bitDepth', e.target.value as BitDepth)
+                }
+                disabled={options.basic.videoCodec === 'copy'}
+                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="8bit">
+                  8-bit - Smaller files, more compatible
+                </option>
+                <option
+                  value="10bit"
+                  disabled={
+                    options.basic.videoCodec === 'libx264' &&
+                    !settings?.ffmpeg?.x264_10bit
+                  }
+                >
+                  10-bit - Better quality, reduced banding
+                  {options.basic.videoCodec === 'libx264' &&
+                    !settings?.ffmpeg?.x264_10bit &&
+                    ' (not supported by your FFmpeg)'}
+                </option>
+              </select>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                10-bit provides smoother gradients and reduces banding artifacts
+              </div>
+            </div>
+
             {/* Bitrate Control */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div ref={bitrateModeRef}>
@@ -563,31 +609,97 @@ export function ConversionConfig({
                   </select>
                 </div>
 
-                {options.advanced.audio.codec !== 'copy' && (
+                {options.advanced.audio.codec !== 'copy' &&
+                  options.advanced.audio.codec !== 'flac' && (
+                    <div>
+                      <label
+                        htmlFor="audio-quality"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                      >
+                        Audio Quality
+                      </label>
+                      <select
+                        id="audio-quality"
+                        value={options.advanced.audio.quality}
+                        onChange={(e) =>
+                          updateAdvancedOption('audio', {
+                            ...options.advanced.audio,
+                            quality: e.target.value as AudioQuality,
+                          })
+                        }
+                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="low">Low - Smaller files</option>
+                        <option value="medium">Medium - Balanced</option>
+                        <option value="high">High - Best quality</option>
+                      </select>
+                    </div>
+                  )}
+                {options.advanced.audio.codec === 'flac' && (
                   <div>
-                    <label
-                      htmlFor="audio-bitrate"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                    >
-                      Audio Bitrate (kbps)
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Audio Quality
                     </label>
-                    <input
-                      id="audio-bitrate"
-                      type="number"
-                      value={options.advanced.audio.bitrate || ''}
-                      onChange={(e) =>
-                        updateAdvancedOption('audio', {
-                          ...options.advanced.audio,
-                          bitrate: e.target.value
-                            ? parseInt(e.target.value)
-                            : undefined,
-                        })
-                      }
-                      placeholder="e.g., 128"
-                      className="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Automatically determined
+                    </div>
                   </div>
                 )}
+                {options.advanced.audio.codec === 'copy' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Audio Quality
+                    </label>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Same as source video
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Extra Video Streams Toggle */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label
+                    htmlFor="remove-extra-video-streams"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    Remove extra video streams
+                  </label>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Keep only the main video stream. Disable to preserve cover
+                    art and other embedded images.
+                  </div>
+                </div>
+                <button
+                  id="remove-extra-video-streams"
+                  type="button"
+                  role="switch"
+                  aria-checked={
+                    options.advanced.removeExtraVideoStreams !== false
+                  }
+                  onClick={() =>
+                    updateAdvancedOption(
+                      'removeExtraVideoStreams',
+                      options.advanced.removeExtraVideoStreams === false,
+                    )
+                  }
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    options.advanced.removeExtraVideoStreams !== false
+                      ? 'bg-blue-600'
+                      : 'bg-gray-200 dark:bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      options.advanced.removeExtraVideoStreams !== false
+                        ? 'translate-x-5'
+                        : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           </div>

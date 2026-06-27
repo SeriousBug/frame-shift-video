@@ -1,5 +1,10 @@
 import { filesHandler } from './handlers/files';
-import { jobsHandler, jobByIdHandler } from './handlers/jobs';
+import {
+  jobsHandler,
+  jobByIdHandler,
+  startJobsHandler,
+  getJobBatchHandler,
+} from './handlers/jobs';
 import {
   fileSelectionsHandler,
   fileSelectionByKeyHandler,
@@ -8,9 +13,25 @@ import {
   getPickerStateHandler,
   pickerActionHandler,
 } from './handlers/file-picker';
-import { testNotificationHandler } from './handlers/notifications';
+import {
+  testNotificationHandler,
+  notificationStatusHandler,
+} from './handlers/notifications';
+import {
+  executeJobHandler,
+  receiveProgressHandler,
+  getWorkerStatusHandler,
+  cancelJobOnWorkerHandler,
+  getWorkerSystemStatusHandler,
+} from './handlers/worker';
+import {
+  getFollowersStatusHandler,
+  retryFollowersHandler,
+  getSystemStatusHandler,
+} from './handlers/settings';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
+import { getCachedCapabilities } from './ffmpeg-capabilities';
 
 function getSettingsResponse(corsHeaders: Record<string, string>): Response {
   const version = process.env.APP_VERSION || null;
@@ -30,6 +51,12 @@ function getSettingsResponse(corsHeaders: Record<string, string>): Response {
     };
   }
 
+  // Include FFmpeg capabilities (cached)
+  const ffmpegCapabilities = getCachedCapabilities();
+  if (ffmpegCapabilities) {
+    response.ffmpeg = ffmpegCapabilities;
+  }
+
   return new Response(JSON.stringify(response), {
     status: 200,
     headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -43,6 +70,14 @@ const wrappedJobsHandler = withErrorHandler(jobsHandler, 'JobsHandler');
 const wrappedJobByIdHandler = withErrorHandler(
   jobByIdHandler,
   'JobByIdHandler',
+);
+const wrappedStartJobsHandler = withErrorHandler(
+  startJobsHandler,
+  'StartJobsHandler',
+);
+const wrappedGetJobBatchHandler = withErrorHandler(
+  getJobBatchHandler,
+  'GetJobBatchHandler',
 );
 const wrappedFileSelectionsHandler = withErrorHandler(
   fileSelectionsHandler,
@@ -63,6 +98,42 @@ const wrappedPickerActionHandler = withErrorHandler(
 const wrappedTestNotificationHandler = withErrorHandler(
   testNotificationHandler,
   'TestNotificationHandler',
+);
+const wrappedNotificationStatusHandler = withErrorHandler(
+  notificationStatusHandler,
+  'NotificationStatusHandler',
+);
+const wrappedExecuteJobHandler = withErrorHandler(
+  executeJobHandler,
+  'ExecuteJobHandler',
+);
+const wrappedReceiveProgressHandler = withErrorHandler(
+  receiveProgressHandler,
+  'ReceiveProgressHandler',
+);
+const wrappedGetWorkerStatusHandler = withErrorHandler(
+  getWorkerStatusHandler,
+  'GetWorkerStatusHandler',
+);
+const wrappedCancelJobOnWorkerHandler = withErrorHandler(
+  cancelJobOnWorkerHandler,
+  'CancelJobOnWorkerHandler',
+);
+const wrappedGetWorkerSystemStatusHandler = withErrorHandler(
+  getWorkerSystemStatusHandler,
+  'GetWorkerSystemStatusHandler',
+);
+const wrappedGetFollowersStatusHandler = withErrorHandler(
+  getFollowersStatusHandler,
+  'GetFollowersStatusHandler',
+);
+const wrappedRetryFollowersHandler = withErrorHandler(
+  retryFollowersHandler,
+  'RetryFollowersHandler',
+);
+const wrappedGetSystemStatusHandler = withErrorHandler(
+  getSystemStatusHandler,
+  'GetSystemStatusHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -119,6 +190,18 @@ export async function setupRoutes(req: Request): Promise<Response> {
       return await wrappedJobByIdHandler(req, jobId, corsHeaders);
     }
 
+    // Route: POST /api/jobs/start (async job creation)
+    if (pathname === '/api/jobs/start' && req.method === 'POST') {
+      return await wrappedStartJobsHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/jobs/batch/:id (get batch status)
+    const jobBatchMatch = pathname.match(/^\/api\/jobs\/batch\/(\d+)$/);
+    if (jobBatchMatch && req.method === 'GET') {
+      const batchId = parseInt(jobBatchMatch[1], 10);
+      return await wrappedGetJobBatchHandler(req, batchId, corsHeaders);
+    }
+
     // Route: POST /api/file-selections
     if (pathname === '/api/file-selections' && req.method === 'POST') {
       return await wrappedFileSelectionsHandler(req, corsHeaders);
@@ -151,9 +234,58 @@ export async function setupRoutes(req: Request): Promise<Response> {
       return getSettingsResponse(corsHeaders);
     }
 
+    // Route: GET /api/notifications/status
+    if (pathname === '/api/notifications/status' && req.method === 'GET') {
+      return await wrappedNotificationStatusHandler(req, corsHeaders);
+    }
+
     // Route: POST /api/notifications/test
     if (pathname === '/api/notifications/test' && req.method === 'POST') {
       return await wrappedTestNotificationHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/settings/followers
+    if (pathname === '/api/settings/followers' && req.method === 'GET') {
+      return await wrappedGetFollowersStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /api/settings/followers/retry
+    if (pathname === '/api/settings/followers/retry' && req.method === 'POST') {
+      return await wrappedRetryFollowersHandler(req, corsHeaders);
+    }
+
+    // Route: GET /api/settings/system-status
+    if (pathname === '/api/settings/system-status' && req.method === 'GET') {
+      return await wrappedGetSystemStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /worker/execute (follower endpoint)
+    if (pathname === '/worker/execute' && req.method === 'POST') {
+      return await wrappedExecuteJobHandler(req, corsHeaders);
+    }
+
+    // Route: GET /worker/status (follower endpoint)
+    if (pathname === '/worker/status' && req.method === 'GET') {
+      return await wrappedGetWorkerStatusHandler(req, corsHeaders);
+    }
+
+    // Route: GET /worker/system-status (follower endpoint)
+    if (pathname === '/worker/system-status' && req.method === 'GET') {
+      return await wrappedGetWorkerSystemStatusHandler(req, corsHeaders);
+    }
+
+    // Route: POST /worker/cancel/:jobId (follower endpoint)
+    const workerCancelMatch = pathname.match(/^\/worker\/cancel\/(\d+)$/);
+    if (workerCancelMatch && req.method === 'POST') {
+      const jobId = parseInt(workerCancelMatch[1], 10);
+      return await wrappedCancelJobOnWorkerHandler(req, jobId, corsHeaders);
+    }
+
+    // Route: POST /api/jobs/:id/progress (leader endpoint to receive progress from followers)
+    const jobProgressMatch = pathname.match(/^\/api\/jobs\/(\d+)\/progress$/);
+    if (jobProgressMatch && req.method === 'POST') {
+      const jobId = parseInt(jobProgressMatch[1], 10);
+      return await wrappedReceiveProgressHandler(req, jobId, corsHeaders);
     }
 
     // 404 Not Found

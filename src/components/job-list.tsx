@@ -142,6 +142,13 @@ export function JobList() {
   const [showRetryAllFailedModal, setShowRetryAllFailedModal] = useState(false);
   const [showClearFinishedModal, setShowClearFinishedModal] = useState(false);
 
+  // Job creation batch progress tracking
+  const [jobCreationProgress, setJobCreationProgress] = useState<{
+    batchId: number;
+    createdCount: number;
+    totalCount: number;
+  } | null>(null);
+
   const connectWebSocket = useCallback(() => {
     // Clear any existing reconnect timeout
     if (reconnectTimeoutRef.current) {
@@ -338,6 +345,33 @@ export function JobList() {
           // Jobs were auto-cleared, invalidate the cache to refetch
           console.log('[WebSocket] Jobs cleared, invalidating cache');
           queryClient.invalidateQueries({ queryKey: ['jobs'] });
+        } else if (message.type === 'job-creation:progress') {
+          // Update job creation progress
+          const { batchId, createdCount, totalCount } = message.data;
+          console.log('[WebSocket] Job creation progress:', {
+            batchId,
+            createdCount,
+            totalCount,
+          });
+          setJobCreationProgress({ batchId, createdCount, totalCount });
+        } else if (message.type === 'job-creation:complete') {
+          // Job creation batch completed
+          const { batchId, totalCreated } = message.data;
+          console.log('[WebSocket] Job creation complete:', {
+            batchId,
+            totalCreated,
+          });
+          setJobCreationProgress(null);
+          // Invalidate jobs cache to show newly created jobs
+          queryClient.invalidateQueries({ queryKey: ['jobs'] });
+        } else if (message.type === 'job-creation:error') {
+          // Job creation batch failed
+          const { batchId, error: errorMsg } = message.data;
+          console.error('[WebSocket] Job creation error:', {
+            batchId,
+            errorMsg,
+          });
+          setJobCreationProgress(null);
         }
       } catch (err) {
         console.error('[WebSocket] Error parsing message:', err);
@@ -565,18 +599,24 @@ export function JobList() {
               <span>
                 processing {statusCounts.processing}{' '}
                 {statusCounts.processing === 1 ? 'job' : 'jobs'}
-                {statusCounts.pending > 0 && ', '}
+                {(statusCounts.pending > 0 || statusCounts.failed > 0) && ', '}
               </span>
             )}
             {statusCounts.pending > 0 && (
               <span>
                 {statusCounts.pending}{' '}
                 {statusCounts.pending === 1 ? 'job' : 'jobs'} pending
+                {statusCounts.failed > 0 && ', '}
               </span>
             )}
-            {statusCounts.processing === 0 && statusCounts.pending === 0 && (
-              <span>no active jobs</span>
+            {statusCounts.failed > 0 && (
+              <span className="text-red-600 dark:text-red-400">
+                {statusCounts.failed} failed
+              </span>
             )}
+            {statusCounts.processing === 0 &&
+              statusCounts.pending === 0 &&
+              statusCounts.failed === 0 && <span>no active jobs</span>}
           </div>
           <Menu.Root>
             <Menu.Trigger className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -781,6 +821,34 @@ export function JobList() {
           </Menu.Root>
         </div>
       </div>
+
+      {/* Job creation progress indicator */}
+      {jobCreationProgress && (
+        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="flex-1">
+              <p className="text-blue-800 dark:text-blue-200 font-medium">
+                Creating conversion jobs...
+              </p>
+              <p className="text-sm text-blue-600 dark:text-blue-400">
+                {jobCreationProgress.createdCount} of{' '}
+                {jobCreationProgress.totalCount} jobs created
+              </p>
+            </div>
+          </div>
+          {jobCreationProgress.totalCount > 0 && (
+            <div className="mt-3 h-2 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-600 transition-all duration-300"
+                style={{
+                  width: `${Math.round((jobCreationProgress.createdCount / jobCreationProgress.totalCount) * 100)}%`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <div
         className="bg-slate-100 dark:bg-slate-900 rounded-xl py-6 border-2 border-slate-300 dark:border-slate-700"
