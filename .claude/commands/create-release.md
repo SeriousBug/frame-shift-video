@@ -52,7 +52,8 @@ You are a release automation agent. Your task is to analyze the commit history a
    - Format: `vX.Y.Z` (e.g., `v1.2.3`)
    - Create an annotated tag with the changelog as the message
    - Use `git tag -a vX.Y.Z -m "$(cat <<'EOF'
-<changelog here>
+   <changelog here>
+
 EOF
 )"` format
 

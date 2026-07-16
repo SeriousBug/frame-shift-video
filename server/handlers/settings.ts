@@ -220,9 +220,7 @@ export async function getSystemStatusHandler(
 ): Promise<Response> {
   try {
     const instanceType = (process.env.INSTANCE_TYPE || 'standalone') as
-      | 'standalone'
-      | 'leader'
-      | 'follower';
+      'standalone' | 'leader' | 'follower';
     const PORT = parseInt(process.env.PORT || '3001', 10);
 
     // Determine node ID based on instance type
