@@ -20,12 +20,12 @@
   },
   "dependencies": {
     "@ark-ui/react": "^5.37.2",
-    "@sentry/bun": "^10.64.0",
-    "@sentry/react": "^10.64.0",
-    "@sentry/vite-plugin": "^5.3.0",
+    "@sentry/bun": "^10.65.0",
+    "@sentry/react": "^10.65.0",
+    "@sentry/vite-plugin": "^5.4.0",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-query-devtools": "^5.101.2",
-    "@tanstack/react-router": "^1.170.17",
+    "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-router-devtools": "^1.167.0",
     "date-fns": "^4.4.0",
     "lucide-react": "^0.546.0",
@@ -38,10 +38,14 @@
     "react-virtuoso": "^4.18.10",
     "zustand": "^5.0.14"
   },
+  "overrides": {
+    "rollup": "^4.60.0",
+    "micromatch/picomatch": "^2.3.2"
+  },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.10.6",
     "@tailwindcss/postcss": "^4.3.2",
-    "@tanstack/router-plugin": "^1.168.19",
+    "@tanstack/router-plugin": "^1.168.20",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
@@ -51,9 +55,9 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-highlight-words": "^0.20.1",
     "@vitejs/plugin-react": "^4.7.0",
-    "concurrently": "^9.2.3",
+    "concurrently": "^9.2.4",
     "husky": "^9.1.7",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.5",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.9.3",
     "vite": "^6.4.3"
