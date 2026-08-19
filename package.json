@@ -19,13 +19,13 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@ark-ui/react": "^5.38.0",
-    "@sentry/bun": "^10.69.0",
-    "@sentry/react": "^10.69.0",
+    "@ark-ui/react": "^5.38.1",
+    "@sentry/bun": "^10.70.0",
+    "@sentry/react": "^10.70.0",
     "@sentry/vite-plugin": "^5.4.0",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-query-devtools": "^5.101.4",
-    "@tanstack/react-router": "^1.170.20",
+    "@tanstack/react-router": "^1.170.27",
     "@tanstack/react-router-devtools": "^1.167.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^0.546.0",
@@ -39,9 +39,9 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.11.1",
+    "@happy-dom/global-registrator": "^20.11.2",
     "@tailwindcss/postcss": "^4.3.3",
-    "@tanstack/router-plugin": "^1.168.25",
+    "@tanstack/router-plugin": "^1.168.30",
     "@testing-library/jest-dom": "^6.10.0",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
