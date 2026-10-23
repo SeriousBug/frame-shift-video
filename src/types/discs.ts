@@ -26,6 +26,11 @@ export interface DiscRun {
 
 /** A note for the next disc that goes in, so it is named or filed as TV right away. */
 export interface DiscNext {
+  /**
+   * The note is for the disc already being ripped (a movie, named while it is read), not for
+   * the one after it
+   */
+  current?: boolean;
   mode: 'movie' | 'tv';
   name?: string;
   show?: string;

@@ -92,6 +92,9 @@ function toRip(details: Details, image?: string): DiscCommand {
 }
 
 function describeNote(note: DiscNext): string {
+  if (note.current) {
+    return `${note.name ? `the movie ${note.name}` : 'a movie'}, named once it has been copied`;
+  }
   if (note.mode === 'tv') {
     return `episodes of ${note.show}, season ${note.season}, from episode ${note.episode}`;
   }
@@ -313,6 +316,9 @@ function NextSection({ state }: { state: DiscsState }) {
   const command = useDiscCommand();
   const problem = detailsProblem(details);
   const diskIn = state.drive?.alive && state.drive.media;
+  // A disc that is already being read cannot be started again, but it is named once it has
+  // been copied, so a movie picked now still goes to it.
+  const ripping = !!diskIn && state.run?.state === 'running';
   // The disc in the drive is looked up by what its label says it is.
   const labelInfo =
     diskIn && state.drive?.label ? parseLabel(state.drive.label) : null;
@@ -320,11 +326,12 @@ function NextSection({ state }: { state: DiscsState }) {
   return (
     <Section
       title="Tell it what the disc is"
-      hint="The ripper names a movie from the disc's label and cannot know a TV disc's season. Say it here before the disc goes in, or for the disc that is in the drive."
+      hint="The ripper names a movie from the disc's label and cannot know a TV disc's season. Say it here before the disc goes in. While a disc is being ripped, a movie you pick names that disc once it has been copied."
     >
       {state.next && (
         <p className="mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/30 p-3 text-blue-900 dark:text-blue-100">
-          The next disc will be treated as {describeNote(state.next)}.{' '}
+          {state.next.current ? 'The disc being ripped' : 'The next disc'} will
+          be treated as {describeNote(state.next)}.{' '}
           <button
             type="button"
             className="underline"
@@ -369,11 +376,29 @@ function NextSection({ state }: { state: DiscsState }) {
         >
           For the next disc
         </button>
+        {ripping && details.mode === 'movie' && (
+          <button
+            type="button"
+            className={SECONDARY}
+            disabled={!!problem || setNext.isPending}
+            onClick={() =>
+              setNext.mutate({ ...toNote(details), current: true })
+            }
+          >
+            For the disc being ripped
+          </button>
+        )}
         <button
           type="button"
           className={SECONDARY}
-          disabled={!!problem || command.isPending || !diskIn}
-          title={diskIn ? undefined : 'There is no disc in the drive'}
+          disabled={!!problem || command.isPending || !diskIn || ripping}
+          title={
+            !diskIn
+              ? 'There is no disc in the drive'
+              : ripping
+                ? 'The disc is already being ripped'
+                : undefined
+          }
           onClick={() => command.mutate(toRip(details))}
         >
           {command.isPending ? 'Starting…' : 'Rip the disc in the drive now'}

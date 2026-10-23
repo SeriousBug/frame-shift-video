@@ -125,6 +125,7 @@ describe('readDiscsState', () => {
     await write('_converting/Andre/submitted', '');
     await write('_converting/.lock', '');
     await write('_images/Showdisc/Showdisc.iso', '');
+    await write('_images/Showdisc/.waiting', '');
     const state = await readDiscsState(dir);
     expect(state.attention.map((note) => note.name)).toEqual([
       'Andre',
@@ -157,12 +158,18 @@ describe('readDiscsState', () => {
 describe('parked discs', () => {
   test('carry what TMDB made of their label, when the ripper left it', async () => {
     await write('_images/Billy_S4_D1/Billy_S4_D1.iso', '');
+    await write('_images/Billy_S4_D1/.waiting', '');
     await write(
       '_images/Billy_S4_D1/suggest.txt',
       'show=Billy the Exterminator (2009)\nseason=4\ndisc=1\n',
     );
     await write('_images/Other/Other.iso', '');
+    await write('_images/Other/.waiting', '');
     await write('_images/Half/suggest.txt', 'show=Only A Show\nseason=x\n');
+    await write('_images/Half/.waiting', '');
+    // A kept copy of a disc that was already filed is not waiting for anything.
+    await write('_images/Air_Bud/Air_Bud.iso', '');
+    await write('_images/Air_Bud/.keep', '');
     const state = await readDiscsState(dir);
     expect(state.parked).toEqual([
       {
@@ -218,6 +225,29 @@ describe('settings the page writes', () => {
     });
     await setNext(dir, { mode: 'movie' });
     expect((await readDiscsState(dir)).next).toEqual({ mode: 'movie' });
+  });
+
+  test('a note for the disc being ripped says so and is read back', async () => {
+    await setNext(dir, {
+      mode: 'movie',
+      name: 'Air Bud - Spikes Back (2003)',
+      current: true,
+    });
+    expect(await fs.readFile(path.join(dir, '_settings', 'next'), 'utf8')).toBe(
+      'for=drive\nmode=movie\nname=Air Bud - Spikes Back (2003)\n',
+    );
+    expect((await readDiscsState(dir)).next).toEqual({
+      mode: 'movie',
+      name: 'Air Bud - Spikes Back (2003)',
+      current: true,
+    });
+  });
+
+  test('a note for the next disc has no for line', async () => {
+    await setNext(dir, { mode: 'movie', name: 'Stellaluna (1996)' });
+    expect(
+      await fs.readFile(path.join(dir, '_settings', 'next'), 'utf8'),
+    ).not.toContain('for=');
   });
 
   test('a note can be taken back', async () => {
