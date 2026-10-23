@@ -30,11 +30,18 @@ import {
   fetchNotificationStatus,
   fetchSystemStatus,
   fetchSettings,
+  fetchDiscs,
+  setDiscEject,
+  setDiscNext,
+  dismissDiscAttention,
+  sendDiscCommand,
+  fetchDiscCommandResult,
   type PickerAction,
   type StartJobsResponse,
 } from './api';
 import { ConversionOptions } from '@/types/conversion';
 import { Job } from '@/types/database';
+import type { DiscCommand, DiscCommandResult, DiscNext } from '@/types/discs';
 
 /**
  * Query keys for caching
@@ -48,6 +55,7 @@ export const queryKeys = {
   notificationStatus: ['notification-status'] as const,
   systemStatus: ['system-status'] as const,
   settings: ['settings'] as const,
+  discs: ['discs'] as const,
 };
 
 /**
@@ -372,5 +380,77 @@ export function useSettings() {
     queryFn: fetchSettings,
     staleTime: Infinity, // Never refetch - capabilities don't change at runtime
     gcTime: Infinity, // Keep in cache forever
+  });
+}
+
+/**
+ * Hook to fetch the Discs page's state. The ripper changes it as it works, so poll.
+ */
+export function useDiscs() {
+  return useQuery({
+    queryKey: queryKeys.discs,
+    queryFn: fetchDiscs,
+    refetchInterval: 3000,
+  });
+}
+
+/**
+ * Hook to turn ejecting on or off
+ */
+export function useSetDiscEject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setDiscEject,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to leave a note for the next disc, or take it back with null
+ */
+export function useSetDiscNext() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (note: DiscNext | null) => setDiscNext(note),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to remove a note the ripper left
+ */
+export function useDismissDiscAttention() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: dismissDiscAttention,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to ask the host to eject, rip or rename. The host answers within a few
+ * seconds, so this waits for the answer and returns it.
+ */
+export function useDiscCommand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (command: DiscCommand): Promise<DiscCommandResult> => {
+      const { id } = await sendDiscCommand(command);
+      for (let attempt = 0; attempt < 15; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const result = await fetchDiscCommandResult(id);
+        if (result.done) return result;
+      }
+      return {
+        done: false,
+        message:
+          'The server did not answer. Is the disc helper running on the host?',
+      };
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
   });
 }

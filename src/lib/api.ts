@@ -5,6 +5,12 @@
 import { FileSystemItem, FilePickerState } from '@/types/files';
 import { Job } from '@/types/database';
 import type { ConversionOptions } from '@/types/conversion';
+import type {
+  DiscCommand,
+  DiscCommandResult,
+  DiscNext,
+  DiscsState,
+} from '@/types/discs';
 
 // Base API URL
 const API_BASE = '/api';
@@ -574,6 +580,113 @@ export async function fetchSystemStatus(): Promise<SystemStatusResponse> {
 
   if (!response.ok) {
     throw new Error('Failed to fetch system status');
+  }
+
+  return response.json();
+}
+
+/**
+ * Reads the reason out of a failed response, so the page can show it
+ */
+async function discError(response: Response, fallback: string): Promise<Error> {
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === 'string') return new Error(body.error);
+  } catch {
+    // not JSON; use the fallback
+  }
+  return new Error(fallback);
+}
+
+/**
+ * Fetch everything the Discs page shows (the DVD ripper on the server)
+ */
+export async function fetchDiscs(): Promise<DiscsState> {
+  const response = await fetch(`${API_BASE}/discs`);
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to load the discs');
+  }
+
+  return response.json();
+}
+
+/**
+ * Turn ejecting on or off for the ripper
+ */
+export async function setDiscEject(enabled: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/eject`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to change the eject setting');
+  }
+}
+
+/**
+ * Leave a note for the next disc, or take it back with null
+ */
+export async function setDiscNext(note: DiscNext | null): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/next`, {
+    method: note ? 'PUT' : 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: note ? JSON.stringify(note) : undefined,
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to save the note');
+  }
+}
+
+/**
+ * Remove a note the ripper left
+ */
+export async function dismissDiscAttention(file: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/attention`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file }),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to remove the note');
+  }
+}
+
+/**
+ * Ask the host to eject, rip or rename. Returns the id to ask the answer by.
+ */
+export async function sendDiscCommand(
+  command: DiscCommand,
+): Promise<{ id: string }> {
+  const response = await fetch(`${API_BASE}/discs/commands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(command),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to send the request');
+  }
+
+  return response.json();
+}
+
+/**
+ * The host's answer to a request, once it has one
+ */
+export async function fetchDiscCommandResult(
+  id: string,
+): Promise<DiscCommandResult> {
+  const response = await fetch(
+    `${API_BASE}/discs/commands/${encodeURIComponent(id)}`,
+  );
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to read the answer');
   }
 
   return response.json();

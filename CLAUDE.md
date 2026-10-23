@@ -83,7 +83,7 @@ Database schema is defined in `/server/database.ts`. Migrations run automaticall
 
 ### Frontend (`/src`)
 
-- **`/src/routes/`**: TanStack Router pages (file picker, config page, job queue)
+- **`/src/routes/`**: TanStack Router pages (file picker, config page, job queue, settings, `/discs` for the DVD ripper)
 - **`/src/components/`**: React components (job cards, file browser, conversion config)
 - **`/src/lib/`**: Frontend utilities (API client, TanStack Query hooks, FFmpeg command builder)
 
@@ -99,7 +99,8 @@ Database schema is defined in `/server/database.ts`. Migrations run automaticall
 - **`follower-executor.ts`**: Executes jobs received from leader (follower mode only)
 - **`auth.ts`**: Authentication utilities for leader-follower communication
 - **`notification-service.ts`**: Notification integrations
-- **`/server/handlers/`**: API endpoint implementations (jobs, files, file selections, worker)
+- **`disc-state.ts`**: The Discs page's side of the DVD ripper: reads and writes the small files the ripper trades with the page (format described at the top of the file)
+- **`/server/handlers/`**: API endpoint implementations (jobs, files, file selections, worker, discs)
 
 ### Tests
 
