@@ -88,6 +88,8 @@ export interface DiscsState {
   available: boolean;
   /** Whether the ripper ejects a disc when it is done with it */
   eject: boolean;
+  /** Whether a disc that goes in is scanned and ripped without being asked */
+  autoScan: boolean;
   drive: DiscDrive | null;
   run: DiscRun | null;
   next: DiscNext | null;

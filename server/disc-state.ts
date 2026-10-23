@@ -8,6 +8,7 @@
  *   _images/<disc>/                      a copied disc waiting to be told what it is
  *   _images/<disc>/suggest.txt           written by the ripper: what TMDB made of its label
  *   _settings/eject                      written here: 1 or 0, read by the ripper
+ *   _settings/auto                       written here: 1 or 0, whether a disc is ripped as it goes in
  *   _settings/next                       written here: a note for the next disc
  *   _commands/<id>.cmd                   written here, run by the host: eject, rip, rename, match,
  *                                        search (TMDB; the host holds the token)
@@ -248,6 +249,7 @@ export async function readDiscsState(
     return {
       available: false,
       eject: false,
+      autoScan: true,
       drive: null,
       run: null,
       next: null,
@@ -260,11 +262,14 @@ export async function readDiscsState(
   }
 
   const ejectText = await readText(path.join(dir, '_settings', 'eject'));
+  const autoText = await readText(path.join(dir, '_settings', 'auto'));
   const folders = (await listDirs(dir)).filter((name) => !name.startsWith('_'));
   return {
     available: true,
     // On unless it was switched off: the ripper ejects a disc once it is not needed.
     eject: ejectText === null ? true : ejectText.trim() !== '0',
+    // On unless it was switched off: a disc that goes in is scanned and ripped by itself.
+    autoScan: autoText === null ? true : autoText.trim() !== '0',
     drive: await readDrive(dir, now),
     run: await readRun(dir),
     next: await readNext(dir),
@@ -283,6 +288,18 @@ export async function setEject(dir: string, enabled: boolean): Promise<void> {
   await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
   await fs.writeFile(
     path.join(dir, '_settings', 'eject'),
+    enabled ? '1\n' : '0\n',
+  );
+}
+
+/** Turns scanning and ripping a disc as it goes in on or off. */
+export async function setAutoScan(
+  dir: string,
+  enabled: boolean,
+): Promise<void> {
+  await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
+  await fs.writeFile(
+    path.join(dir, '_settings', 'auto'),
     enabled ? '1\n' : '0\n',
   );
 }

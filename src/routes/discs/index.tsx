@@ -6,6 +6,7 @@ import { parseLabel } from '@/lib/tmdb-results';
 import {
   useDiscs,
   useSetDiscEject,
+  useSetDiscAutoScan,
   useSetDiscNext,
   useDismissDiscAttention,
   useDiscCommand,
@@ -243,6 +244,7 @@ function DetailsFields({
 
 function DriveSection({ state }: { state: DiscsState }) {
   const eject = useSetDiscEject();
+  const autoScan = useSetDiscAutoScan();
   const command = useDiscCommand();
   const { drive, run } = state;
 
@@ -284,6 +286,21 @@ function DriveSection({ state }: { state: DiscsState }) {
         <label className="flex items-center gap-2 text-gray-900 dark:text-white">
           <input
             type="checkbox"
+            checked={state.autoScan}
+            disabled={autoScan.isPending}
+            onChange={(event) => autoScan.mutate(event.target.checked)}
+          />
+          Scan a disc automatically when it goes in
+        </label>
+      </div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        With this off, a disc that goes in is left alone until you press “Rip
+        the disc in the drive now”, so you can name it first.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-gray-900 dark:text-white">
+          <input
+            type="checkbox"
             checked={state.eject}
             disabled={eject.isPending}
             onChange={(event) => eject.mutate(event.target.checked)}
@@ -305,7 +322,10 @@ function DriveSection({ state }: { state: DiscsState }) {
         copied, it stays in the drive. With this off, it always stays until you
         eject it.
       </p>
-      <Answer result={command.data} error={command.error ?? eject.error} />
+      <Answer
+        result={command.data}
+        error={command.error ?? eject.error ?? autoScan.error}
+      />
     </Section>
   );
 }
