@@ -12,6 +12,7 @@ import type {
   DiscCommand,
   DiscCommandResult,
   DiscNext,
+  DiscParked,
   DiscsState,
 } from '@/types/discs';
 
@@ -427,16 +428,28 @@ function WorkingSection({ state }: { state: DiscsState }) {
   );
 }
 
-function ParkedDisc({ name }: { name: string }) {
+function ParkedDisc({ disc }: { disc: DiscParked }) {
+  const { name, suggestion } = disc;
+  // What TMDB made of the disc's label, to start from. The first episode is not guessed.
   const [details, setDetails] = useState<Details>({
     ...EMPTY_DETAILS,
     mode: 'tv',
+    show: suggestion?.show ?? '',
+    season: String(suggestion?.season ?? 1),
   });
   const command = useDiscCommand();
   const problem = detailsProblem(details);
   return (
     <li className="rounded-lg border border-gray-200 dark:border-gray-600 p-4">
       <strong className="text-gray-900 dark:text-white">{name}</strong>
+      {suggestion?.show && (
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          TMDB thinks it is {suggestion.show}
+          {suggestion.season ? `, season ${suggestion.season}` : ''}
+          {suggestion.disc ? `, disc ${suggestion.disc}` : ''}. Check the first
+          episode on the disc, then convert it.
+        </p>
+      )}
       <div className="mt-3">
         <DetailsFields value={details} onChange={setDetails} />
       </div>
@@ -466,8 +479,8 @@ function ParkedSection({ state }: { state: DiscsState }) {
       hint="These discs were copied but look like TV episodes, whose season and episode numbers are not on the disc."
     >
       <ul className="space-y-4">
-        {state.parked.map((name) => (
-          <ParkedDisc key={name} name={name} />
+        {state.parked.map((disc) => (
+          <ParkedDisc key={disc.name} disc={disc} />
         ))}
       </ul>
     </Section>
@@ -497,6 +510,15 @@ function NeedsYearRow({ name }: { name: string }) {
         >
           Rename
         </button>
+        <button
+          type="button"
+          className={PRIMARY}
+          disabled={command.isPending}
+          title="Ask TMDB which movie this is, by its name and the length of its file"
+          onClick={() => command.mutate({ action: 'match', old: name })}
+        >
+          Match on TMDB
+        </button>
       </div>
       <Answer result={command.data} error={command.error} />
     </li>
@@ -508,7 +530,7 @@ function NeedsYearSection({ state }: { state: DiscsState }) {
   return (
     <Section
       title="Finished, but no year yet"
-      hint="Plex matches best with the year in the name, like Stellaluna (1996). Renaming also renames the files inside."
+      hint="Plex matches best with the year in the name, like Stellaluna (1996). Match on TMDB finds the movie by its name and the length of its file; Rename lets you type it. Either one renames the files inside too."
     >
       <ul className="space-y-3">
         {state.needsYear.map((name) => (

@@ -141,7 +141,7 @@ describe('readDiscsState', () => {
       'line 9',
     ]);
     expect(state.working[0]?.queued).toBe(true);
-    expect(state.parked).toEqual(['Showdisc']);
+    expect(state.parked).toEqual([{ name: 'Showdisc', suggestion: null }]);
   });
 
   test('lists finished folders that have no year', async () => {
@@ -151,6 +151,31 @@ describe('readDiscsState', () => {
     const state = await readDiscsState(dir);
     expect(state.needsYear).toEqual(['Stellaluna']);
     expect(state.finishedCount).toBe(2);
+  });
+});
+
+describe('parked discs', () => {
+  test('carry what TMDB made of their label, when the ripper left it', async () => {
+    await write('_images/Billy_S4_D1/Billy_S4_D1.iso', '');
+    await write(
+      '_images/Billy_S4_D1/suggest.txt',
+      'show=Billy the Exterminator (2009)\nseason=4\ndisc=1\n',
+    );
+    await write('_images/Other/Other.iso', '');
+    await write('_images/Half/suggest.txt', 'show=Only A Show\nseason=x\n');
+    const state = await readDiscsState(dir);
+    expect(state.parked).toEqual([
+      {
+        name: 'Billy_S4_D1',
+        suggestion: {
+          show: 'Billy the Exterminator (2009)',
+          season: 4,
+          disc: 1,
+        },
+      },
+      { name: 'Half', suggestion: { show: 'Only A Show' } },
+      { name: 'Other', suggestion: null },
+    ]);
   });
 });
 
@@ -256,6 +281,15 @@ describe('commands', () => {
         new: 'Stellaluna (1996)',
       }),
     ).toEqual(['action=rename', 'old=Stellaluna', 'new=Stellaluna (1996)']);
+  });
+
+  test('a match request names only the folder', () => {
+    expect(commandLines({ action: 'match', old: 'Stellaluna' })).toEqual([
+      'action=match',
+      'old=Stellaluna',
+    ]);
+    expect(() => commandLines({ action: 'match', old: '../x' })).toThrow();
+    expect(() => commandLines({ action: 'match', old: '' })).toThrow();
   });
 
   test('the first episode defaults to 1', () => {
