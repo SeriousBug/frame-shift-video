@@ -75,7 +75,7 @@ describe('readDiscsState', () => {
     const state = await readDiscsState(dir);
     expect(state).toEqual({
       available: true,
-      eject: false,
+      eject: true,
       drive: null,
       run: null,
       next: null,
@@ -180,6 +180,12 @@ describe('parked discs', () => {
 });
 
 describe('settings the page writes', () => {
+  test('eject is on unless it was switched off', async () => {
+    expect((await readDiscsState(dir)).eject).toBe(true);
+    await setEject(dir, false);
+    expect((await readDiscsState(dir)).eject).toBe(false);
+  });
+
   test('eject is read back as written', async () => {
     await setEject(dir, true);
     expect((await readDiscsState(dir)).eject).toBe(true);
@@ -281,6 +287,58 @@ describe('commands', () => {
         new: 'Stellaluna (1996)',
       }),
     ).toEqual(['action=rename', 'old=Stellaluna', 'new=Stellaluna (1996)']);
+  });
+
+  test('a search carries its kind, a cleaned query and a checked year', () => {
+    expect(
+      commandLines({
+        action: 'search',
+        kind: 'any',
+        query: '  Andre   (1994) & friends ',
+        year: 1994,
+      }),
+    ).toEqual([
+      'action=search',
+      'kind=any',
+      'query=Andre (1994) & friends',
+      'year=1994',
+    ]);
+    expect(
+      commandLines({ action: 'search', kind: 'movie', query: 'Andre' }),
+    ).toEqual(['action=search', 'kind=movie', 'query=Andre']);
+  });
+
+  test('a pasted address stays whole in a search', () => {
+    const address =
+      'https://www.themoviedb.org/movie/21352-andre?language=en-US';
+    expect(
+      commandLines({ action: 'search', kind: 'any', query: address }),
+    ).toContain(`query=${address}`);
+  });
+
+  test('a newline in a search cannot start another line of the request', () => {
+    const lines = commandLines({
+      action: 'search',
+      kind: 'movie',
+      query: 'Andre\naction=eject',
+    });
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe('query=Andre action=eject');
+  });
+
+  test('bad searches are refused', () => {
+    expect(() =>
+      commandLines({ action: 'search', kind: 'any', query: '   ' }),
+    ).toThrow();
+    expect(() =>
+      commandLines({ action: 'search', kind: 'sideways' as never, query: 'x' }),
+    ).toThrow();
+    expect(() =>
+      commandLines({ action: 'search', kind: 'any', query: 'x'.repeat(201) }),
+    ).toThrow();
+    expect(() =>
+      commandLines({ action: 'search', kind: 'any', query: 'x', year: 0 }),
+    ).toThrow();
   });
 
   test('a match request names only the folder', () => {

@@ -9,11 +9,12 @@
  *   _images/<disc>/suggest.txt           written by the ripper: what TMDB made of its label
  *   _settings/eject                      written here: 1 or 0, read by the ripper
  *   _settings/next                       written here: a note for the next disc
- *   _commands/<id>.cmd                   written here, run by the host: eject, rip, rename, match
+ *   _commands/<id>.cmd                   written here, run by the host: eject, rip, rename, match,
+ *                                        search (TMDB; the host holds the token)
  *   _commands/done/<id>.result           written by the host: "ok" or "error", then a sentence
  *
  * Everything written here is made of a small set of checked values, and the host
- * checks it again, so the page can only ask for those four things.
+ * checks it again, so the page can only ask for those five things.
  */
 
 import fs from 'fs/promises';
@@ -69,6 +70,19 @@ export function cleanNumber(value: unknown, what: string): number {
     throw new Error(`${what} must be a whole number from 1 to 999`);
   }
   return number;
+}
+
+/** A four-digit year, for narrowing a TMDB search. */
+export function cleanYear(value: unknown): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 1888 ||
+    value > 2100
+  ) {
+    throw new Error('The year must be a four-digit year');
+  }
+  return value;
 }
 
 /** Reads a file, or null when it is not there. */
@@ -237,7 +251,8 @@ export async function readDiscsState(
   const folders = (await listDirs(dir)).filter((name) => !name.startsWith('_'));
   return {
     available: true,
-    eject: ejectText?.trim() === '1',
+    // On unless it was switched off: the ripper ejects a disc once it is not needed.
+    eject: ejectText === null ? true : ejectText.trim() !== '0',
     drive: await readDrive(dir, now),
     run: await readRun(dir),
     next: await readNext(dir),
@@ -331,9 +346,45 @@ export function commandLines(command: DiscCommand): string[] {
       ];
     case 'match':
       return ['action=match', `old=${cleanFolder(command.old)}`];
+    case 'search': {
+      if (
+        command.kind !== 'movie' &&
+        command.kind !== 'tv' &&
+        command.kind !== 'any'
+      ) {
+        throw new Error('Search for a movie, a show or either');
+      }
+      const lines = [
+        'action=search',
+        `kind=${command.kind}`,
+        `query=${cleanQuery(command.query)}`,
+      ];
+      if (command.year !== undefined) {
+        lines.push(`year=${cleanYear(command.year)}`);
+      }
+      return lines;
+    }
     default:
       throw new Error('Unknown request');
   }
+}
+
+/**
+ * What a person typed into a TMDB search box. It can be a title or a pasted address, so
+ * punctuation stays; control characters (a newline would start another line of the request)
+ * do not.
+ */
+function cleanQuery(value: unknown): string {
+  if (typeof value !== 'string')
+    throw new Error('Type something to search for');
+  // eslint-disable-next-line no-control-regex
+  const cleaned = value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/ +/g, ' ')
+    .trim();
+  if (!cleaned) throw new Error('Type something to search for');
+  if (cleaned.length > 200) throw new Error('That is too long to search for');
+  return cleaned;
 }
 
 /** A folder name from the page: no slashes, no leading dot or underscore trickery. */

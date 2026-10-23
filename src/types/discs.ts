@@ -58,6 +58,19 @@ export interface DiscSuggestion {
   disc?: number;
 }
 
+/** One match from a TMDB search, to pick from. */
+export interface TmdbResult {
+  kind: 'movie' | 'tv';
+  id: number;
+  /** "Title (Year)", already safe to use as a name */
+  name: string;
+  /** A movie's length, or how many seasons a show has */
+  size: string;
+  overview: string;
+  /** TMDB's poster path, or empty */
+  poster: string;
+}
+
 /** A disc that was copied and is waiting to be told what it is. */
 export interface DiscParked {
   /** Its folder name, which is what a request to convert it is made by */
@@ -97,7 +110,14 @@ export type DiscCommand =
     }
   | { action: 'rename'; old: string; new: string }
   /** Ask TMDB which movie a finished folder is, and rename it Title (Year) */
-  | { action: 'match'; old: string };
+  | { action: 'match'; old: string }
+  /** Search TMDB for movies, shows or either; the query may be a TMDB or IMDb address */
+  | {
+      action: 'search';
+      kind: 'movie' | 'tv' | 'any';
+      query: string;
+      year?: number;
+    };
 
 export interface DiscCommandResult {
   /** Whether the host has answered yet */
