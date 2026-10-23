@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { JobList } from '@/components/job-list';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { DiscsCard } from '@/components/discs-card';
 
 export const Route = createFileRoute('/')({
   component: IndexComponent,
@@ -19,8 +20,8 @@ function IndexComponent() {
       </header>
 
       <main>
-        <div className="text-center py-16">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-600 p-12 shadow-lg max-w-md mx-auto">
+        <div className="py-16 flex flex-wrap justify-center gap-8">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-600 p-12 shadow-lg max-w-md w-full text-center">
             <div className="text-6xl mb-6">📹</div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
               Start Video Conversion
@@ -36,6 +37,9 @@ function IndexComponent() {
               Start Conversions
             </Link>
           </div>
+          <AppErrorBoundary>
+            <DiscsCard />
+          </AppErrorBoundary>
         </div>
 
         <div className="mt-16">
