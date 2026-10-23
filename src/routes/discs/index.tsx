@@ -285,7 +285,7 @@ function DriveSection({ state }: { state: DiscsState }) {
             disabled={eject.isPending}
             onChange={(event) => eject.mutate(event.target.checked)}
           />
-          Eject a disc once it has been read
+          Eject a disc when it is done being scanned
         </label>
         <button
           type="button"
@@ -297,9 +297,10 @@ function DriveSection({ state }: { state: DiscsState }) {
         </button>
       </div>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        The disc comes out once it has been read completely and is not needed
-        anymore. If part of it could not be read, or it was not copied, it stays
-        in the drive. With this off, it always stays until you eject it.
+        The disc comes out as soon as it is done being scanned and copied, once
+        it is not needed anymore. If part of it could not be read, or it was not
+        copied, it stays in the drive. With this off, it always stays until you
+        eject it.
       </p>
       <Answer result={command.data} error={command.error ?? eject.error} />
     </Section>
