@@ -162,7 +162,11 @@ async function readNext(dir: string): Promise<DiscNext | null> {
     };
   }
   if (values.mode === 'movie') {
-    return { mode: 'movie', ...(values.name ? { name: values.name } : {}) };
+    return {
+      mode: 'movie',
+      ...(values.name ? { name: values.name } : {}),
+      ...(values.for === 'drive' ? { current: true } : {}),
+    };
   }
   return null;
 }
@@ -191,11 +195,19 @@ async function readAttention(dir: string): Promise<DiscAttention[]> {
   return notes.slice(0, MAX_LIST);
 }
 
-/** Discs that were copied and parked, with the ripper's guess from TMDB when it left one. */
+/**
+ * Discs that were copied and parked to be told what they are, with the ripper's guess from
+ * TMDB when it left one.
+ */
 async function readParked(dir: string): Promise<DiscParked[]> {
   const folders = await listDirs(path.join(dir, '_images'));
   const parked: DiscParked[] = [];
-  for (const name of folders.slice(0, MAX_LIST)) {
+  for (const name of folders) {
+    if (parked.length >= MAX_LIST) break;
+    // Only a disc the ripper parked to be told what it is. A kept copy of one that was
+    // already filed stays in _images too, without this marker.
+    const waiting = await readText(path.join(dir, '_images', name, '.waiting'));
+    if (waiting === null) continue;
     const text = await readText(path.join(dir, '_images', name, 'suggest.txt'));
     const values = text === null ? {} : parseKeyValues(text);
     const season = Number(values.season);
@@ -275,7 +287,7 @@ export async function setEject(dir: string, enabled: boolean): Promise<void> {
   );
 }
 
-/** Leaves a note for the next disc, or takes it back when null. */
+/** Leaves a note for the next disc (or the disc being ripped), or takes it back when null. */
 export async function setNext(
   dir: string,
   note: DiscNext | null,
@@ -294,6 +306,8 @@ export async function setNext(
       `episode=${cleanNumber(note.episode ?? 1, 'The first episode')}`,
     );
   } else if (note.mode === 'movie') {
+    // For the disc being ripped, which the ripper names once it has been copied.
+    if (note.current) lines.push('for=drive');
     lines.push('mode=movie');
     if (note.name) lines.push(`name=${cleanName(note.name)}`);
   } else {
