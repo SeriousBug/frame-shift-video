@@ -275,35 +275,18 @@ function buildFFmpegArgs(config: FFmpegJobConfig): string[] {
     args.push('-c:a', 'copy');
   }
 
-  // Subtitle codec - smart handling based on detected formats
+  // Subtitle codec - decided per stream so Plex can use every track.
+  // Plex-compatible text formats and bitmap formats are copied; any other
+  // subtitle format (eia_608, mov_text, microdvd, ...) is converted to SRT.
   const subtitleCodecs = config.subtitleCodecs || [];
 
   if (subtitleCodecs.length === 0) {
     // No subtitle streams detected - skip subtitles
     args.push('-sn');
   } else {
-    // Text-based formats that can be converted
-    const textFormats = ['ass', 'ssa', 'srt', 'subrip', 'mov_text', 'webvtt'];
-    // Bitmap formats that must be copied (cannot convert to text)
-    const bitmapFormats = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvdsub'];
-
-    const hasOnlyTextSubs = subtitleCodecs.every((codec) =>
-      textFormats.includes(codec.toLowerCase()),
-    );
-    const hasBitmapSubs = subtitleCodecs.some((codec) =>
-      bitmapFormats.includes(codec.toLowerCase()),
-    );
-
-    if (hasBitmapSubs) {
-      // Has bitmap subtitles - must copy (can't convert bitmap to text)
-      args.push('-c:s', 'copy');
-    } else if (hasOnlyTextSubs) {
-      // All text-based - can convert incompatible ones to ASS
-      args.push('-c:s', 'ass');
-    } else {
-      // Mixed or unknown - safest to copy
-      args.push('-c:s', 'copy');
-    }
+    subtitleCodecs.forEach((codec, index) => {
+      args.push(`-c:s:${index}`, subtitleCodecFor(codec));
+    });
   }
 
   // Bitrate mode (if not CRF)
@@ -411,6 +394,20 @@ export function createFFmpegJobs(
     `[FFmpeg Command] Successfully created ${jobs.length} job config(s)`,
   );
   return jobs;
+}
+
+/** Subtitle formats Plex supports in every client, kept as they are. */
+const PLEX_TEXT_SUBTITLES = ['ass', 'ssa', 'srt', 'subrip', 'webvtt'];
+/** Bitmap formats cannot become text without OCR, so they are copied. */
+const BITMAP_SUBTITLES = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvdsub'];
+
+/** The `-c:s:N` value for one subtitle stream of the given source codec. */
+function subtitleCodecFor(codec: string): string {
+  const name = codec.toLowerCase();
+  if (PLEX_TEXT_SUBTITLES.includes(name) || BITMAP_SUBTITLES.includes(name)) {
+    return 'copy';
+  }
+  return 'srt';
 }
 
 /**
