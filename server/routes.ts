@@ -42,6 +42,12 @@ import {
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
 import { getCachedCapabilities } from './ffmpeg-capabilities';
+import {
+  hobworkStateHandler,
+  hobworkSaveHandler,
+  hobworkTestHandler,
+  discNoticeHandler,
+} from './handlers/hobwork';
 
 function getSettingsResponse(corsHeaders: Record<string, string>): Response {
   const version = process.env.APP_VERSION || null;
@@ -161,6 +167,22 @@ const wrappedDiscsAutoScanHandler = withErrorHandler(
 const wrappedDiscsMovieOnlyHandler = withErrorHandler(
   discsMovieOnlyHandler,
   'DiscsMovieOnlyHandler',
+);
+const wrappedHobworkStateHandler = withErrorHandler(
+  hobworkStateHandler,
+  'HobworkStateHandler',
+);
+const wrappedHobworkSaveHandler = withErrorHandler(
+  hobworkSaveHandler,
+  'HobworkSaveHandler',
+);
+const wrappedHobworkTestHandler = withErrorHandler(
+  hobworkTestHandler,
+  'HobworkTestHandler',
+);
+const wrappedDiscNoticeHandler = withErrorHandler(
+  discNoticeHandler,
+  'DiscNoticeHandler',
 );
 const wrappedDiscsNextHandler = withErrorHandler(
   discsNextHandler,
@@ -300,6 +322,21 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: GET /api/settings/system-status
     if (pathname === '/api/settings/system-status' && req.method === 'GET') {
       return await wrappedGetSystemStatusHandler(req, corsHeaders);
+    }
+
+    // Routes for the connection to Hobwork (notifications and Live Activities)
+    if (pathname === '/api/hobwork' && req.method === 'GET') {
+      return await wrappedHobworkStateHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/hobwork' && req.method === 'PUT') {
+      return await wrappedHobworkSaveHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/hobwork/test' && req.method === 'POST') {
+      return await wrappedHobworkTestHandler(req, corsHeaders);
+    }
+    // From the disc ripper on the same host
+    if (pathname === '/api/disc-notice' && req.method === 'POST') {
+      return await wrappedDiscNoticeHandler(req, corsHeaders);
     }
 
     // Routes for the Discs page (the DVD ripper on the server host)

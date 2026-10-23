@@ -5,6 +5,7 @@
 import { FileSystemItem, FilePickerState } from '@/types/files';
 import { Job } from '@/types/database';
 import type { ConversionOptions } from '@/types/conversion';
+import type { HobworkChanges, HobworkState } from '@/types/hobwork';
 import type {
   DiscCommand,
   DiscCommandResult,
@@ -483,6 +484,45 @@ export async function sendTestNotification(): Promise<{
   }
 
   return response.json();
+}
+
+/**
+ * Whether Frame Shift is connected to Hobwork, and its switches
+ */
+export async function fetchHobwork(): Promise<HobworkState> {
+  const response = await fetch(`${API_BASE}/hobwork`);
+  if (!response.ok) throw new Error('Failed to read the Hobwork connection');
+  return response.json();
+}
+
+/**
+ * Change the connection to Hobwork or its switches
+ */
+export async function saveHobwork(
+  changes: HobworkChanges,
+): Promise<HobworkState> {
+  const response = await fetch(`${API_BASE}/hobwork`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || 'Failed to save the Hobwork connection');
+  }
+  return body;
+}
+
+/**
+ * Send a test notification through Hobwork
+ */
+export async function testHobwork(): Promise<{ ok: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/hobwork/test`, { method: 'POST' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.message || 'Hobwork did not take the test');
+  }
+  return body;
 }
 
 /**
