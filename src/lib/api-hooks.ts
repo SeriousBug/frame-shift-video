@@ -33,6 +33,7 @@ import {
   fetchDiscs,
   setDiscEject,
   setDiscAutoScan,
+  setDiscMovieOnly,
   setDiscNext,
   dismissDiscAttention,
   sendDiscCommand,
@@ -402,6 +403,18 @@ export function useSetDiscEject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: setDiscEject,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to turn leaving out a movie's extras on or off
+ */
+export function useSetDiscMovieOnly() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setDiscMovieOnly,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
   });

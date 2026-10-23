@@ -627,6 +627,21 @@ export async function setDiscEject(enabled: boolean): Promise<void> {
 }
 
 /**
+ * Turn leaving out a movie's extras on or off
+ */
+export async function setDiscMovieOnly(enabled: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/movie-only`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to change the movie-only setting');
+  }
+}
+
+/**
  * Turn scanning and ripping a disc as it goes in on or off
  */
 export async function setDiscAutoScan(enabled: boolean): Promise<void> {

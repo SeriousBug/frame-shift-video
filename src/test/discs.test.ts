@@ -13,6 +13,7 @@ import {
   setEject,
   setNext,
   setAutoScan,
+  setMovieOnly,
 } from '../../server/disc-state';
 
 let dir: string;
@@ -78,6 +79,7 @@ describe('readDiscsState', () => {
       available: true,
       eject: true,
       autoScan: true,
+      movieOnly: false,
       drive: null,
       run: null,
       next: null,
@@ -189,6 +191,17 @@ describe('parked discs', () => {
 });
 
 describe('settings the page writes', () => {
+  test('movie-only is off unless it was switched on', async () => {
+    expect((await readDiscsState(dir)).movieOnly).toBe(false);
+    await setMovieOnly(dir, true);
+    expect((await readDiscsState(dir)).movieOnly).toBe(true);
+    expect(
+      await fs.readFile(path.join(dir, '_settings', 'movie-only'), 'utf8'),
+    ).toBe('1\n');
+    await setMovieOnly(dir, false);
+    expect((await readDiscsState(dir)).movieOnly).toBe(false);
+  });
+
   test('auto-scan is on unless it was switched off', async () => {
     expect((await readDiscsState(dir)).autoScan).toBe(true);
     await setAutoScan(dir, false);

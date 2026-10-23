@@ -9,6 +9,7 @@
  *   _images/<disc>/suggest.txt           written by the ripper: what TMDB made of its label
  *   _settings/eject                      written here: 1 or 0, read by the ripper
  *   _settings/auto                       written here: 1 or 0, whether a disc is ripped as it goes in
+ *   _settings/movie-only                 written here: 1 or 0, whether a movie's extras are left out
  *   _settings/next                       written here: a note for the next disc
  *   _commands/<id>.cmd                   written here, run by the host: eject, rip, rename, match,
  *                                        search (TMDB; the host holds the token)
@@ -250,6 +251,7 @@ export async function readDiscsState(
       available: false,
       eject: false,
       autoScan: true,
+      movieOnly: false,
       drive: null,
       run: null,
       next: null,
@@ -263,6 +265,9 @@ export async function readDiscsState(
 
   const ejectText = await readText(path.join(dir, '_settings', 'eject'));
   const autoText = await readText(path.join(dir, '_settings', 'auto'));
+  const movieOnlyText = await readText(
+    path.join(dir, '_settings', 'movie-only'),
+  );
   const folders = (await listDirs(dir)).filter((name) => !name.startsWith('_'));
   return {
     available: true,
@@ -270,6 +275,8 @@ export async function readDiscsState(
     eject: ejectText === null ? true : ejectText.trim() !== '0',
     // On unless it was switched off: a disc that goes in is scanned and ripped by itself.
     autoScan: autoText === null ? true : autoText.trim() !== '0',
+    // Off unless it was switched on: a movie's extras are made too.
+    movieOnly: movieOnlyText?.trim() === '1',
     drive: await readDrive(dir, now),
     run: await readRun(dir),
     next: await readNext(dir),
@@ -300,6 +307,18 @@ export async function setAutoScan(
   await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
   await fs.writeFile(
     path.join(dir, '_settings', 'auto'),
+    enabled ? '1\n' : '0\n',
+  );
+}
+
+/** Turns leaving out a movie's extras on or off. */
+export async function setMovieOnly(
+  dir: string,
+  enabled: boolean,
+): Promise<void> {
+  await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
+  await fs.writeFile(
+    path.join(dir, '_settings', 'movie-only'),
     enabled ? '1\n' : '0\n',
   );
 }

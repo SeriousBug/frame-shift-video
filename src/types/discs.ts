@@ -90,6 +90,8 @@ export interface DiscsState {
   eject: boolean;
   /** Whether a disc that goes in is scanned and ripped without being asked */
   autoScan: boolean;
+  /** Whether only a movie is made from a disc, with none of its extras */
+  movieOnly: boolean;
   drive: DiscDrive | null;
   run: DiscRun | null;
   next: DiscNext | null;
