@@ -627,6 +627,21 @@ export async function setDiscEject(enabled: boolean): Promise<void> {
 }
 
 /**
+ * Turn scanning and ripping a disc as it goes in on or off
+ */
+export async function setDiscAutoScan(enabled: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/auto-scan`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to change the auto-scan setting');
+  }
+}
+
+/**
  * Leave a note for the next disc, or take it back with null
  */
 export async function setDiscNext(note: DiscNext | null): Promise<void> {

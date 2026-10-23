@@ -10,6 +10,7 @@ import {
   readDiscsState,
   sendCommand,
   setEject,
+  setAutoScan,
   setNext,
 } from '../disc-state';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
@@ -78,6 +79,22 @@ export async function discsEjectHandler(
   }
   await setEject(discsDir(), body.enabled);
   return json({ eject: body.enabled }, 200, corsHeaders);
+}
+
+/**
+ * PUT /api/discs/auto-scan
+ * Body: { enabled: boolean }. Whether a disc that goes in is scanned and ripped by itself.
+ */
+export async function discsAutoScanHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body || typeof body.enabled !== 'boolean') {
+    return json({ error: 'enabled must be true or false' }, 400, corsHeaders);
+  }
+  await setAutoScan(discsDir(), body.enabled);
+  return json({ autoScan: body.enabled }, 200, corsHeaders);
 }
 
 /**

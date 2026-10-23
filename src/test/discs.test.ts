@@ -12,6 +12,7 @@ import {
   sendCommand,
   setEject,
   setNext,
+  setAutoScan,
 } from '../../server/disc-state';
 
 let dir: string;
@@ -76,6 +77,7 @@ describe('readDiscsState', () => {
     expect(state).toEqual({
       available: true,
       eject: true,
+      autoScan: true,
       drive: null,
       run: null,
       next: null,
@@ -187,6 +189,17 @@ describe('parked discs', () => {
 });
 
 describe('settings the page writes', () => {
+  test('auto-scan is on unless it was switched off', async () => {
+    expect((await readDiscsState(dir)).autoScan).toBe(true);
+    await setAutoScan(dir, false);
+    expect((await readDiscsState(dir)).autoScan).toBe(false);
+    expect(await fs.readFile(path.join(dir, '_settings', 'auto'), 'utf8')).toBe(
+      '0\n',
+    );
+    await setAutoScan(dir, true);
+    expect((await readDiscsState(dir)).autoScan).toBe(true);
+  });
+
   test('eject is on unless it was switched off', async () => {
     expect((await readDiscsState(dir)).eject).toBe(true);
     await setEject(dir, false);

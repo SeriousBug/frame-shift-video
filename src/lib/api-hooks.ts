@@ -32,6 +32,7 @@ import {
   fetchSettings,
   fetchDiscs,
   setDiscEject,
+  setDiscAutoScan,
   setDiscNext,
   dismissDiscAttention,
   sendDiscCommand,
@@ -401,6 +402,18 @@ export function useSetDiscEject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: setDiscEject,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to turn scanning and ripping a disc as it goes in on or off
+ */
+export function useSetDiscAutoScan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setDiscAutoScan,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
   });
