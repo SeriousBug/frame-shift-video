@@ -22,15 +22,19 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
+import { JobService } from './db-service';
 import type {
   DiscAttention,
   DiscCommand,
   DiscCommandResult,
+  DiscConversion,
+  DiscDone,
   DiscDrive,
   DiscNext,
   DiscParked,
   DiscRun,
   DiscsState,
+  DiscStage,
   DiscWorking,
 } from '../src/types/discs';
 
@@ -38,6 +42,7 @@ import type {
 const DRIVE_ALIVE_SECONDS = 90;
 const MAX_NAME_LENGTH = 100;
 const MAX_LIST = 100;
+const RECENT_COUNT = 5;
 
 /** Where the ripper's folder is, as this server sees it. */
 export function discsDir(): string {
@@ -227,22 +232,131 @@ async function readParked(dir: string): Promise<DiscParked[]> {
   return parked;
 }
 
-async function readWorking(dir: string): Promise<DiscWorking[]> {
+/** The part of a Frame Shift job the queue needs. */
+export interface QueueJob {
+  input_file: string;
+  status: string;
+  progress: number | null;
+}
+
+/** The jobs in Frame Shift's list, as the queue reads them. */
+function readJobs(): QueueJob[] {
+  try {
+    return (['pending', 'processing', 'completed', 'failed'] as const).flatMap(
+      (status) => JobService.getByStatus(status),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** How far the conversions of one disc's working folder have got, or null when there are none. */
+export function conversionOf(
+  folder: string,
+  jobs: QueueJob[],
+): DiscConversion | null {
+  const marker = `/_converting/${folder}/`;
+  const mine = jobs.filter((job) => job.input_file.includes(marker));
+  if (mine.length === 0) return null;
+  const done = mine.filter((job) => job.status === 'completed').length;
+  const failed = mine.filter((job) => job.status === 'failed').length;
+  const points = mine.reduce(
+    (sum, job) =>
+      sum +
+      (job.status === 'completed' || job.status === 'failed'
+        ? 100
+        : Math.min(100, Math.max(0, job.progress ?? 0))),
+    0,
+  );
+  return {
+    total: mine.length,
+    done,
+    failed,
+    percent: Math.round(points / mine.length),
+  };
+}
+
+/** Where a disc is, from what its folder holds and what Frame Shift is doing with it. */
+export function stageOf(
+  stage: string | null,
+  hasManifest: boolean,
+  queued: boolean,
+  conversion: DiscConversion | null,
+): DiscStage {
+  if (queued || stage === 'queued') {
+    if (!conversion) return 'waiting';
+    if (conversion.done + conversion.failed >= conversion.total)
+      return 'filing';
+    return conversion.percent > 0 || conversion.done > 0
+      ? 'converting'
+      : 'waiting';
+  }
+  if (stage === 'copying') return 'copying';
+  if (stage === 'staged' || hasManifest) return 'waiting';
+  return 'extracting';
+}
+
+/** What to call a disc: where it will be filed, which its manifest says, else its folder. */
+function titleOf(folder: string, manifest: string | null): string {
+  const first = manifest?.split('\n')[0]?.split('\t')[1];
+  const filed = first?.split('/')[0]?.trim();
+  return filed || folder.replace(/_+/g, ' ').trim();
+}
+
+async function readWorking(
+  dir: string,
+  jobs: QueueJob[],
+  now: number,
+): Promise<DiscWorking[]> {
   const folders = await listDirs(path.join(dir, '_converting'));
   const working: DiscWorking[] = [];
   for (const name of folders) {
     const folder = path.join(dir, '_converting', name);
     const log = await readText(path.join(folder, 'STATUS.txt'));
     const queued = (await readText(path.join(folder, 'submitted'))) !== null;
-    working.push({ name, lines: lastLines(log ?? '', 6), queued });
+    const manifest = await readText(path.join(folder, 'manifest.tsv'));
+    const stage =
+      (await readText(path.join(folder, 'stage.txt')))?.trim() ?? null;
+    const conversion = conversionOf(name, jobs);
+    let quietSeconds: number | null = null;
+    try {
+      const stat = await fs.stat(path.join(folder, 'STATUS.txt'));
+      quietSeconds = Math.max(0, now - Math.floor(stat.mtimeMs / 1000));
+    } catch {
+      quietSeconds = null;
+    }
+    working.push({
+      name,
+      title: titleOf(name, manifest),
+      stage: stageOf(stage, manifest !== null, queued, conversion),
+      lines: lastLines(log ?? '', 6),
+      queued,
+      conversion,
+      quietSeconds,
+    });
   }
   return working.slice(0, MAX_LIST);
+}
+
+/** The last few folders filed, newest first. */
+async function readRecent(dir: string, folders: string[]): Promise<DiscDone[]> {
+  const stamped: DiscDone[] = [];
+  for (const name of folders) {
+    try {
+      const stat = await fs.stat(path.join(dir, name));
+      stamped.push({ name, at: Math.floor(stat.mtimeMs / 1000) });
+    } catch {
+      // Gone since it was listed.
+    }
+  }
+  return stamped.sort((a, b) => b.at - a.at).slice(0, RECENT_COUNT);
 }
 
 /** Everything the Discs page shows, from the files in the DVDs folder. */
 export async function readDiscsState(
   dir: string = discsDir(),
   now: number = Math.floor(Date.now() / 1000),
+  jobs: QueueJob[] = readJobs(),
 ): Promise<DiscsState> {
   try {
     await fs.access(dir);
@@ -260,6 +374,7 @@ export async function readDiscsState(
       parked: [],
       needsYear: [],
       finishedCount: 0,
+      recent: [],
     };
   }
 
@@ -281,12 +396,13 @@ export async function readDiscsState(
     run: await readRun(dir),
     next: await readNext(dir),
     attention: await readAttention(dir),
-    working: await readWorking(dir),
+    working: await readWorking(dir, jobs, now),
     parked: await readParked(dir),
     needsYear: folders
       .filter((name) => !/\(\d{4}\)/.test(name))
       .slice(0, MAX_LIST),
     finishedCount: folders.length,
+    recent: await readRecent(dir, folders),
   };
 }
 

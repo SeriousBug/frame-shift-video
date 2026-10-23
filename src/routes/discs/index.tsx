@@ -15,9 +15,11 @@ import {
 import type {
   DiscCommand,
   DiscCommandResult,
+  DiscConversion,
   DiscNext,
   DiscParked,
   DiscsState,
+  DiscStage,
 } from '@/types/discs';
 
 export const Route = createFileRoute('/discs/')({
@@ -494,28 +496,184 @@ function AttentionSection({ state }: { state: DiscsState }) {
   );
 }
 
+/** The steps a disc goes through, in order, as the queue shows them. */
+const PIPELINE: { stage: DiscStage | 'scanning'; label: string }[] = [
+  { stage: 'scanning', label: 'Scan' },
+  { stage: 'copying', label: 'Copy' },
+  { stage: 'extracting', label: 'Extract' },
+  { stage: 'waiting', label: 'Queue' },
+  { stage: 'converting', label: 'Convert' },
+  { stage: 'filing', label: 'File' },
+];
+
+/** Past this many quiet seconds a step is called slow, not busy. */
+const QUIET_SECONDS = 30 * 60;
+
+function describeStage(disc: QueueEntry): string {
+  switch (disc.stage) {
+    case 'scanning':
+      return 'Checking how well the disc reads';
+    case 'copying':
+      return 'Copying the disc. It can come out when this is done, and the next one can go in.';
+    case 'extracting':
+      return 'The disc is out of the drive. Taking the movie out of the copy.';
+    case 'waiting':
+      return disc.queued
+        ? 'Queued in Frame Shift, waiting its turn'
+        : 'Ready. Frame Shift gets it within a few minutes.';
+    case 'converting':
+      return 'Converting in Frame Shift';
+    case 'filing':
+      return 'Converted. Moving it into place.';
+  }
+}
+
+/** A row of the queue: a disc in the working folder, or the one the drive is reading. */
+interface QueueEntry {
+  key: string;
+  title: string;
+  stage: DiscStage | 'scanning';
+  queued: boolean;
+  conversion: DiscConversion | null;
+  lines: string[];
+  quietSeconds: number | null;
+}
+
+function queueOf(state: DiscsState): QueueEntry[] {
+  const entries: QueueEntry[] = state.working.map((disc) => ({
+    key: disc.name,
+    title: disc.title,
+    stage: disc.stage,
+    queued: disc.queued,
+    conversion: disc.conversion,
+    lines: disc.lines,
+    quietSeconds: disc.quietSeconds,
+  }));
+  // The disc being scanned has no folder yet, so it comes from the ripper's own status.
+  if (
+    state.run?.state === 'running' &&
+    !entries.some((e) => e.stage === 'copying')
+  ) {
+    entries.unshift({
+      key: 'scanning',
+      title: state.run.name || 'A disc',
+      stage: 'scanning',
+      queued: false,
+      conversion: null,
+      lines: state.run.step ? [state.run.step] : [],
+      quietSeconds: null,
+    });
+  }
+  return entries;
+}
+
+function Pipeline({ stage }: { stage: DiscStage | 'scanning' }) {
+  const at = PIPELINE.findIndex((step) => step.stage === stage);
+  return (
+    <ol className="mt-2 flex flex-wrap items-center gap-1 text-xs">
+      {PIPELINE.map((step, index) => (
+        <li
+          key={step.stage}
+          className={`rounded-full px-2 py-0.5 ${
+            index < at
+              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+              : index === at
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+          }`}
+        >
+          {index < at ? '✓ ' : ''}
+          {step.label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function WorkingSection({ state }: { state: DiscsState }) {
-  if (state.working.length === 0) return null;
+  const queue = queueOf(state);
+  const drive = state.drive;
+  const driveBusy = state.run?.state === 'running';
+  if (queue.length === 0 && state.recent.length === 0) return null;
   return (
     <Section
-      title="Being copied or converted"
-      hint="Conversions show up in the job list on the home page once they are queued."
+      title="Queue"
+      hint="Every disc from the scan to the file. The drive is free as soon as a disc has been copied and is out, so the next one can go in while this one is extracted and converted."
     >
-      <ul className="space-y-4">
-        {state.working.map((disc) => (
-          <li key={disc.name}>
-            <strong className="text-gray-900 dark:text-white">
-              {disc.name}
-            </strong>{' '}
-            <span className="text-sm text-gray-500">
-              {disc.queued ? 'queued for conversion' : 'getting ready'}
-            </span>
-            <pre className="mt-1 overflow-x-auto rounded-lg bg-gray-100 dark:bg-gray-900 p-3 text-xs text-gray-800 dark:text-gray-200">
-              {disc.lines.join('\n') || 'No log yet.'}
-            </pre>
-          </li>
-        ))}
-      </ul>
+      <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">
+        {driveBusy
+          ? 'The drive is busy with a disc. The next one can go in once it is copied and out.'
+          : drive?.media
+            ? 'The drive is free, and there is a disc in it.'
+            : 'The drive is free. Put in the next disc.'}
+      </p>
+      {queue.length > 0 && (
+        <ul className="space-y-4">
+          {queue.map((disc) => (
+            <li
+              key={disc.key}
+              className="rounded-lg border border-gray-200 dark:border-gray-600 p-4"
+            >
+              <strong className="text-gray-900 dark:text-white">
+                {disc.title}
+              </strong>
+              <Pipeline stage={disc.stage} />
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                {describeStage(disc)}
+                {disc.quietSeconds !== null &&
+                  disc.quietSeconds > QUIET_SECONDS &&
+                  (disc.stage === 'copying' || disc.stage === 'extracting') &&
+                  ' Nothing has been written for a while, so it may be stuck.'}
+              </p>
+              {disc.conversion && (
+                <div className="mt-2">
+                  <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                      className="h-2 rounded-full bg-blue-600"
+                      style={{ width: `${disc.conversion.percent}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                    {disc.conversion.done + disc.conversion.failed} of{' '}
+                    {disc.conversion.total} file
+                    {disc.conversion.total === 1 ? '' : 's'} ·{' '}
+                    {disc.conversion.percent}%
+                    {disc.conversion.failed > 0
+                      ? ` · ${disc.conversion.failed} failed`
+                      : ''}
+                  </p>
+                </div>
+              )}
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-gray-500">
+                  Log
+                </summary>
+                <pre className="mt-1 overflow-x-auto rounded-lg bg-gray-100 dark:bg-gray-900 p-3 text-xs text-gray-800 dark:text-gray-200">
+                  {disc.lines.join('\n') || 'No log yet.'}
+                </pre>
+              </details>
+            </li>
+          ))}
+        </ul>
+      )}
+      {state.recent.length > 0 && (
+        <div className={queue.length > 0 ? 'mt-5' : ''}>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Filed
+          </h3>
+          <ul className="mt-1 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+            {state.recent.map((done) => (
+              <li key={done.name}>
+                <span className="text-green-600 dark:text-green-400">✓</span>{' '}
+                {done.name}{' '}
+                <span className="text-xs text-gray-500">
+                  {secondsAgo(done.at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Section>
   );
 }
