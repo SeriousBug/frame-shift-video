@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { checkVersion } from '@/lib/version-checker';
 import { VersionMismatchBanner } from '@/components/version-mismatch-banner';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { DiscsCornerButton } from '@/components/discs-corner-button';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -61,6 +62,7 @@ function RootComponent() {
           />
         )}
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+          <DiscsCornerButton />
           <Outlet />
         </div>
         <TanStackRouterDevtools />

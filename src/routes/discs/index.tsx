@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
 import {
@@ -563,16 +563,10 @@ function DiscsContent() {
 function DiscsPage() {
   return (
     <div className="container mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
+      <header className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
           Discs
         </h1>
-        <Link
-          to="/"
-          className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-sm"
-        >
-          Back to jobs
-        </Link>
       </header>
       <AppErrorBoundary>
         <DiscsContent />
