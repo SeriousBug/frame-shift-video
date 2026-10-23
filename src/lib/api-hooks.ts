@@ -434,22 +434,31 @@ export function useDismissDiscAttention() {
  * Hook to ask the host to eject, rip or rename. The host answers within a few
  * seconds, so this waits for the answer and returns it.
  */
+/**
+ * Sends a request to the host and waits for its answer: up to 15 seconds, then a "did not
+ * answer" result. Not a hook, so a component can start one on its own, such as when a disc
+ * goes in.
+ */
+export async function runDiscCommand(
+  command: DiscCommand,
+): Promise<DiscCommandResult> {
+  const { id } = await sendDiscCommand(command);
+  for (let attempt = 0; attempt < 15; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const result = await fetchDiscCommandResult(id);
+    if (result.done) return result;
+  }
+  return {
+    done: false,
+    message:
+      'The server did not answer. Is the disc helper running on the host?',
+  };
+}
+
 export function useDiscCommand() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (command: DiscCommand): Promise<DiscCommandResult> => {
-      const { id } = await sendDiscCommand(command);
-      for (let attempt = 0; attempt < 15; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const result = await fetchDiscCommandResult(id);
-        if (result.done) return result;
-      }
-      return {
-        done: false,
-        message:
-          'The server did not answer. Is the disc helper running on the host?',
-      };
-    },
+    mutationFn: runDiscCommand,
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
   });

@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { TmdbPicker } from '@/components/tmdb-picker';
+import { parseLabel } from '@/lib/tmdb-results';
 import {
   useDiscs,
   useSetDiscEject,
@@ -283,7 +285,7 @@ function DriveSection({ state }: { state: DiscsState }) {
             disabled={eject.isPending}
             onChange={(event) => eject.mutate(event.target.checked)}
           />
-          Eject a disc when it has been read
+          Eject a disc once it has been read
         </label>
         <button
           type="button"
@@ -295,8 +297,9 @@ function DriveSection({ state }: { state: DiscsState }) {
         </button>
       </div>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        With ejecting off, a disc stays in the drive until you eject it, so it
-        can be looked at or tried again.
+        The disc comes out once it has been read completely and is not needed
+        anymore. If part of it could not be read, or it was not copied, it stays
+        in the drive. With this off, it always stays until you eject it.
       </p>
       <Answer result={command.data} error={command.error ?? eject.error} />
     </Section>
@@ -309,6 +312,9 @@ function NextSection({ state }: { state: DiscsState }) {
   const command = useDiscCommand();
   const problem = detailsProblem(details);
   const diskIn = state.drive?.alive && state.drive.media;
+  // The disc in the drive is looked up by what its label says it is.
+  const labelInfo =
+    diskIn && state.drive?.label ? parseLabel(state.drive.label) : null;
 
   return (
     <Section
@@ -328,7 +334,26 @@ function NextSection({ state }: { state: DiscsState }) {
           </button>
         </p>
       )}
-      <DetailsFields value={details} onChange={setDetails} />
+      <TmdbPicker
+        kind="any"
+        initialQuery={labelInfo?.title ?? ''}
+        autoSearch={!!labelInfo}
+        onPick={(result) =>
+          setDetails((current) =>
+            result.kind === 'movie'
+              ? { ...current, mode: 'movie', name: result.name }
+              : {
+                  ...current,
+                  mode: 'tv',
+                  show: result.name,
+                  season: String(labelInfo?.season ?? current.season),
+                },
+          )
+        }
+      />
+      <div className="mt-4">
+        <DetailsFields value={details} onChange={setDetails} />
+      </div>
       {problem && (
         <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
           {problem}
@@ -451,6 +476,24 @@ function ParkedDisc({ disc }: { disc: DiscParked }) {
         </p>
       )}
       <div className="mt-3">
+        <TmdbPicker
+          kind="tv"
+          initialQuery={(suggestion?.show ?? parseLabel(name).title).replace(
+            / \(\d{4}\)$/,
+            '',
+          )}
+          autoSearch
+          onPick={(result) =>
+            setDetails((current) => ({
+              ...current,
+              mode: 'tv',
+              show: result.name,
+              season: String(suggestion?.season ?? current.season),
+            }))
+          }
+        />
+      </div>
+      <div className="mt-3">
         <DetailsFields value={details} onChange={setDetails} />
       </div>
       {problem && (
@@ -520,6 +563,21 @@ function NeedsYearRow({ name }: { name: string }) {
           Match on TMDB
         </button>
       </div>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-400">
+          Search TMDB yourself
+        </summary>
+        <div className="mt-2">
+          <TmdbPicker
+            kind="movie"
+            initialQuery={parseLabel(name).title}
+            onPick={(result) => setValue(result.name)}
+          />
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            “Use this” fills the name above. Press Rename to apply it.
+          </p>
+        </div>
+      </details>
       <Answer result={command.data} error={command.error} />
     </li>
   );
