@@ -49,11 +49,40 @@ export interface DiscAttention {
 
 /** A disc that is being copied, extracted or converted. */
 export interface DiscWorking {
+  /** Its working folder, which is what identifies it */
   name: string;
+  /** What to call it: the name it will be filed under when that is known */
+  title: string;
+  /** Where it is: copying, extracting, waiting for Frame Shift, converting, or being filed */
+  stage: DiscStage;
   /** The last lines of its log */
   lines: string[];
   /** Whether its titles have been queued in Frame Shift */
   queued: boolean;
+  /** Its conversions in Frame Shift, once there are any */
+  conversion: DiscConversion | null;
+  /** Seconds since its log was last written, to tell a slow step from a stuck one */
+  quietSeconds: number | null;
+}
+
+/** The steps a disc goes through after it is scanned. */
+export type DiscStage =
+  'copying' | 'extracting' | 'waiting' | 'converting' | 'filing';
+
+/** How far a disc's conversions in Frame Shift have got. */
+export interface DiscConversion {
+  total: number;
+  done: number;
+  failed: number;
+  /** 0 to 100, over all of them */
+  percent: number;
+}
+
+/** A disc that was filed, newest first. */
+export interface DiscDone {
+  name: string;
+  /** Unix seconds */
+  at: number;
 }
 
 /** What TMDB made of a parked disc's label, left beside it by the ripper. */
@@ -103,6 +132,8 @@ export interface DiscsState {
   needsYear: string[];
   /** How many finished folders there are */
   finishedCount: number;
+  /** The last few filed, newest first */
+  recent: DiscDone[];
 }
 
 /** What the page can ask the host to do. */

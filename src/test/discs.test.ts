@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import {
+  conversionOf,
+  stageOf,
   cleanName,
   cleanNumber,
   commandLines,
@@ -88,6 +90,7 @@ describe('readDiscsState', () => {
       parked: [],
       needsYear: [],
       finishedCount: 0,
+      recent: [],
     });
   });
 
@@ -467,5 +470,93 @@ describe('commands', () => {
 
   test('an id with a path in it is refused', async () => {
     await expect(commandResult(dir, '../x')).rejects.toThrow();
+  });
+});
+
+describe('the queue', () => {
+  const job = (folder: string, status: string, progress: number | null) => ({
+    input_file: `/videos/DVDs/_converting/${folder}/${folder}.mkv`,
+    status,
+    progress,
+  });
+
+  test('a disc has no conversion until Frame Shift has jobs for it', () => {
+    expect(conversionOf('Duma', [])).toBeNull();
+    expect(conversionOf('Duma', [job('Other', 'processing', 50)])).toBeNull();
+  });
+
+  test('its conversions are counted and averaged, and finished ones count as whole', () => {
+    const jobs = [
+      job('Duma', 'completed', 100),
+      job('Duma', 'processing', 50),
+      job('Duma', 'pending', null),
+      job('Other', 'processing', 90),
+    ];
+    expect(conversionOf('Duma', jobs)).toEqual({
+      total: 3,
+      done: 1,
+      failed: 0,
+      percent: 50,
+    });
+    const failed = conversionOf('Duma', [job('Duma', 'failed', 10)]);
+    expect(failed).toMatchObject({ total: 1, failed: 1, percent: 100 });
+  });
+
+  test('the stage follows what the folder holds and what Frame Shift is doing', () => {
+    expect(stageOf('copying', false, false, null)).toBe('copying');
+    expect(stageOf('extracting', false, false, null)).toBe('extracting');
+    // Older folders have no stage file: a manifest means it is ready, none means it is extracting.
+    expect(stageOf(null, true, false, null)).toBe('waiting');
+    expect(stageOf(null, false, false, null)).toBe('extracting');
+    expect(stageOf('staged', true, false, null)).toBe('waiting');
+    const idle = { total: 2, done: 0, failed: 0, percent: 0 };
+    expect(stageOf('queued', true, true, null)).toBe('waiting');
+    expect(stageOf('queued', true, true, idle)).toBe('waiting');
+    expect(stageOf('queued', true, true, { ...idle, percent: 20 })).toBe(
+      'converting',
+    );
+    expect(
+      stageOf('queued', true, true, { ...idle, done: 1, percent: 50 }),
+    ).toBe('converting');
+    expect(
+      stageOf('queued', true, true, {
+        total: 2,
+        done: 1,
+        failed: 1,
+        percent: 100,
+      }),
+    ).toBe('filing');
+  });
+
+  test('a working folder shows its stage, its filed name and its progress, and filed discs are listed', async () => {
+    await write('_converting/Everyones_Hero/stage.txt', 'queued\n');
+    await write('_converting/Everyones_Hero/submitted', '');
+    await write(
+      '_converting/Everyones_Hero/manifest.tsv',
+      "Everyones_Hero.mkv\tEveryone's Hero (2006)/Everyone's Hero (2006).mkv\t5230\n",
+    );
+    await write(
+      '_converting/Everyones_Hero/STATUS.txt',
+      'Queued in Frame Shift Video\n',
+    );
+    await write('_converting/Duma/stage.txt', 'extracting\n');
+    await write('_converting/Duma/STATUS.txt', 'Extracting\n');
+    await write('Duma (2005)/Duma (2005).mkv', '');
+    const state = await readDiscsState(dir, undefined, [
+      job('Everyones_Hero', 'processing', 40),
+    ]);
+    const hero = state.working.find((disc) => disc.name === 'Everyones_Hero');
+    expect(hero).toMatchObject({
+      title: "Everyone's Hero (2006)",
+      stage: 'converting',
+      queued: true,
+      conversion: { total: 1, done: 0, failed: 0, percent: 40 },
+    });
+    expect(state.working.find((disc) => disc.name === 'Duma')).toMatchObject({
+      title: 'Duma',
+      stage: 'extracting',
+      conversion: null,
+    });
+    expect(state.recent.map((done) => done.name)).toEqual(['Duma (2005)']);
   });
 });
