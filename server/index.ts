@@ -8,6 +8,8 @@ await initializeServerMonitoring();
 import { setupRoutes } from './routes';
 import { setupWebSocket, WSBroadcaster } from './websocket';
 import { JobProcessor } from './job-processor';
+import { attachConvertActivity } from './convert-activity';
+import { startDiscActivityWatcher } from './disc-activity';
 import { LeaderDistributor } from './leader-distributor';
 import { FollowerExecutor } from './follower-executor';
 import { Job } from '../src/types/database';
@@ -248,6 +250,13 @@ if (INSTANCE_TYPE === 'follower') {
       WSBroadcaster.broadcastStatusCounts(JobService.getStatusCounts());
       broadcastFollowerStatusIfLeader();
     });
+
+    // A Live Activity for the conversions and one for the disc ripper, when Hobwork is connected
+    attachConvertActivity(processor, () => ({
+      pending: JobService.getByStatus('pending').length,
+      processing: JobService.getByStatus('processing').length,
+    }));
+    startDiscActivityWatcher();
 
     // Start the processor
     await processor.start();

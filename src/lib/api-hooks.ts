@@ -33,6 +33,8 @@ import {
   fetchDiscs,
   setDiscEject,
   setDiscAutoScan,
+  fetchHobwork,
+  saveHobwork,
   setDiscMovieOnly,
   setDiscNext,
   dismissDiscAttention,
@@ -58,6 +60,7 @@ export const queryKeys = {
   systemStatus: ['system-status'] as const,
   settings: ['settings'] as const,
   discs: ['discs'] as const,
+  hobwork: ['hobwork'] as const,
 };
 
 /**
@@ -347,6 +350,27 @@ export function useRetryFollowers() {
       // Invalidate followers status to refetch
       queryClient.invalidateQueries({ queryKey: queryKeys.followersStatus });
     },
+  });
+}
+
+/**
+ * Hook to read the connection to Hobwork
+ */
+export function useHobwork() {
+  return useQuery({
+    queryKey: queryKeys.hobwork,
+    queryFn: fetchHobwork,
+  });
+}
+
+/**
+ * Hook to change the connection to Hobwork, or send it a test
+ */
+export function useSaveHobwork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveHobwork,
+    onSuccess: (state) => queryClient.setQueryData(queryKeys.hobwork, state),
   });
 }
 

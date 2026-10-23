@@ -4,6 +4,7 @@
  */
 
 import { logger, captureException } from '../src/lib/sentry';
+import { hobworkNotify, linkTo, readSettings } from './hobwork-service';
 
 /**
  * Notification configuration from environment variables
@@ -86,6 +87,7 @@ async function sendPushoverNotification(
   userKey: string,
   message: string,
   title?: string,
+  link?: { url: string; title: string },
 ): Promise<void> {
   try {
     const params = new URLSearchParams({
@@ -94,6 +96,11 @@ async function sendPushoverNotification(
       message,
       title: title || 'Frame Shift Video',
     });
+    // Pushover shows this as a tappable link under the message.
+    if (link) {
+      params.set('url', link.url);
+      params.set('url_title', link.title);
+    }
 
     const response = await fetch('https://api.pushover.net/1/messages.json', {
       method: 'POST',
@@ -123,6 +130,22 @@ async function sendPushoverNotification(
 }
 
 /**
+ * A notice from the disc ripper, to Pushover with a link to the page that deals with it. Resolves
+ * false when Pushover is not set up; throws when it is and the send failed.
+ */
+export async function sendPushoverNotice(
+  title: string,
+  message: string,
+  link?: { url: string; title: string },
+): Promise<boolean> {
+  const token = process.env.PUSHOVER_API_TOKEN;
+  const userKey = process.env.PUSHOVER_USER_KEY;
+  if (!token || !userKey) return false;
+  await sendPushoverNotification(token, userKey, message, title, link);
+  return true;
+}
+
+/**
  * Notification service for sending alerts
  */
 export class NotificationService {
@@ -138,7 +161,13 @@ export class NotificationService {
    * Check if notifications are enabled
    */
   isEnabled(): boolean {
-    return !!(this.config.discord || this.config.pushover);
+    return !!(this.config.discord || this.config.pushover || this.hobworkOn());
+  }
+
+  /** Whether notifications also go through Hobwork (connected, and switched on). */
+  private hobworkOn(): boolean {
+    const settings = readSettings();
+    return settings.url !== null && settings.notifications;
   }
 
   /**
@@ -151,6 +180,9 @@ export class NotificationService {
     }
     if (this.config.pushover) {
       methods.push('Pushover');
+    }
+    if (this.hobworkOn()) {
+      methods.push('Hobwork');
     }
     return methods;
   }
@@ -188,21 +220,44 @@ export class NotificationService {
 
     // Send notifications to all enabled services
     const promises: Promise<void>[] = [];
+    const names: string[] = [];
 
     if (this.config.discord) {
+      names.push('Discord');
       promises.push(
         sendDiscordNotification(this.config.discord.webhookUrl, message),
       );
     }
 
     if (this.config.pushover) {
+      const page = linkTo('/');
+      names.push('Pushover');
       promises.push(
         sendPushoverNotification(
           this.config.pushover.token,
           this.config.pushover.userKey,
           message,
           'All Jobs Complete',
+          page ? { url: page, title: 'Open Frame Shift' } : undefined,
         ),
+      );
+    }
+
+    if (this.hobworkOn()) {
+      names.push('Hobwork');
+      promises.push(
+        hobworkNotify({
+          kind: 'converted',
+          id: 'converted',
+          title:
+            failedCount > 0
+              ? `${failedCount} conversion${failedCount === 1 ? '' : 's'} failed`
+              : 'Conversions finished',
+          message: `Completed: ${completedCount}${failedCount > 0 ? `, failed: ${failedCount}` : ''}`,
+          path: '/',
+        }).then((sent) => {
+          if (!sent) throw new Error('Hobwork did not take the notification');
+        }),
       );
     }
 
@@ -212,7 +267,7 @@ export class NotificationService {
     // Log any failures
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        const service = index === 0 ? 'Discord' : 'Pushover';
+        const service = names[index] ?? 'A notification service';
         logger.error(`[NotificationService] ${service} notification failed`, {
           error:
             result.reason instanceof Error

@@ -1,3 +1,4 @@
+import { HobworkCard } from '@/components/hobwork-card';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
   useFollowersStatus,
@@ -694,6 +695,11 @@ function SettingsPage() {
               )}
             </div>
           </div>
+        </AppErrorBoundary>
+
+        {/* Hobwork Section */}
+        <AppErrorBoundary>
+          <HobworkCard />
         </AppErrorBoundary>
       </main>
     </div>
