@@ -149,7 +149,7 @@ export function TmdbPicker({
       )}
 
       {results.length > 0 && (
-        <ul className="divide-y divide-gray-200 dark:divide-gray-600 rounded-lg border border-gray-200 dark:border-gray-600">
+        <ul className="max-h-96 overflow-y-auto overscroll-contain divide-y divide-gray-200 dark:divide-gray-600 rounded-lg border border-gray-200 dark:border-gray-600">
           {results.map((result) => {
             const poster = posterUrl(result.poster);
             return (
