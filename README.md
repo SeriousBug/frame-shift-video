@@ -162,23 +162,39 @@ services:
 
 ### Environment Variables
 
-| Variable                  | Required              | Default          | Description                                          |
-| ------------------------- | --------------------- | ---------------- | ---------------------------------------------------- |
-| `PORT`                    | No                    | `3001`           | Port the server listens on                           |
-| `FRAME_SHIFT_HOME`        | No                    | `/` (or `$HOME`) | Starting directory for file browser                  |
-| `INSTANCE_TYPE`           | No                    | `standalone`     | Instance type: `standalone`, `leader`, or `follower` |
-| `SHARED_TOKEN`            | Yes (leader/follower) | -                | Shared authentication token for distributed setup    |
-| `FOLLOWER_URLS`           | Yes (leader)          | -                | Comma-separated list of follower URLs                |
-| `LEADER_URL`              | Yes (follower)        | -                | URL of the leader instance                           |
-| `FFMPEG_DECODER_THREADS`  | No                    | -                | Number of threads for FFmpeg decoding                |
-| `FFMPEG_ENCODER_THREADS`  | No                    | -                | Number of threads for FFmpeg encoding                |
-| `DISCORD_WEBHOOK_URL`     | No                    | -                | Discord webhook URL for notifications                |
-| `PUSHOVER_API_TOKEN`      | No                    | -                | Pushover application token                           |
-| `PUSHOVER_USER_KEY`       | No                    | -                | Pushover user key                                    |
-| `SENTRY_CLIENT_DSN`       | No                    | -                | Sentry DSN for client-side error tracking            |
-| `SENTRY_SERVER_DSN`       | No                    | -                | Sentry DSN for server-side error tracking            |
-| `SENTRY_ENVIRONMENT`      | No                    | `production`     | Sentry environment name                              |
-| `SENTRY_SEND_DEFAULT_PII` | No                    | -                | Send personally identifiable info to Sentry          |
+| Variable                  | Required              | Default                  | Description                                          |
+| ------------------------- | --------------------- | ------------------------ | ---------------------------------------------------- |
+| `PORT`                    | No                    | `3001`                   | Port the server listens on                           |
+| `FRAME_SHIFT_HOME`        | No                    | `/` (or `$HOME`)         | Starting directory for file browser                  |
+| `DISC_RIP_DIR`            | No                    | `$FRAME_SHIFT_HOME/DVDs` | Folder the Discs page reads (see below)              |
+| `INSTANCE_TYPE`           | No                    | `standalone`             | Instance type: `standalone`, `leader`, or `follower` |
+| `SHARED_TOKEN`            | Yes (leader/follower) | -                        | Shared authentication token for distributed setup    |
+| `FOLLOWER_URLS`           | Yes (leader)          | -                        | Comma-separated list of follower URLs                |
+| `LEADER_URL`              | Yes (follower)        | -                        | URL of the leader instance                           |
+| `FFMPEG_DECODER_THREADS`  | No                    | -                        | Number of threads for FFmpeg decoding                |
+| `FFMPEG_ENCODER_THREADS`  | No                    | -                        | Number of threads for FFmpeg encoding                |
+| `DISCORD_WEBHOOK_URL`     | No                    | -                        | Discord webhook URL for notifications                |
+| `PUSHOVER_API_TOKEN`      | No                    | -                        | Pushover application token                           |
+| `PUSHOVER_USER_KEY`       | No                    | -                        | Pushover user key                                    |
+| `SENTRY_CLIENT_DSN`       | No                    | -                        | Sentry DSN for client-side error tracking            |
+| `SENTRY_SERVER_DSN`       | No                    | -                        | Sentry DSN for server-side error tracking            |
+| `SENTRY_ENVIRONMENT`      | No                    | `production`             | Sentry environment name                              |
+| `SENTRY_SEND_DEFAULT_PII` | No                    | -                        | Send personally identifiable info to Sentry          |
+
+## Discs page (optional)
+
+If a DVD ripper runs on the same machine and keeps its files in a `DVDs` folder
+inside `FRAME_SHIFT_HOME`, the **Discs** page (`/discs`, a button on the home page)
+shows the drive, what the ripper is doing and anything that needs a person, and has
+buttons to eject, to say what the next disc is, to rip the disc in the drive as a
+movie or a TV show, to convert a disc that was copied and parked, and to add a year
+to a movie's folder. With no `DVDs` folder, the page says so and nothing else changes.
+
+Frame Shift cannot reach the drive, so the page and the ripper trade small files in
+that folder: `_status/` (written by the ripper), `_settings/eject` and
+`_settings/next` (written by the page), and `_commands/` (requests the page leaves
+and the ripper answers). Every value the page writes is checked first. The files and
+their format are described at the top of `server/disc-state.ts`.
 
 ## Development
 

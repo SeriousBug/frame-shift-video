@@ -29,6 +29,14 @@ import {
   retryFollowersHandler,
   getSystemStatusHandler,
 } from './handlers/settings';
+import {
+  discsStateHandler,
+  discsEjectHandler,
+  discsNextHandler,
+  discsAttentionHandler,
+  discsCommandsHandler,
+  discsCommandResultHandler,
+} from './handlers/discs';
 import { logger, captureException } from '../src/lib/sentry';
 import { withErrorHandler } from './handler-wrapper';
 import { getCachedCapabilities } from './ffmpeg-capabilities';
@@ -134,6 +142,31 @@ const wrappedRetryFollowersHandler = withErrorHandler(
 const wrappedGetSystemStatusHandler = withErrorHandler(
   getSystemStatusHandler,
   'GetSystemStatusHandler',
+);
+
+const wrappedDiscsStateHandler = withErrorHandler(
+  discsStateHandler,
+  'DiscsStateHandler',
+);
+const wrappedDiscsEjectHandler = withErrorHandler(
+  discsEjectHandler,
+  'DiscsEjectHandler',
+);
+const wrappedDiscsNextHandler = withErrorHandler(
+  discsNextHandler,
+  'DiscsNextHandler',
+);
+const wrappedDiscsAttentionHandler = withErrorHandler(
+  discsAttentionHandler,
+  'DiscsAttentionHandler',
+);
+const wrappedDiscsCommandsHandler = withErrorHandler(
+  discsCommandsHandler,
+  'DiscsCommandsHandler',
+);
+const wrappedDiscsCommandResultHandler = withErrorHandler(
+  discsCommandResultHandler,
+  'DiscsCommandResultHandler',
 );
 
 export async function setupRoutes(req: Request): Promise<Response> {
@@ -257,6 +290,36 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // Route: GET /api/settings/system-status
     if (pathname === '/api/settings/system-status' && req.method === 'GET') {
       return await wrappedGetSystemStatusHandler(req, corsHeaders);
+    }
+
+    // Routes for the Discs page (the DVD ripper on the server host)
+    if (pathname === '/api/discs' && req.method === 'GET') {
+      return await wrappedDiscsStateHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/eject' && req.method === 'PUT') {
+      return await wrappedDiscsEjectHandler(req, corsHeaders);
+    }
+    if (
+      pathname === '/api/discs/next' &&
+      (req.method === 'PUT' || req.method === 'DELETE')
+    ) {
+      return await wrappedDiscsNextHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/attention' && req.method === 'DELETE') {
+      return await wrappedDiscsAttentionHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/commands' && req.method === 'POST') {
+      return await wrappedDiscsCommandsHandler(req, corsHeaders);
+    }
+    const discCommandMatch = pathname.match(
+      /^\/api\/discs\/commands\/([^/]+)$/,
+    );
+    if (discCommandMatch && req.method === 'GET') {
+      return await wrappedDiscsCommandResultHandler(
+        req,
+        decodeURIComponent(discCommandMatch[1]),
+        corsHeaders,
+      );
     }
 
     // Route: POST /worker/execute (follower endpoint)
