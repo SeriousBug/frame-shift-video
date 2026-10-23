@@ -6,13 +6,14 @@
  *   ATTENTION - <name>.txt               written by the ripper: something needs a person
  *   _converting/<disc>/STATUS.txt        written by the ripper: a disc's log
  *   _images/<disc>/                      a copied disc waiting to be told what it is
+ *   _images/<disc>/suggest.txt           written by the ripper: what TMDB made of its label
  *   _settings/eject                      written here: 1 or 0, read by the ripper
  *   _settings/next                       written here: a note for the next disc
- *   _commands/<id>.cmd                   written here, run by the host: eject, rip, rename
+ *   _commands/<id>.cmd                   written here, run by the host: eject, rip, rename, match
  *   _commands/done/<id>.result           written by the host: "ok" or "error", then a sentence
  *
  * Everything written here is made of a small set of checked values, and the host
- * checks it again, so the page can only ask for those three things.
+ * checks it again, so the page can only ask for those four things.
  */
 
 import fs from 'fs/promises';
@@ -24,6 +25,7 @@ import type {
   DiscCommandResult,
   DiscDrive,
   DiscNext,
+  DiscParked,
   DiscRun,
   DiscsState,
   DiscWorking,
@@ -175,6 +177,28 @@ async function readAttention(dir: string): Promise<DiscAttention[]> {
   return notes.slice(0, MAX_LIST);
 }
 
+/** Discs that were copied and parked, with the ripper's guess from TMDB when it left one. */
+async function readParked(dir: string): Promise<DiscParked[]> {
+  const folders = await listDirs(path.join(dir, '_images'));
+  const parked: DiscParked[] = [];
+  for (const name of folders.slice(0, MAX_LIST)) {
+    const text = await readText(path.join(dir, '_images', name, 'suggest.txt'));
+    const values = text === null ? {} : parseKeyValues(text);
+    const season = Number(values.season);
+    const disc = Number(values.disc);
+    const suggestion = {
+      ...(values.show ? { show: values.show } : {}),
+      ...(Number.isInteger(season) && season > 0 ? { season } : {}),
+      ...(Number.isInteger(disc) && disc > 0 ? { disc } : {}),
+    };
+    parked.push({
+      name,
+      suggestion: Object.keys(suggestion).length > 0 ? suggestion : null,
+    });
+  }
+  return parked;
+}
+
 async function readWorking(dir: string): Promise<DiscWorking[]> {
   const folders = await listDirs(path.join(dir, '_converting'));
   const working: DiscWorking[] = [];
@@ -219,7 +243,7 @@ export async function readDiscsState(
     next: await readNext(dir),
     attention: await readAttention(dir),
     working: await readWorking(dir),
-    parked: (await listDirs(path.join(dir, '_images'))).slice(0, MAX_LIST),
+    parked: await readParked(dir),
     needsYear: folders
       .filter((name) => !/\(\d{4}\)/.test(name))
       .slice(0, MAX_LIST),
@@ -305,6 +329,8 @@ export function commandLines(command: DiscCommand): string[] {
         `old=${cleanFolder(command.old)}`,
         `new=${cleanName(command.new)}`,
       ];
+    case 'match':
+      return ['action=match', `old=${cleanFolder(command.old)}`];
     default:
       throw new Error('Unknown request');
   }

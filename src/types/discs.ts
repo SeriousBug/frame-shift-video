@@ -51,6 +51,20 @@ export interface DiscWorking {
   queued: boolean;
 }
 
+/** What TMDB made of a parked disc's label, left beside it by the ripper. */
+export interface DiscSuggestion {
+  show?: string;
+  season?: number;
+  disc?: number;
+}
+
+/** A disc that was copied and is waiting to be told what it is. */
+export interface DiscParked {
+  /** Its folder name, which is what a request to convert it is made by */
+  name: string;
+  suggestion: DiscSuggestion | null;
+}
+
 export interface DiscsState {
   /** Whether the DVDs folder exists on the server */
   available: boolean;
@@ -62,7 +76,7 @@ export interface DiscsState {
   attention: DiscAttention[];
   working: DiscWorking[];
   /** Discs copied and waiting to be told what they are, by folder name */
-  parked: string[];
+  parked: DiscParked[];
   /** Finished folders whose name has no year in it, which Plex wants */
   needsYear: string[];
   /** How many finished folders there are */
@@ -81,7 +95,9 @@ export type DiscCommand =
       episode?: number;
       image?: string;
     }
-  | { action: 'rename'; old: string; new: string };
+  | { action: 'rename'; old: string; new: string }
+  /** Ask TMDB which movie a finished folder is, and rename it Title (Year) */
+  | { action: 'match'; old: string };
 
 export interface DiscCommandResult {
   /** Whether the host has answered yet */
