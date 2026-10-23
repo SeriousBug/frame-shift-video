@@ -11,6 +11,7 @@ import {
   sendCommand,
   setEject,
   setAutoScan,
+  setMovieOnly,
   setNext,
 } from '../disc-state';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
@@ -95,6 +96,22 @@ export async function discsAutoScanHandler(
   }
   await setAutoScan(discsDir(), body.enabled);
   return json({ autoScan: body.enabled }, 200, corsHeaders);
+}
+
+/**
+ * PUT /api/discs/movie-only
+ * Body: { enabled: boolean }. Whether only the movie is made from a disc, without its extras.
+ */
+export async function discsMovieOnlyHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body || typeof body.enabled !== 'boolean') {
+    return json({ error: 'enabled must be true or false' }, 400, corsHeaders);
+  }
+  await setMovieOnly(discsDir(), body.enabled);
+  return json({ movieOnly: body.enabled }, 200, corsHeaders);
 }
 
 /**

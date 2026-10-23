@@ -7,6 +7,7 @@ import {
   useDiscs,
   useSetDiscEject,
   useSetDiscAutoScan,
+  useSetDiscMovieOnly,
   useSetDiscNext,
   useDismissDiscAttention,
   useDiscCommand,
@@ -245,6 +246,7 @@ function DetailsFields({
 function DriveSection({ state }: { state: DiscsState }) {
   const eject = useSetDiscEject();
   const autoScan = useSetDiscAutoScan();
+  const movieOnly = useSetDiscMovieOnly();
   const command = useDiscCommand();
   const { drive, run } = state;
 
@@ -301,6 +303,23 @@ function DriveSection({ state }: { state: DiscsState }) {
         <label className="flex items-center gap-2 text-gray-900 dark:text-white">
           <input
             type="checkbox"
+            checked={state.movieOnly}
+            disabled={movieOnly.isPending}
+            onChange={(event) => movieOnly.mutate(event.target.checked)}
+          />
+          Only make the movie, not its extras
+        </label>
+      </div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        The disc is still copied whole, but the bonus features, trailers and
+        other short titles are not converted. TV discs are not affected. It is
+        read when the disc is named, so you can change it while a disc is being
+        copied.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-gray-900 dark:text-white">
+          <input
+            type="checkbox"
             checked={state.eject}
             disabled={eject.isPending}
             onChange={(event) => eject.mutate(event.target.checked)}
@@ -324,7 +343,9 @@ function DriveSection({ state }: { state: DiscsState }) {
       </p>
       <Answer
         result={command.data}
-        error={command.error ?? eject.error ?? autoScan.error}
+        error={
+          command.error ?? eject.error ?? autoScan.error ?? movieOnly.error
+        }
       />
     </Section>
   );
