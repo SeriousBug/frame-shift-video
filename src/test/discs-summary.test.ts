@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { summarize } from '../routes/discs/index';
+import { subtitleHint, summarize } from '../routes/discs/index';
 import type { DiscsState } from '../types/discs';
+import type { SubtitleFile, SubtitlesState } from '../types/subtitles';
 
 function state(changes: Partial<DiscsState>): DiscsState {
   return {
@@ -38,6 +39,7 @@ describe('the sentence at the top of the Discs page', () => {
     );
     expect(result.tone).toBe('attention');
     expect(result.text).toContain('One thing needs you');
+    expect(result.goto).toBe('Needs you');
   });
 
   test('says there is nothing to do while a disc is worked on', () => {
@@ -62,5 +64,58 @@ describe('the sentence at the top of the Discs page', () => {
 
   test('warns when the helper on the server is silent', () => {
     expect(summarize(state({ drive: null })).tone).toBe('attention');
+  });
+});
+
+describe('the hint about subtitles under the status sentence', () => {
+  const track = {
+    language: 'eng',
+    codec: 'picture',
+    name: '',
+    default: true,
+    forced: false,
+  };
+  function subtitles(files: Partial<SubtitleFile>[], current = null) {
+    return {
+      available: true,
+      auto: false,
+      updated: 1,
+      files: files.map((f) => ({
+        path: 'A/a.mkv',
+        tracks: [track],
+        pictures: 1,
+        needsClean: false,
+        status: null,
+        ...f,
+      })),
+      held: [],
+      current,
+      recent: [],
+    } as SubtitlesState;
+  }
+
+  test('says nothing when there is nothing to convert', () => {
+    expect(subtitleHint(undefined)).toBeNull();
+    expect(subtitleHint(subtitles([{ pictures: 0 }]))).toBeNull();
+  });
+
+  test('counts the movies that can be converted, not the ones already waiting', () => {
+    expect(subtitleHint(subtitles([{}, {}, { status: 'queued' }]))).toContain(
+      '2 movies have',
+    );
+    expect(subtitleHint(subtitles([{}]))).toContain('1 movie has');
+  });
+
+  test('stays quiet while a conversion is running', () => {
+    expect(
+      subtitleHint(
+        subtitles([{}], {
+          path: 'A/a.mkv',
+          step: 'x',
+          done: null,
+          total: null,
+        } as never),
+      ),
+    ).toBeNull();
   });
 });
