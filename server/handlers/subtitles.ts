@@ -1,6 +1,7 @@
 import {
   dismissSubtitles,
   readSubtitlesState,
+  requestClean,
   requestClearOldCopies,
   requestRestore,
   requestSubtitles,
@@ -50,6 +51,28 @@ export async function subtitlesConvertHandler(
   if (!body) return json({ error: 'Send JSON' }, 400, corsHeaders);
   try {
     const count = await requestSubtitles(
+      discsDir(),
+      body.all === true ? { all: true } : { path: body.path as string },
+    );
+    return json({ queued: count }, 200, corsHeaders);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : 'Could not ask' },
+      400,
+      corsHeaders,
+    );
+  }
+}
+
+/** POST /api/subtitles/clean, body { path } or { all: true }: clean the text already in files. */
+export async function subtitlesCleanHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body) return json({ error: 'Send JSON' }, 400, corsHeaders);
+  try {
+    const count = await requestClean(
       discsDir(),
       body.all === true ? { all: true } : { path: body.path as string },
     );

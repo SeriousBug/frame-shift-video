@@ -7,6 +7,7 @@ import { Job } from '@/types/database';
 import type { ConversionOptions } from '@/types/conversion';
 import type { HobworkChanges, HobworkState } from '@/types/hobwork';
 import type {
+  SubtitleCleanRequest,
   SubtitleDismiss,
   SubtitleRequest,
   SubtitlesState,
@@ -515,6 +516,22 @@ export async function convertSubtitles(
   if (!response.ok) {
     throw new Error(body.error || 'Failed to ask for the conversion');
   }
+  return body;
+}
+
+/**
+ * Ask for the text subtitles already in a file, or in all files that need it, to be cleaned
+ */
+export async function cleanSubtitles(
+  request: SubtitleCleanRequest,
+): Promise<{ queued: number }> {
+  const response = await fetch(`${API_BASE}/subtitles/clean`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Failed to ask');
   return body;
 }
 

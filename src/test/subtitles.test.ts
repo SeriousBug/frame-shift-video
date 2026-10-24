@@ -7,6 +7,7 @@ import {
   dismissSubtitles,
   isExtra,
   readSubtitlesState,
+  requestClean,
   requestClearOldCopies,
   requestRestore,
   requestSubtitles,
@@ -269,6 +270,44 @@ describe('what is listed', () => {
     ]);
     expect(isExtra('A (1)/Featurettes/x.mkv')).toBe(true);
     expect(isExtra('A (1)/A (1).mkv')).toBe(false);
+  });
+});
+
+describe('cleaning converted text', () => {
+  test('a file that needs it is asked for by a recheck request, not a conversion', async () => {
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [
+          {
+            path: HERO,
+            needs_clean: true,
+            tracks: [
+              {
+                language: 'eng',
+                codec: 'S_TEXT/UTF8',
+                name: '',
+                default: true,
+                forced: false,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect((await readSubtitlesState(dir)).files[0]?.needsClean).toBe(true);
+    expect(await requestClean(dir, { all: true })).toBe(1);
+    const queue = path.join(dir, '_subs', 'queue');
+    const names = await fs.readdir(queue);
+    const text = await fs.readFile(
+      path.join(queue, names[0] as string),
+      'utf8',
+    );
+    expect(text).toContain('action=recheck\n');
+    expect(text).toContain(`path=${HERO}\n`);
+    expect((await readSubtitlesState(dir)).files[0]?.status).toBe('queued');
+    expect(await requestClean(dir, { all: true })).toBe(0);
   });
 });
 

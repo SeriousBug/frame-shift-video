@@ -14,6 +14,8 @@ export interface SubtitleFile {
   tracks: SubtitleTrack[];
   /** How many of the tracks are picture subtitles that can be converted */
   pictures: number;
+  /** Has text subtitles that were not cleaned with the current rules */
+  needsClean: boolean;
   /** Waiting its turn, or being converted now */
   status: 'queued' | 'converting' | null;
 }
@@ -61,6 +63,9 @@ export interface SubtitlesState {
 
 /** What can be asked: one file, or every file that still has picture subtitles. */
 export type SubtitleRequest = { path: string } | { all: true };
+
+/** Clean the text subtitles already in a file, or in every file that needs it. */
+export type SubtitleCleanRequest = { path: string } | { all: true };
 
 /** What can be taken off the page: a waiting file, every waiting file, or finished entries. */
 export type SubtitleDismiss =
