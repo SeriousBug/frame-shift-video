@@ -619,7 +619,7 @@ export function JobList() {
               statusCounts.failed === 0 && <span>no active jobs</span>}
           </div>
           <Menu.Root>
-            <Menu.Trigger className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <Menu.Trigger className="min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
               Actions
               <span className="text-xs">▼</span>
             </Menu.Trigger>
@@ -863,7 +863,7 @@ export function JobList() {
                 : 'No jobs yet. Start a conversion to see jobs here.'}
             </p>
             {!showCleared && (
-              <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-2">
                 (Toggle "Show cleared jobs" to see cleared jobs)
               </p>
             )}

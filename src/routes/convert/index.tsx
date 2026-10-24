@@ -386,7 +386,7 @@ function ConvertPage() {
               itemRefs.current.delete(item.path);
             }
           }}
-          className={`flex items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 ${
+          className={`flex min-h-[44px] items-center py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 ${
             isSelected
               ? 'bg-blue-50 dark:bg-blue-900/20'
               : isActiveMatch
@@ -405,7 +405,7 @@ function ConvertPage() {
                   }
                 }}
                 disabled={isExpanding || isSearching}
-                className={`mr-2 w-4 h-4 flex items-center justify-center rounded ${
+                className={`mr-1 -ml-3 w-11 h-11 -my-2 shrink-0 flex items-center justify-center rounded ${
                   isSearching
                     ? 'cursor-not-allowed opacity-50'
                     : 'hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -416,7 +416,7 @@ function ConvertPage() {
                     : undefined
                 }
               >
-                <span className="text-gray-500 text-xs">
+                <span className="text-gray-600 dark:text-gray-400 text-sm">
                   {isSearching || item.isExpanded ? '▼' : '▶'}
                 </span>
               </button>
@@ -437,37 +437,41 @@ function ConvertPage() {
                 }
               }}
               disabled={isTopLevelFolder}
-              className={`mr-3 w-4 h-4 flex items-center justify-center border-2 rounded ${
-                isSelected
-                  ? 'bg-blue-600 border-blue-600'
-                  : isIndeterminate
-                    ? 'bg-blue-600 border-blue-600'
-                    : 'border-gray-300 dark:border-gray-600'
-              } ${isTopLevelFolder ? 'opacity-50 cursor-not-allowed' : isExpanding ? 'cursor-default' : 'cursor-pointer'}`}
+              className={`mr-1 w-11 h-11 -my-2 shrink-0 flex items-center justify-center ${isTopLevelFolder ? 'opacity-50 cursor-not-allowed' : isExpanding ? 'cursor-default' : 'cursor-pointer'}`}
             >
-              {isSelected && (
-                <svg
-                  className="w-3 h-3 text-white"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                >
-                  <path
-                    d="M10 3L4.5 8.5L2 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-              {isIndeterminate && (
-                <div className="w-2 h-0.5 bg-white rounded"></div>
-              )}
+              <span
+                className={`w-5 h-5 flex items-center justify-center border-2 rounded ${
+                  isSelected
+                    ? 'bg-blue-600 border-blue-600'
+                    : isIndeterminate
+                      ? 'bg-blue-600 border-blue-600'
+                      : 'border-gray-400 dark:border-gray-500'
+                }`}
+              >
+                {isSelected && (
+                  <svg
+                    className="w-3 h-3 text-white"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                  >
+                    <path
+                      d="M10 3L4.5 8.5L2 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+                {isIndeterminate && (
+                  <div className="w-2 h-0.5 bg-white rounded"></div>
+                )}
+              </span>
             </button>
 
             <button
               type="button"
-              className={`flex items-center flex-1 min-w-0 text-left ${isExpanding ? 'cursor-default' : 'cursor-pointer'} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded`}
+              className={`flex items-center flex-1 min-w-0 self-stretch -my-2 py-2 text-left ${isExpanding ? 'cursor-default' : 'cursor-pointer'} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded`}
               onClick={(e) => {
                 if (isExpanding) return;
                 // Prevent text selection when shift-clicking
@@ -545,7 +549,8 @@ function ConvertPage() {
           <button
             type="button"
             onClick={handleCancel}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
+            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
           >
             <span className="text-2xl">×</span>
           </button>
@@ -565,7 +570,7 @@ function ConvertPage() {
             <div className="flex gap-2 items-center">
               {/* Filter Menu */}
               <Menu.Root>
-                <Menu.Trigger className="px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <Menu.Trigger className="min-h-[44px] px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
                   Filters
                   <span className="text-xs">▼</span>
                 </Menu.Trigger>
@@ -746,12 +751,13 @@ function ConvertPage() {
                       ? 'Search video files (e.g., charlie, 2024-)'
                       : 'Search files (e.g., charlie, 2024-)'
                 }
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="min-h-[44px] flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 onClick={() => setIsSearchHelpOpen(true)}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="How to search"
+                className="min-h-[44px] px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Search pattern help"
               >
                 <HelpCircle size={18} />
@@ -760,8 +766,9 @@ function ConvertPage() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                  className="min-h-[44px] px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                   title="Clear search"
+                  aria-label="Clear the search"
                 >
                   ✕
                 </button>
@@ -802,7 +809,7 @@ function ConvertPage() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
+                  className="min-h-[44px] px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 rounded"
                 >
                   Cancel
                 </button>
@@ -815,7 +822,7 @@ function ConvertPage() {
                     pickerState.selectedCount === 0 ||
                     pickerAction.isPending
                   }
-                  className="w-24 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  className="min-h-[44px] w-24 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   {pickerAction.isPending ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
