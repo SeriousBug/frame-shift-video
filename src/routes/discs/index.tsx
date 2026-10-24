@@ -9,6 +9,14 @@ import {
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import { parseLabel } from '@/lib/tmdb-results';
+import {
+  applyTextSize,
+  describeTextSize,
+  nextTextSize,
+  readTextSize,
+  saveTextSize,
+  type TextSize,
+} from '@/lib/text-size';
 import type { SubtitlesState } from '@/types/subtitles';
 import {
   useDiscs,
@@ -1029,8 +1037,36 @@ function StatusBanner({
   );
 }
 
+function HowItWorks() {
+  return (
+    <Section title="How this works">
+      <ol className="list-decimal space-y-2 pl-6 text-gray-900 dark:text-white">
+        <li>Put a DVD in the drive. It starts by itself.</li>
+        <li>
+          Wait. The disc is read, and the tray opens when it is done. You can
+          put the next disc in while the first one is being made ready.
+        </li>
+        <li>
+          When it is finished, the movie is ready to watch in Plex, and you get
+          a message.
+        </li>
+      </ol>
+      <p className="mt-3 text-gray-700 dark:text-gray-300">
+        You only need to do something when a yellow box at the top says so. The
+        “?” buttons explain each part.
+      </p>
+    </Section>
+  );
+}
+
 function DiscsContent() {
   const { data: state, isLoading, error, dataUpdatedAt } = useDiscs();
+  const [textSize, setTextSize] = useState<TextSize>(readTextSize);
+  // The size applies to this page only, and goes back when you leave it.
+  useEffect(() => {
+    applyTextSize(textSize);
+    return () => applyTextSize(100);
+  }, [textSize]);
   const { data: subtitles } = useSubtitles();
 
   if (isLoading) {
@@ -1062,7 +1098,18 @@ function DiscsContent() {
         updatedAt={dataUpdatedAt}
         subtitles={subtitles}
       />
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          className={SECONDARY}
+          onClick={() => {
+            const next = nextTextSize(textSize);
+            setTextSize(next);
+            saveTextSize(next);
+          }}
+        >
+          Text size: {describeTextSize(textSize)}
+        </button>
         <button
           type="button"
           className={SECONDARY}
@@ -1078,6 +1125,7 @@ function DiscsContent() {
           Collapse all
         </button>
       </div>
+      <HowItWorks />
       <DriveSection state={state} />
       <AttentionSection state={state} />
       <NextSection state={state} />
