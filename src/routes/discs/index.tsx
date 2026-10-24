@@ -82,7 +82,11 @@ function toNote(details: Details): DiscNext {
   return name ? { mode: 'movie', name } : { mode: 'movie' };
 }
 
-function toRip(details: Details, image?: string): DiscCommand {
+function toRip(
+  details: Details,
+  image?: string,
+  replace?: boolean,
+): DiscCommand {
   const note = toNote(details);
   const base = image ? { image } : {};
   if (note.mode === 'tv') {
@@ -99,6 +103,7 @@ function toRip(details: Details, image?: string): DiscCommand {
     action: 'rip',
     mode: 'movie',
     ...(note.name ? { name: note.name } : {}),
+    ...(replace ? { replace: true } : {}),
     ...base,
   };
 }
@@ -380,6 +385,7 @@ function DriveSection({ state }: { state: DiscsState }) {
 
 function NextSection({ state }: { state: DiscsState }) {
   const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
+  const [replace, setReplace] = useState(false);
   const setNext = useSetDiscNext();
   const command = useDiscCommand();
   const problem = detailsProblem(details);
@@ -467,11 +473,26 @@ function NextSection({ state }: { state: DiscsState }) {
                 ? 'The disc is already being ripped'
                 : undefined
           }
-          onClick={() => command.mutate(toRip(details))}
+          onClick={() => command.mutate(toRip(details, undefined, replace))}
         >
           {command.isPending ? 'Starting…' : 'Rip the disc in the drive now'}
         </button>
       </div>
+      {details.mode === 'movie' && (
+        <label className="mt-3 flex items-start gap-2 text-sm text-gray-900 dark:text-white">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={replace}
+            onChange={(event) => setReplace(event.target.checked)}
+          />
+          <span>
+            Do it again over a movie that is already in the library. The old
+            file is kept, and the new one takes its place when it is ready.
+            Without this, a second copy is made with “(2)” in its name.
+          </span>
+        </label>
+      )}
       <Answer result={command.data} error={command.error ?? setNext.error} />
     </Section>
   );

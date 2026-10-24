@@ -500,6 +500,7 @@ export function commandLines(command: DiscCommand): string[] {
       } else if (command.mode === 'movie') {
         lines.push('mode=movie');
         if (command.name) lines.push(`name=${cleanName(command.name)}`);
+        if (command.replace === true) lines.push('replace=1');
       } else {
         throw new Error('Say whether it is a movie or a TV show');
       }

@@ -317,6 +317,20 @@ describe('dismissAttention', () => {
 });
 
 describe('commands', () => {
+  test('redoing a movie over the filed one is asked for only when it is true', () => {
+    const base = { action: 'rip', mode: 'movie', name: 'A (2000)' } as const;
+    expect(commandLines({ ...base, replace: true })).toEqual([
+      'action=rip',
+      'mode=movie',
+      'name=A (2000)',
+      'replace=1',
+    ]);
+    expect(commandLines({ ...base, replace: false })).not.toContain(
+      'replace=1',
+    );
+    expect(commandLines(base)).not.toContain('replace=1');
+  });
+
   test('each request becomes the lines the host reads', () => {
     expect(commandLines({ action: 'eject' })).toEqual(['action=eject']);
     expect(
