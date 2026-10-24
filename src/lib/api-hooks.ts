@@ -39,6 +39,7 @@ import {
   convertSubtitles,
   setSubtitlesAuto,
   restoreSubtitles,
+  removeSubtitleTrack,
   dismissSubtitles,
   cleanSubtitles,
   clearOldCopies,
@@ -404,6 +405,19 @@ export function useDismissSubtitles() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: dismissSubtitles,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
+  });
+}
+
+/**
+ * Hook to take one subtitle track out of a file
+ */
+export function useRemoveSubtitleTrack() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path, track }: { path: string; track: number }) =>
+      removeSubtitleTrack(path, track),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
   });

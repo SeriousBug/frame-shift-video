@@ -41,13 +41,19 @@ export function isExtra(file: string): boolean {
     .some((part) => EXTRA_FOLDERS.has(part.toLowerCase()));
 }
 
-function requestName(relative: string, action: string = 'convert'): string {
+function requestName(
+  relative: string,
+  action: string = 'convert',
+  track?: number,
+): string {
   const key =
     action === 'convert'
       ? relative
       : action === 'clear'
         ? 'clear'
-        : `${action}:${relative}`;
+        : action === 'droptrack'
+          ? `${action}:${relative}:${track}`
+          : `${action}:${relative}`;
   return createHash('md5').update(key).digest('hex').slice(0, 12);
 }
 
@@ -224,26 +230,29 @@ export function cleanSubtitlePath(value: unknown): string {
   return text;
 }
 
-type Action = 'convert' | 'restore' | 'clear' | 'recheck';
+type Action = 'convert' | 'restore' | 'clear' | 'recheck' | 'droptrack';
 
 async function writeRequest(
   dir: string,
   relative: string,
   action: Action = 'convert',
+  track?: number,
 ): Promise<void> {
   const folder = path.join(dir, '_subs', 'queue');
   await fs.mkdir(folder, { recursive: true });
   // Written here as root and cleaned up by the converter as another user, so open to both.
   await fs.chmod(folder, 0o777).catch(() => undefined);
   // The same name the converter gives, so asking twice is one request.
-  const name = requestName(relative, action);
+  const name = requestName(relative, action, track);
   const file = path.join(folder, `${name}.req`);
   try {
     await fs.writeFile(
       file,
       action === 'clear'
         ? `action=clear\nat=${Math.floor(Date.now() / 1000)}\n`
-        : `action=${action}\npath=${relative}\nat=${Math.floor(Date.now() / 1000)}\n`,
+        : `action=${action}\npath=${relative}\n${
+            track === undefined ? '' : `track=${track}\n`
+          }at=${Math.floor(Date.now() / 1000)}\n`,
       { flag: 'wx', mode: 0o666 },
     );
     await fs.chmod(file, 0o666).catch(() => undefined);
@@ -293,6 +302,34 @@ export async function requestClean(
   if (!known) throw new Error('That file is not in the list of movies');
   await writeRequest(dir, relative, 'recheck');
   return 1;
+}
+
+/**
+ * Asks for one subtitle track to be taken out of a file. The number counts the file's subtitle
+ * tracks from 0, in the order the page lists them. The old file is kept first.
+ */
+export async function requestDropTrack(
+  dir: string,
+  value: unknown,
+  track: unknown,
+): Promise<string> {
+  const relative = cleanSubtitlePath(value);
+  const state = await readSubtitlesState(dir);
+  const known = state.files.find((f) => f.path === relative);
+  if (!known) throw new Error('That file is not in the list of movies');
+  if (
+    typeof track !== 'number' ||
+    !Number.isInteger(track) ||
+    track < 0 ||
+    track >= known.tracks.length
+  ) {
+    throw new Error('That subtitle track is not in the file');
+  }
+  if (known.status !== null) {
+    throw new Error('That file is being worked on, try again in a minute');
+  }
+  await writeRequest(dir, relative, 'droptrack', track);
+  return relative;
 }
 
 /** Asks for the old copy of a file to be put back; the converted file is kept in its place. */

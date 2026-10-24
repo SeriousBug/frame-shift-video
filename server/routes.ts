@@ -56,6 +56,7 @@ import {
   subtitlesDismissHandler,
   subtitlesRestoreHandler,
   subtitlesClearOldHandler,
+  subtitlesRemoveTrackHandler,
 } from './handlers/subtitles';
 
 function getSettingsResponse(corsHeaders: Record<string, string>): Response {
@@ -208,6 +209,10 @@ const wrappedSubtitlesCleanHandler = withErrorHandler(
 const wrappedSubtitlesDismissHandler = withErrorHandler(
   subtitlesDismissHandler,
   'SubtitlesDismissHandler',
+);
+const wrappedSubtitlesRemoveTrackHandler = withErrorHandler(
+  subtitlesRemoveTrackHandler,
+  'SubtitlesRemoveTrackHandler',
 );
 const wrappedSubtitlesRestoreHandler = withErrorHandler(
   subtitlesRestoreHandler,
@@ -385,6 +390,9 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/subtitles/clean' && req.method === 'POST') {
       return await wrappedSubtitlesCleanHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/subtitles/remove-track' && req.method === 'POST') {
+      return await wrappedSubtitlesRemoveTrackHandler(req, corsHeaders);
     }
     if (pathname === '/api/subtitles/dismiss' && req.method === 'POST') {
       return await wrappedSubtitlesDismissHandler(req, corsHeaders);
