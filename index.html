@@ -5,9 +5,76 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Frame Shift Video</title>
+    <style>
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: #111827;
+        }
+      }
+      #boot {
+        font:
+          16px system-ui,
+          sans-serif;
+        color: #6b7280;
+        padding: 24px;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app starts, so a page that cannot start says why instead of staying blank. -->
+      <p id="boot">Loading Frame Shift…</p>
+    </div>
+    <script>
+      (function () {
+        function show(text) {
+          var root = document.getElementById('root');
+          if (!root) return;
+          if (root.children.length === 0 || document.getElementById('boot')) {
+            root.innerHTML = '';
+            var note = document.createElement('p');
+            note.id = 'boot';
+            note.style.color = '#dc2626';
+            note.textContent = text + ' Try reloading the page.';
+            root.appendChild(note);
+          }
+        }
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target;
+            if (target && target.src) {
+              show(
+                'A file the page needs did not load (' +
+                  target.src.split('/').pop() +
+                  ').',
+              );
+            } else {
+              show(
+                'Frame Shift could not start: ' +
+                  (event.message || 'unknown error') +
+                  '.',
+              );
+            }
+          },
+          true,
+        );
+        window.addEventListener('unhandledrejection', function (event) {
+          show(
+            'Frame Shift could not start: ' +
+              ((event.reason && event.reason.message) || 'unknown error') +
+              '.',
+          );
+        });
+        setTimeout(function () {
+          var note = document.getElementById('boot');
+          if (note && note.textContent === 'Loading Frame Shift…') {
+            note.textContent =
+              'Still loading… if this stays here, reload the page.';
+          }
+        }, 8000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
