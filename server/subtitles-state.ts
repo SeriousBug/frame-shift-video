@@ -164,6 +164,7 @@ export async function readSubtitlesState(
         path: raw.path,
         size: typeof raw.size === 'number' ? raw.size : 0,
         at: typeof raw.at === 'number' ? raw.at : 0,
+        version: typeof raw.version === 'number' ? raw.version : 0,
       });
     }
   }
