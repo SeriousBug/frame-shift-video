@@ -93,7 +93,7 @@ export function TmdbPicker({
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3">
       <h3 className="font-medium text-gray-900 dark:text-white">
-        Find it on TMDB
+        Find the movie or show
       </h3>
       <form
         className="grid gap-3 sm:grid-cols-[1fr_7rem_auto]"
@@ -126,7 +126,7 @@ export function TmdbPicker({
           className="self-end min-h-[44px] px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={looking || !query.trim()}
         >
-          {looking ? 'Looking…' : 'Look up on TMDB'}
+          {looking ? 'Looking…' : 'Look it up'}
         </button>
       </form>
 
@@ -168,12 +168,12 @@ export function TmdbPicker({
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-gray-900 dark:text-white">
                     {result.name}{' '}
-                    <span className="text-sm font-normal text-gray-500">
+                    <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
                       {result.kind === 'tv' ? 'TV · ' : ''}
                       {result.size}
                     </span>
                   </div>
-                  <p className="line-clamp-2 text-xs text-gray-600 dark:text-gray-400">
+                  <p className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
                     {result.overview}
                   </p>
                 </div>
