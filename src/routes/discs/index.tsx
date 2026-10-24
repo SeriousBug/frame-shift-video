@@ -140,7 +140,7 @@ const HELP: Record<string, string> = {
   'Tell it what the disc is':
     'Optional. If you know the name of the disc, or that it is a TV show, say so here before putting it in. Otherwise the ripper works it out from the disc.',
   'Needs you':
-    'The ripper only shows something here when it cannot go on without a person. Read the note, do what it says, then press Dismiss.',
+    'Something shows up here only when it cannot go on without you. Read the note, do what it says, then press Dismiss.',
   Queue:
     'Every disc in progress, from copying to being ready to watch. Nothing to do here but wait. You will get a message when a disc is finished.',
   'Copied, waiting to be told what they are':
@@ -307,12 +307,12 @@ function DriveSection({ state }: { state: DiscsState }) {
           <>
             <strong>Working</strong>
             {run.name ? ` on ${run.name}` : ''}: {run.step}{' '}
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
               ({secondsAgo(run.updated)})
             </span>
           </>
         ) : (
-          'The ripper is idle.'
+          'Nothing is being copied right now.'
         )}
       </p>
 
@@ -324,12 +324,12 @@ function DriveSection({ state }: { state: DiscsState }) {
             disabled={autoScan.isPending}
             onChange={(event) => autoScan.mutate(event.target.checked)}
           />
-          Scan a disc automatically when it goes in
+          Start by itself when a disc is put in
         </label>
       </div>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        With this off, a disc that goes in is left alone until you press “Rip
-        the disc in the drive now”, so you can name it first.
+        If this is off, nothing starts until you press “Rip the disc in the
+        drive now”, so you can type its name first.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-gray-900 dark:text-white">
@@ -339,14 +339,12 @@ function DriveSection({ state }: { state: DiscsState }) {
             disabled={movieOnly.isPending}
             onChange={(event) => movieOnly.mutate(event.target.checked)}
           />
-          Only make the movie, not its extras
+          Keep only the movie (skip bonus features)
         </label>
       </div>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        The disc is still copied whole, but the bonus features, trailers and
-        other short titles are not converted. TV discs are not affected. It is
-        read when the disc is named, so you can change it while a disc is being
-        copied.
+        Bonus features and trailers on the disc are skipped. TV discs are not
+        affected.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-gray-900 dark:text-white">
@@ -356,7 +354,7 @@ function DriveSection({ state }: { state: DiscsState }) {
             disabled={eject.isPending}
             onChange={(event) => eject.mutate(event.target.checked)}
           />
-          Eject a disc when it is done being scanned
+          Open the tray when the disc has been read
         </label>
         <button
           type="button"
@@ -368,10 +366,9 @@ function DriveSection({ state }: { state: DiscsState }) {
         </button>
       </div>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        The disc comes out as soon as it is done being scanned and copied, once
-        it is not needed anymore. If part of it could not be read, or it was not
-        copied, it stays in the drive. With this off, it always stays until you
-        eject it.
+        The disc comes out as soon as it has been read. If part of it could not
+        be read, it stays in. With this off, it always stays in until you press
+        “Eject now”.
       </p>
       <Answer
         result={command.data}
@@ -400,7 +397,7 @@ function NextSection({ state }: { state: DiscsState }) {
   return (
     <Section
       title="Tell it what the disc is"
-      hint="The ripper names a movie from the disc's label and cannot know a TV disc's season. Say it here before the disc goes in. While a disc is being ripped, a movie you pick names that disc once it has been copied."
+      hint="The name printed on a disc is often short or odd. Tell it the real name here before you put the disc in. A TV show also needs its season. While a disc is being copied, a movie you pick here names that disc once it has been copied."
     >
       {state.next && (
         <p className="mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/30 p-3 text-blue-900 dark:text-blue-100">
@@ -515,7 +512,7 @@ function AttentionSection({ state }: { state: DiscsState }) {
               </strong>
               <button
                 type="button"
-                className="text-sm underline text-gray-700 dark:text-gray-300"
+                className={`${SECONDARY} shrink-0`}
                 disabled={dismiss.isPending}
                 onClick={() => dismiss.mutate(note.file)}
               >
@@ -616,7 +613,7 @@ function queueOf(state: DiscsState): QueueEntry[] {
 function Pipeline({ stage }: { stage: DiscStage | 'scanning' }) {
   const at = PIPELINE.findIndex((step) => step.stage === stage);
   return (
-    <ol className="mt-2 flex flex-wrap items-center gap-1 text-xs">
+    <ol className="mt-2 flex flex-wrap items-center gap-1 text-sm">
       {PIPELINE.map((step, index) => (
         <li
           key={step.stage}
@@ -686,7 +683,7 @@ function WorkingSection({ state }: { state: DiscsState }) {
                       style={{ width: `${disc.conversion.percent}%` }}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     {disc.conversion.done + disc.conversion.failed} of{' '}
                     {disc.conversion.total} file
                     {disc.conversion.total === 1 ? '' : 's'} ·{' '}
@@ -698,10 +695,10 @@ function WorkingSection({ state }: { state: DiscsState }) {
                 </div>
               )}
               <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-gray-500">
+                <summary className="flex min-h-[44px] cursor-pointer items-center text-sm text-gray-600 dark:text-gray-400">
                   Log
                 </summary>
-                <pre className="mt-1 overflow-x-auto rounded-lg bg-gray-100 dark:bg-gray-900 p-3 text-xs text-gray-800 dark:text-gray-200">
+                <pre className="mt-1 overflow-x-auto rounded-lg bg-gray-100 dark:bg-gray-900 p-3 text-sm text-gray-800 dark:text-gray-200">
                   {disc.lines.join('\n') || 'No log yet.'}
                 </pre>
               </details>
@@ -722,7 +719,7 @@ function WorkingSection({ state }: { state: DiscsState }) {
               <li key={done.name}>
                 <span className="text-green-600 dark:text-green-400">✓</span>{' '}
                 {done.name}{' '}
-                <span className="text-xs text-gray-500">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   {secondsAgo(done.at)}
                 </span>
               </li>
@@ -860,7 +857,7 @@ function NeedsYearRow({ name }: { name: string }) {
         </button>
       </div>
       <details className="mt-2">
-        <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-400">
+        <summary className="flex min-h-[44px] cursor-pointer items-center text-sm text-gray-600 dark:text-gray-400">
           Search TMDB yourself
         </summary>
         <div className="mt-2">
@@ -1001,29 +998,31 @@ function StatusBanner({
       role="status"
       className={`rounded-xl border-2 p-4 text-lg font-medium ${TONES[tone]}`}
     >
-      {text}
-      {goto && (
-        <button
-          type="button"
-          className={`${SECONDARY} ml-3 align-middle`}
-          onClick={() => showSection(goto)}
-        >
-          Show me
-        </button>
-      )}
-      {note && (
-        <div className="mt-2 text-base font-normal">
-          {note}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span>{text}</span>
+        {goto && (
           <button
             type="button"
-            className={`${SECONDARY} ml-3 align-middle`}
+            className={`${SECONDARY} shrink-0 self-start`}
+            onClick={() => showSection(goto)}
+          >
+            Show me
+          </button>
+        )}
+      </div>
+      {note && (
+        <div className="mt-3 flex flex-col gap-3 text-base font-normal sm:flex-row sm:items-center sm:justify-between">
+          <span>{note}</span>
+          <button
+            type="button"
+            className={`${SECONDARY} shrink-0 self-start`}
             onClick={() => showSection('Subtitles')}
           >
             Show me
           </button>
         </div>
       )}
-      <div className="mt-1 text-xs font-normal opacity-75">
+      <div className="mt-1 text-sm font-normal opacity-90">
         Updated {secondsAgo(Math.floor(updatedAt / 1000))}
       </div>
     </div>
@@ -1086,9 +1085,10 @@ function DiscsContent() {
       <SubtitlesSection />
       <ParkedSection state={state} />
       <NeedsYearSection state={state} />
-      <p className="text-center text-sm text-gray-500">
-        {state.finishedCount} finished{' '}
-        {state.finishedCount === 1 ? 'folder' : 'folders'} in the DVDs folder.
+      <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+        {state.finishedCount === 1
+          ? '1 movie or show is finished and ready to watch.'
+          : `${state.finishedCount} movies and shows are finished and ready to watch.`}
       </p>
     </div>
   );

@@ -46,13 +46,13 @@ function ago(epochSeconds: number): string {
   return `${Math.round(seconds / (24 * HOURS))} days ago`;
 }
 
-/** "English", "Spanish (forced)", "French (picture)" for one track. */
+/** "English", "Spanish (foreign speech only)", "French (picture)" for one track. */
 export function describeTrack(track: SubtitleTrack): string {
   const language = LANGUAGES[track.language] ?? track.language;
   const flags = [
     track.codec === 'picture' ? 'picture' : '',
-    track.forced ? 'forced' : '',
-    track.default ? 'default' : '',
+    track.forced ? 'foreign speech only' : '',
+    track.default ? 'plays by default' : '',
   ].filter(Boolean);
   return flags.length > 0 ? `${language} (${flags.join(', ')})` : language;
 }
@@ -85,18 +85,20 @@ function FileRow({
           {file.path.split('/').pop()}
         </div>
         {file.path.includes('/') && (
-          <div className="text-xs text-gray-500 break-words">
+          <div className="text-sm text-gray-600 dark:text-gray-400 break-words">
             {movieName(file.path)}
           </div>
         )}
         <div className="mt-1 flex flex-wrap gap-1">
           {file.tracks.length === 0 && (
-            <span className="text-xs text-gray-500">No subtitles</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              No subtitles
+            </span>
           )}
           {file.tracks.map((track, index) => (
             <span
               key={index}
-              className={`rounded-full px-2 py-0.5 text-xs ${
+              className={`rounded-full px-2 py-0.5 text-sm ${
                 track.codec === 'picture'
                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
                   : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
@@ -108,7 +110,7 @@ function FileRow({
         </div>
         {onRemoveTrack && file.tracks.length > 0 && !waiting && (
           <details className="mt-2">
-            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-300">
+            <summary className="flex min-h-[44px] cursor-pointer items-center text-sm text-gray-600 dark:text-gray-300">
               Remove a subtitle track…
             </summary>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -197,7 +199,7 @@ export function SubtitlesSection() {
     <CollapsibleCard
       title="Subtitles"
       help="A DVD’s subtitles are little pictures, and many TVs and apps cannot show those. This turns them into real text that every player can show, in every language on the disc. Your original file is always kept first, so nothing can be lost. Press Convert, then wait."
-      hint="A DVD’s subtitles are pictures, which many Plex clients cannot show. This reads them into text, drops repeated and empty tracks, marks forced and SDH tracks, and makes English the default. The file as it was is kept under “Old copies” until you delete it."
+      hint="Turns the picture subtitles of a DVD into real text that every TV and app can show. Your original file is always kept first, under “Old copies”."
     >
       {!state.available ? (
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
@@ -283,11 +285,11 @@ export function SubtitlesSection() {
                 {(() => {
                   const count = state.files.filter((f) => f.needsClean).length;
                   return count === 1
-                    ? '1 converted movie can'
-                    : `${count} converted movies can`;
+                    ? "1 movie's subtitles have"
+                    : `${count} movies' subtitles have`;
                 })()}{' '}
-                have the text of its subtitles tidied up (stray brackets,
-                mixed-up letters, music marks). The old file is kept first.
+                small typing mistakes that can be fixed automatically. The old
+                file is kept first.
               </div>
               <button
                 type="button"
@@ -303,7 +305,7 @@ export function SubtitlesSection() {
                   }
                 }}
               >
-                Clean up text
+                Fix the typing mistakes
               </button>
               {clean.isSuccess && (
                 <p className="mt-2 text-sm text-green-700 dark:text-green-400">
@@ -400,7 +402,7 @@ export function SubtitlesSection() {
                   >
                     <div className="min-w-0 text-sm text-gray-900 dark:text-white break-words">
                       {movieName(held.path)}{' '}
-                      <span className="text-xs text-gray-500">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
                         {held.version === 0
                           ? 'newest old copy'
                           : `older copy ${held.version}`}
@@ -497,7 +499,7 @@ export function SubtitlesSection() {
                       {result.ok ? '✓' : '✗'}
                     </span>{' '}
                     {result.path.split('/').pop()}{' '}
-                    <span className="text-xs text-gray-500">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
                       {ago(result.at)}
                     </span>
                     <button
@@ -507,7 +509,7 @@ export function SubtitlesSection() {
                     >
                       Dismiss
                     </button>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 break-words">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 break-words">
                       {result.message}
                     </div>
                   </li>

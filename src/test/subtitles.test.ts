@@ -491,7 +491,7 @@ describe('how tracks are described', () => {
         default: true,
         forced: false,
       }),
-    ).toBe('English (default)');
+    ).toBe('English (plays by default)');
     expect(
       describeTrack({
         language: 'spa',
@@ -500,7 +500,7 @@ describe('how tracks are described', () => {
         default: false,
         forced: true,
       }),
-    ).toBe('Spanish (picture, forced)');
+    ).toBe('Spanish (picture, foreign speech only)');
     expect(
       describeTrack({
         language: 'xyz',
