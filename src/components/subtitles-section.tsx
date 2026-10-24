@@ -12,10 +12,10 @@ import {
 import type { SubtitleFile, SubtitleTrack } from '@/types/subtitles';
 
 const BUTTON =
-  'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  'min-h-[44px] px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
 const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-700`;
 const SMALL =
-  'px-3 py-1 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600';
+  'min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600';
 
 const LANGUAGES: Record<string, string> = {
   eng: 'English',
@@ -256,10 +256,14 @@ export function SubtitlesSection() {
           {state.files.some((f) => f.needsClean) && (
             <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
               <div className="text-sm text-gray-900 dark:text-white">
-                {state.files.filter((f) => f.needsClean).length} converted
-                file(s) can have their text cleaned up with the newest rules
-                (stray brackets, mixed-up letters, music marks). The old file is
-                kept first.
+                {(() => {
+                  const count = state.files.filter((f) => f.needsClean).length;
+                  return count === 1
+                    ? '1 converted movie can'
+                    : `${count} converted movies can`;
+                })()}{' '}
+                have the text of its subtitles tidied up (stray brackets,
+                mixed-up letters, music marks). The old file is kept first.
               </div>
               <button
                 type="button"
@@ -277,12 +281,27 @@ export function SubtitlesSection() {
               >
                 Clean up text
               </button>
+              {clean.isSuccess && (
+                <p className="mt-2 text-sm text-green-700 dark:text-green-400">
+                  Asked. It starts within a minute.
+                </p>
+              )}
               {clean.error && (
                 <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                   {clean.error.message}
                 </p>
               )}
             </div>
+          )}
+          {convert.isSuccess && convert.data.queued > 0 && (
+            <p className="text-sm text-green-700 dark:text-green-400">
+              Asked. It starts within a minute. You can leave this page.
+            </p>
+          )}
+          {(dismiss.error || auto.error) && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {(dismiss.error ?? auto.error)?.message}
+            </p>
           )}
           {convert.error && (
             <p className="text-sm text-red-600 dark:text-red-400">
@@ -431,7 +450,7 @@ export function SubtitlesSection() {
                     </span>
                     <button
                       type="button"
-                      className="ml-2 text-xs text-gray-500 underline hover:text-gray-700 dark:hover:text-gray-300"
+                      className="ml-2 min-h-[44px] px-2 text-sm text-gray-600 underline hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                       onClick={() => dismiss.mutate({ result: result.id })}
                     >
                       Dismiss

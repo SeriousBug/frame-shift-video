@@ -123,7 +123,7 @@ export function TmdbPicker({
         </label>
         <button
           type="submit"
-          className="self-end px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="self-end min-h-[44px] px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={looking || !query.trim()}
         >
           {looking ? 'Looking…' : 'Look up on TMDB'}
@@ -179,7 +179,7 @@ export function TmdbPicker({
                 </div>
                 <button
                   type="button"
-                  className="self-center px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
+                  className="self-center min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
                   onClick={() => {
                     setChosen(result);
                     setResults([]);
