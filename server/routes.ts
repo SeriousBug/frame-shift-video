@@ -52,6 +52,8 @@ import {
   subtitlesStateHandler,
   subtitlesConvertHandler,
   subtitlesAutoHandler,
+  subtitlesRestoreHandler,
+  subtitlesClearOldHandler,
 } from './handlers/subtitles';
 
 function getSettingsResponse(corsHeaders: Record<string, string>): Response {
@@ -196,6 +198,14 @@ const wrappedSubtitlesStateHandler = withErrorHandler(
 const wrappedSubtitlesConvertHandler = withErrorHandler(
   subtitlesConvertHandler,
   'SubtitlesConvertHandler',
+);
+const wrappedSubtitlesRestoreHandler = withErrorHandler(
+  subtitlesRestoreHandler,
+  'SubtitlesRestoreHandler',
+);
+const wrappedSubtitlesClearOldHandler = withErrorHandler(
+  subtitlesClearOldHandler,
+  'SubtitlesClearOldHandler',
 );
 const wrappedSubtitlesAutoHandler = withErrorHandler(
   subtitlesAutoHandler,
@@ -362,6 +372,12 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/subtitles/convert' && req.method === 'POST') {
       return await wrappedSubtitlesConvertHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/subtitles/restore' && req.method === 'POST') {
+      return await wrappedSubtitlesRestoreHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/subtitles/clear-old' && req.method === 'POST') {
+      return await wrappedSubtitlesClearOldHandler(req, corsHeaders);
     }
     if (pathname === '/api/subtitles/auto' && req.method === 'PUT') {
       return await wrappedSubtitlesAutoHandler(req, corsHeaders);

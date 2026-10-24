@@ -1,5 +1,7 @@
 import {
   readSubtitlesState,
+  requestClearOldCopies,
+  requestRestore,
   requestSubtitles,
   setSubtitlesAuto,
 } from '../subtitles-state';
@@ -51,6 +53,46 @@ export async function subtitlesConvertHandler(
       body.all === true ? { all: true } : { path: body.path as string },
     );
     return json({ queued: count }, 200, corsHeaders);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : 'Could not ask' },
+      400,
+      corsHeaders,
+    );
+  }
+}
+
+/** POST /api/subtitles/restore, body { path }: put the old copy of a file back. */
+export async function subtitlesRestoreHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body) return json({ error: 'Send JSON' }, 400, corsHeaders);
+  try {
+    const path = await requestRestore(discsDir(), body.path);
+    return json({ restoring: path }, 200, corsHeaders);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : 'Could not ask' },
+      400,
+      corsHeaders,
+    );
+  }
+}
+
+/** POST /api/subtitles/clear-old, body { confirm: true }: delete every old copy for good. */
+export async function subtitlesClearOldHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body || body.confirm !== true) {
+    return json({ error: 'Deleting needs confirm: true' }, 400, corsHeaders);
+  }
+  try {
+    const count = await requestClearOldCopies(discsDir());
+    return json({ deleting: count }, 200, corsHeaders);
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'Could not ask' },

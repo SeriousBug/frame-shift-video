@@ -18,6 +18,16 @@ export interface SubtitleFile {
   status: 'queued' | 'converting' | null;
 }
 
+/** The file as it was before its subtitles were converted, kept until someone deletes it. */
+export interface HeldFile {
+  /** The movie file it belongs to, relative to the DVDs folder */
+  path: string;
+  /** Bytes */
+  size: number;
+  /** When it was set aside, unix seconds */
+  at: number;
+}
+
 export interface SubtitleResult {
   path: string;
   ok: boolean;
@@ -34,6 +44,8 @@ export interface SubtitlesState {
   /** When the list of files was made, unix seconds, or null */
   updated: number | null;
   files: SubtitleFile[];
+  /** Old copies kept from before conversions, newest first */
+  held: HeldFile[];
   /** The file being converted now, and where it is */
   current: {
     path: string;

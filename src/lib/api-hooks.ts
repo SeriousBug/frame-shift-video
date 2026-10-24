@@ -38,6 +38,8 @@ import {
   fetchSubtitles,
   convertSubtitles,
   setSubtitlesAuto,
+  restoreSubtitles,
+  clearOldCopies,
   setDiscMovieOnly,
   setDiscNext,
   dismissDiscAttention,
@@ -376,6 +378,30 @@ export function useConvertSubtitles() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: convertSubtitles,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
+  });
+}
+
+/**
+ * Hook to put the old copy of a converted file back
+ */
+export function useRestoreSubtitles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: restoreSubtitles,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
+  });
+}
+
+/**
+ * Hook to delete every old copy for good
+ */
+export function useClearOldCopies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: clearOldCopies,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
   });

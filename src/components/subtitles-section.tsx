@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
+  useClearOldCopies,
   useConvertSubtitles,
+  useRestoreSubtitles,
   useSetSubtitlesAuto,
   useSubtitles,
 } from '@/lib/api-hooks';
@@ -29,6 +31,10 @@ const LANGUAGES: Record<string, string> = {
 };
 
 const HOURS = 3600;
+
+function gigabytes(bytes: number): string {
+  return `${(bytes / 1e9).toFixed(1)} GB`;
+}
 
 function ago(epochSeconds: number): string {
   const seconds = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
@@ -124,6 +130,9 @@ export function SubtitlesSection() {
   const { data: state, error } = useSubtitles();
   const convert = useConvertSubtitles();
   const auto = useSetSubtitlesAuto();
+  const restore = useRestoreSubtitles();
+  const clear = useClearOldCopies();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -159,8 +168,8 @@ export function SubtitlesSection() {
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
         A DVD’s subtitles are pictures, which many Plex clients cannot show.
         This reads them into text, drops repeated and empty tracks, marks forced
-        and SDH tracks, and makes English the default. The picture tracks are
-        removed from the file.
+        and SDH tracks, and makes English the default. The file as it was is
+        kept under “Old copies” until you delete it.
       </p>
 
       {!state.available ? (
@@ -243,6 +252,91 @@ export function SubtitlesSection() {
                 ? 'Show only the ones to convert'
                 : `Show all ${state.files.length} files`}
             </button>
+          )}
+
+          {state.held.length > 0 && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
+              <h3 className="font-medium text-gray-900 dark:text-white">
+                Old copies kept: {state.held.length} file
+                {state.held.length === 1 ? '' : 's'},{' '}
+                {gigabytes(state.held.reduce((sum, h) => sum + h.size, 0))}
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                Each file as it was before its subtitles were converted. Nothing
+                here is deleted unless you delete it.
+              </p>
+              <ul className="mt-2 divide-y divide-gray-200 dark:divide-gray-600">
+                {state.held.map((held) => (
+                  <li
+                    key={`${held.path}${held.at}`}
+                    className="py-2 flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 text-sm text-gray-900 dark:text-white break-words">
+                      {held.path.split('/').pop()}{' '}
+                      <span className="text-xs text-gray-500">
+                        {gigabytes(held.size)}, {ago(held.at)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={SMALL}
+                      disabled={restore.isPending}
+                      onClick={() => restore.mutate(held.path)}
+                    >
+                      Put this one back
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {restore.error && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {restore.error.message}
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {confirmingDelete ? (
+                  <>
+                    <span className="text-sm text-gray-900 dark:text-white">
+                      Delete all {state.held.length} old cop
+                      {state.held.length === 1 ? 'y' : 'ies'} for good? This
+                      cannot be undone.
+                    </span>
+                    <button
+                      type="button"
+                      className={`${BUTTON} bg-red-600 text-white hover:bg-red-700`}
+                      disabled={clear.isPending}
+                      onClick={() =>
+                        clear.mutate(undefined, {
+                          onSettled: () => setConfirmingDelete(false),
+                        })
+                      }
+                    >
+                      Yes, delete them
+                    </button>
+                    <button
+                      type="button"
+                      className={SMALL}
+                      onClick={() => setConfirmingDelete(false)}
+                    >
+                      Keep them
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className={SMALL}
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    Delete old copies…
+                  </button>
+                )}
+              </div>
+              {clear.error && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {clear.error.message}
+                </p>
+              )}
+            </div>
           )}
 
           {state.recent.length > 0 && (
