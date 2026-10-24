@@ -51,13 +51,13 @@ function IndexComponent() {
         <div className="mt-8 flex justify-center gap-3">
           <Link
             to="/discs"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-sm"
+            className="inline-flex min-h-[44px] items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-base"
           >
             Discs
           </Link>
           <Link
             to="/settings"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-sm"
+            className="inline-flex min-h-[44px] items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors text-base"
           >
             Settings
           </Link>
