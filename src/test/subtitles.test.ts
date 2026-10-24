@@ -366,7 +366,11 @@ describe('the old copies', () => {
       JSON.stringify({
         updated: 1,
         files: [],
-        held: [{ path: DUMA, size: 2e9, at: 50 }, { path: 'bad' }, 7],
+        held: [
+          { path: DUMA, size: 2e9, at: 50, version: 2 },
+          { path: 'bad' },
+          7,
+        ],
       }),
     );
   }
@@ -375,8 +379,8 @@ describe('the old copies', () => {
     await withHeld();
     const state = await readSubtitlesState(dir);
     expect(state.held).toEqual([
-      { path: DUMA, size: 2e9, at: 50 },
-      { path: 'bad', size: 0, at: 0 },
+      { path: DUMA, size: 2e9, at: 50, version: 2 },
+      { path: 'bad', size: 0, at: 0, version: 0 },
     ]);
   });
 

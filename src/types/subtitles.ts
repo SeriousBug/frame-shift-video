@@ -28,6 +28,8 @@ export interface HeldFile {
   size: number;
   /** When it was set aside, unix seconds */
   at: number;
+  /** 0 for the newest copy of this movie, which "put back" brings back; 1 and up are older */
+  version: number;
 }
 
 export interface SubtitleResult {

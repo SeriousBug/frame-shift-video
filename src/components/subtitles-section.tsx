@@ -352,27 +352,32 @@ export function SubtitlesSection() {
                     className="py-2 flex flex-wrap items-center justify-between gap-3"
                   >
                     <div className="min-w-0 text-sm text-gray-900 dark:text-white break-words">
-                      {held.path.split('/').pop()}{' '}
+                      {movieName(held.path)}{' '}
                       <span className="text-xs text-gray-500">
-                        {gigabytes(held.size)}, {ago(held.at)}
+                        {held.version === 0
+                          ? 'newest old copy'
+                          : `older copy ${held.version}`}
+                        , {gigabytes(held.size)}, set aside {ago(held.at)}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className={SMALL}
-                      disabled={restore.isPending}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            'Put the old file back? The new one is kept, so you can swap again.',
-                          )
-                        ) {
-                          restore.mutate(held.path);
-                        }
-                      }}
-                    >
-                      Put this one back
-                    </button>
+                    {held.version === 0 && (
+                      <button
+                        type="button"
+                        className={SMALL}
+                        disabled={restore.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              'Put the old file back? The new one is kept, so you can swap again.',
+                            )
+                          ) {
+                            restore.mutate(held.path);
+                          }
+                        }}
+                      >
+                        Put this one back
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
