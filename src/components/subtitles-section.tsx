@@ -172,6 +172,7 @@ export function SubtitlesSection() {
   return (
     <CollapsibleCard
       title="Subtitles"
+      help="A DVD’s subtitles are little pictures, and many TVs and apps cannot show those. This turns them into real text that every player can show, in every language on the disc. Your original file is always kept first, so nothing can be lost. Press Convert, then wait."
       hint="A DVD’s subtitles are pictures, which many Plex clients cannot show. This reads them into text, drops repeated and empty tracks, marks forced and SDH tracks, and makes English the default. The file as it was is kept under “Old copies” until you delete it."
     >
       {!state.available ? (
@@ -215,7 +216,15 @@ export function SubtitlesSection() {
               type="button"
               className={PRIMARY}
               disabled={convert.isPending || free.length === 0}
-              onClick={() => convert.mutate({ all: true })}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Convert the subtitles of ${free.length} movie${free.length === 1 ? '' : 's'}? Each original file is kept until you delete it.`,
+                  )
+                ) {
+                  convert.mutate({ all: true });
+                }
+              }}
             >
               {free.length === 0
                 ? 'Nothing left to convert'
@@ -226,7 +235,15 @@ export function SubtitlesSection() {
                 type="button"
                 className={SMALL}
                 disabled={dismiss.isPending}
-                onClick={() => dismiss.mutate({ queue: 'all' })}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Take everything off the waiting list? No movie is changed.',
+                    )
+                  ) {
+                    dismiss.mutate({ queue: 'all' });
+                  }
+                }}
               >
                 Clear queue
               </button>
@@ -248,7 +265,15 @@ export function SubtitlesSection() {
                 type="button"
                 className={`${SMALL} mt-2`}
                 disabled={clean.isPending}
-                onClick={() => clean.mutate({ all: true })}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Clean up the text of these files? The old file is kept first.',
+                    )
+                  ) {
+                    clean.mutate({ all: true });
+                  }
+                }}
               >
                 Clean up text
               </button>
@@ -317,7 +342,15 @@ export function SubtitlesSection() {
                       type="button"
                       className={SMALL}
                       disabled={restore.isPending}
-                      onClick={() => restore.mutate(held.path)}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Put the old file back? The new one is kept, so you can swap again.',
+                          )
+                        ) {
+                          restore.mutate(held.path);
+                        }
+                      }}
                     >
                       Put this one back
                     </button>
@@ -425,7 +458,15 @@ export function SubtitlesSection() {
                   type="button"
                   className={SMALL}
                   disabled={dismiss.isPending}
-                  onClick={() => dismiss.mutate({ results: 'all' })}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Clear this list? It only removes the notes, not any movie.',
+                      )
+                    ) {
+                      dismiss.mutate({ results: 'all' });
+                    }
+                  }}
                 >
                   Clear this list
                 </button>

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
-import { CollapsibleCard } from '@/components/collapsible-card';
+import { CollapsibleCard, setAllSections } from '@/components/collapsible-card';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import { parseLabel } from '@/lib/tmdb-results';
@@ -123,6 +123,21 @@ const BUTTON =
 const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-700`;
 const SECONDARY = `${BUTTON} bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600`;
 
+const HELP: Record<string, string> = {
+  Drive:
+    'This is the DVD drive. Put a disc in and, by default, it is copied by itself. When the copy is done the disc comes out, and you can put the next one in.',
+  'Tell it what the disc is':
+    'Optional. If you know the name of the disc, or that it is a TV show, say so here before putting it in. Otherwise the ripper works it out from the disc.',
+  'Needs you':
+    'The ripper only shows something here when it cannot go on without a person. Read the note, do what it says, then press Dismiss.',
+  Queue:
+    'Every disc in progress, from copying to being ready to watch. Nothing to do here but wait. You will get a message when a disc is finished.',
+  'Copied, waiting to be told what they are':
+    'These discs look like TV shows. Tell it the show and the season and it will finish them.',
+  'Finished, but no year yet':
+    'Plex finds the poster and details best when the name has the year, like Stellaluna (1996). Press Match on TMDB and it fills it in for you.',
+};
+
 function Section({
   title,
   children,
@@ -133,7 +148,7 @@ function Section({
   hint?: string;
 }) {
   return (
-    <CollapsibleCard title={title} hint={hint}>
+    <CollapsibleCard title={title} hint={hint} help={HELP[title]}>
       {children}
     </CollapsibleCard>
   );
@@ -838,8 +853,93 @@ function NeedsYearSection({ state }: { state: DiscsState }) {
   );
 }
 
+/**
+ * One sentence at the top that says whether anything needs the person, so nobody has to read
+ * the cards to find out. Green: nothing to do. Amber: something needs you. Blue: working.
+ */
+export function summarize(state: DiscsState): {
+  tone: 'ok' | 'busy' | 'attention';
+  text: string;
+} {
+  if (state.attention.length > 0) {
+    const count = state.attention.length;
+    return {
+      tone: 'attention',
+      text:
+        count === 1
+          ? 'One thing needs you. Read the “Needs you” box below.'
+          : `${count} things need you. Read the “Needs you” box below.`,
+    };
+  }
+  if (!state.drive || !state.drive.alive) {
+    return {
+      tone: 'attention',
+      text: 'The disc helper on the server is not answering. Discs still rip by themselves, but the buttons here will not work.',
+    };
+  }
+  if (state.parked.length > 0) {
+    return {
+      tone: 'attention',
+      text: 'A disc is waiting to be told what it is. See “Copied, waiting” below.',
+    };
+  }
+  if (state.run?.state === 'running') {
+    const where = state.run.name ? ` on ${state.run.name}` : '';
+    return {
+      tone: 'busy',
+      text: `Working${where}. Nothing to do. You will get a message when it is done.`,
+    };
+  }
+  if (state.working.length > 0) {
+    return {
+      tone: 'busy',
+      text: `${state.working.length === 1 ? 'A disc is' : `${state.working.length} discs are`} being made ready to watch. Nothing to do. You can put the next disc in.`,
+    };
+  }
+  if (state.drive.media) {
+    return {
+      tone: 'ok',
+      text: state.autoScan
+        ? 'A disc is in the drive. It will start by itself.'
+        : 'A disc is in the drive. Press “Rip the disc in the drive now” when you are ready.',
+    };
+  }
+  return {
+    tone: 'ok',
+    text: 'All good. Put a disc in the drive to start.',
+  };
+}
+
+const TONES = {
+  ok: 'border-green-300 bg-green-50 text-green-900 dark:border-green-700 dark:bg-green-900/20 dark:text-green-200',
+  busy: 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200',
+  attention:
+    'border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200',
+};
+
+function StatusBanner({
+  state,
+  updatedAt,
+}: {
+  state: DiscsState;
+  updatedAt: number;
+}) {
+  const { tone, text } = summarize(state);
+  return (
+    <div
+      role="status"
+      className={`rounded-xl border-2 p-4 text-lg font-medium ${TONES[tone]}`}
+    >
+      {text}
+      <div className="mt-1 text-xs font-normal opacity-75">
+        Updated {secondsAgo(Math.floor(updatedAt / 1000))}
+      </div>
+    </div>
+  );
+}
+
 function DiscsContent() {
-  const { data: state, isLoading, error } = useDiscs();
+  const { data: state, isLoading, error, dataUpdatedAt } = useDiscs();
 
   if (isLoading) {
     return <p className="text-gray-600 dark:text-gray-300">Loading…</p>;
@@ -865,6 +965,23 @@ function DiscsContent() {
 
   return (
     <div className="space-y-6">
+      <StatusBanner state={state} updatedAt={dataUpdatedAt} />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          className={SECONDARY}
+          onClick={() => setAllSections(true)}
+        >
+          Expand all
+        </button>
+        <button
+          type="button"
+          className={SECONDARY}
+          onClick={() => setAllSections(false)}
+        >
+          Collapse all
+        </button>
+      </div>
       <DriveSection state={state} />
       <AttentionSection state={state} />
       <NextSection state={state} />
