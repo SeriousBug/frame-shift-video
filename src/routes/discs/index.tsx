@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { CollapsibleCard, setAllSections } from '@/components/collapsible-card';
 import { TmdbPicker } from '@/components/tmdb-picker';
@@ -119,7 +119,7 @@ function secondsAgo(epochSeconds: number | null): string {
 const INPUT =
   'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white';
 const BUTTON =
-  'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  'min-h-[44px] px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
 const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-700`;
 const SECONDARY = `${BUTTON} bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600`;
 
@@ -925,6 +925,14 @@ function StatusBanner({
   updatedAt: number;
 }) {
   const { tone, text } = summarize(state);
+  // The browser tab says so too, for when the page is in another tab.
+  useEffect(() => {
+    const before = document.title;
+    if (tone === 'attention') document.title = '⚠ Discs: needs you';
+    return () => {
+      document.title = before;
+    };
+  }, [tone]);
   return (
     <div
       role="status"

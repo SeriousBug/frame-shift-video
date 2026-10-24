@@ -68,7 +68,7 @@ export function CollapsibleCard({
             type="button"
             aria-expanded={open}
             onClick={toggle}
-            className="flex w-full items-center justify-between gap-3 text-left"
+            className="flex min-h-[44px] w-full items-center justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
           >
             <span>{title}</span>
             <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
@@ -83,7 +83,7 @@ export function CollapsibleCard({
             aria-expanded={helping}
             title="What is this?"
             onClick={() => setHelping(!helping)}
-            className="h-8 w-8 shrink-0 rounded-full bg-blue-100 text-blue-800 font-bold hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-200"
+            className="h-11 w-11 shrink-0 rounded-full bg-blue-100 text-blue-800 font-bold hover:bg-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-blue-900/50 dark:text-blue-200"
           >
             ?
           </button>
