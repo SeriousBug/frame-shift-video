@@ -172,6 +172,8 @@ export function cleanSubtitlePath(value: unknown): string {
 async function writeRequest(dir: string, relative: string): Promise<void> {
   const folder = path.join(dir, '_subs', 'queue');
   await fs.mkdir(folder, { recursive: true });
+  // Written here as root and cleaned up by the converter as another user, so open to both.
+  await fs.chmod(folder, 0o777).catch(() => undefined);
   // The same name the converter gives, so asking twice is one request.
   const name = createHash('md5').update(relative).digest('hex').slice(0, 12);
   const file = path.join(folder, `${name}.req`);
@@ -179,8 +181,9 @@ async function writeRequest(dir: string, relative: string): Promise<void> {
     await fs.writeFile(
       file,
       `path=${relative}\nat=${Math.floor(Date.now() / 1000)}\n`,
-      { flag: 'wx' },
+      { flag: 'wx', mode: 0o666 },
     );
+    await fs.chmod(file, 0o666).catch(() => undefined);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
   }
