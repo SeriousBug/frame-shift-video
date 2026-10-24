@@ -3,9 +3,9 @@ import { useHobwork, useSaveHobwork } from '@/lib/api-hooks';
 import { testHobwork } from '@/lib/api';
 
 const INPUT =
-  'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white';
+  'min-h-[44px] w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white';
 const BUTTON =
-  'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  'min-h-[44px] px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
 /**
  * The connection to Hobwork: where notifications and Live Activities are sent besides Pushover.
