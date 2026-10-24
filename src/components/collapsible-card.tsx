@@ -5,6 +5,7 @@ const CARD =
 
 /** The event the "Expand all" and "Collapse all" buttons send to every card. */
 export const SET_ALL_EVENT = 'discs-set-all-sections';
+const SHOW_EVENT = 'discs-show-section';
 
 function readOpen(id: string): boolean {
   try {
@@ -22,6 +23,22 @@ function saveOpen(id: string, open: boolean) {
   }
 }
 
+/** The id of a card's element, which the status banner's "Show me" buttons scroll to. */
+export function sectionId(title: string): string {
+  return `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+/** Opens the card with this title if it is folded, and scrolls it into view. */
+export function showSection(title: string) {
+  window.dispatchEvent(new CustomEvent(SHOW_EVENT, { detail: title }));
+  // After the card has opened, so it is scrolled to where it ends up.
+  setTimeout(() => {
+    document
+      .getElementById(sectionId(title))
+      ?.scrollIntoView({ block: 'start' });
+  }, 50);
+}
+
 /** Opens or closes every card on the page at once. */
 export function setAllSections(open: boolean) {
   window.dispatchEvent(new CustomEvent(SET_ALL_EVENT, { detail: open }));
@@ -35,12 +52,18 @@ export function CollapsibleCard({
   title,
   hint,
   help,
+  badge,
+  urgent,
   children,
 }: {
   title: string;
   hint?: string;
   /** A plain-words explanation, shown when the "?" is pressed */
   help?: string;
+  /** A short count or word beside the title, visible even when the card is folded */
+  badge?: string;
+  /** Something here needs the person: a folded card opens itself when this turns true */
+  urgent?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(() => readOpen(title));
@@ -51,17 +74,28 @@ export function CollapsibleCard({
   };
 
   useEffect(() => {
+    if (urgent) setOpen(true);
+  }, [urgent]);
+
+  useEffect(() => {
     const listener = (event: Event) => {
       const wanted = (event as CustomEvent<boolean>).detail === true;
       setOpen(wanted);
       saveOpen(title, wanted);
     };
+    const show = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === title) setOpen(true);
+    };
     window.addEventListener(SET_ALL_EVENT, listener);
-    return () => window.removeEventListener(SET_ALL_EVENT, listener);
+    window.addEventListener(SHOW_EVENT, show);
+    return () => {
+      window.removeEventListener(SET_ALL_EVENT, listener);
+      window.removeEventListener(SHOW_EVENT, show);
+    };
   }, [title]);
 
   return (
-    <section className={CARD}>
+    <section id={sectionId(title)} className={`${CARD} scroll-mt-4`}>
       <div className="flex items-center gap-2">
         <h2 className="flex-1 text-xl font-bold text-gray-900 dark:text-white">
           <button
@@ -70,7 +104,14 @@ export function CollapsibleCard({
             onClick={toggle}
             className="flex min-h-[44px] w-full items-center justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
           >
-            <span>{title}</span>
+            <span>
+              {title}
+              {badge && (
+                <span className="ml-3 rounded-full bg-amber-100 px-3 py-0.5 align-middle text-sm font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                  {badge}
+                </span>
+              )}
+            </span>
             <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
               {open ? 'Collapse ▲' : 'Expand ▼'}
             </span>

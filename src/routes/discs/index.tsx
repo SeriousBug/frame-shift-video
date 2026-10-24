@@ -1,12 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
-import { CollapsibleCard, setAllSections } from '@/components/collapsible-card';
+import {
+  CollapsibleCard,
+  setAllSections,
+  showSection,
+} from '@/components/collapsible-card';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import { parseLabel } from '@/lib/tmdb-results';
+import type { SubtitlesState } from '@/types/subtitles';
 import {
   useDiscs,
+  useSubtitles,
   useSetDiscEject,
   useSetDiscAutoScan,
   useSetDiscMovieOnly,
@@ -142,13 +148,23 @@ function Section({
   title,
   children,
   hint,
+  badge,
+  urgent,
 }: {
   title: string;
   children: ReactNode;
   hint?: string;
+  badge?: string;
+  urgent?: boolean;
 }) {
   return (
-    <CollapsibleCard title={title} hint={hint} help={HELP[title]}>
+    <CollapsibleCard
+      title={title}
+      hint={hint}
+      help={HELP[title]}
+      badge={badge}
+      urgent={urgent}
+    >
       {children}
     </CollapsibleCard>
   );
@@ -465,7 +481,7 @@ function AttentionSection({ state }: { state: DiscsState }) {
   const dismiss = useDismissDiscAttention();
   if (state.attention.length === 0) return null;
   return (
-    <Section title="Needs you">
+    <Section title="Needs you" badge={String(state.attention.length)} urgent>
       <ul className="space-y-4">
         {state.attention.map((note) => (
           <li
@@ -611,6 +627,9 @@ function WorkingSection({ state }: { state: DiscsState }) {
   return (
     <Section
       title="Queue"
+      badge={
+        state.working.length > 0 ? `${state.working.length} working` : undefined
+      }
       hint="Every disc from the scan to the file. The drive is free as soon as a disc has been copied and is out, so the next one can go in while this one is extracted and converted."
     >
       <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">
@@ -773,6 +792,8 @@ function ParkedSection({ state }: { state: DiscsState }) {
   return (
     <Section
       title="Copied, waiting to be told what they are"
+      badge={String(state.parked.length)}
+      urgent
       hint="These discs were copied but look like TV episodes, whose season and episode numbers are not on the disc."
     >
       <ul className="space-y-4">
@@ -842,6 +863,7 @@ function NeedsYearSection({ state }: { state: DiscsState }) {
   return (
     <Section
       title="Finished, but no year yet"
+      badge={String(state.needsYear.length)}
       hint="Plex matches best with the year in the name, like Stellaluna (1996). Match on TMDB finds the movie by its name and the length of its file; Rename lets you type it. Either one renames the files inside too."
     >
       <ul className="space-y-3">
@@ -860,11 +882,14 @@ function NeedsYearSection({ state }: { state: DiscsState }) {
 export function summarize(state: DiscsState): {
   tone: 'ok' | 'busy' | 'attention';
   text: string;
+  /** The card the "Show me" button goes to */
+  goto?: string;
 } {
   if (state.attention.length > 0) {
     const count = state.attention.length;
     return {
       tone: 'attention',
+      goto: 'Needs you',
       text:
         count === 1
           ? 'One thing needs you. Read the “Needs you” box below.'
@@ -880,6 +905,7 @@ export function summarize(state: DiscsState): {
   if (state.parked.length > 0) {
     return {
       tone: 'attention',
+      goto: 'Copied, waiting to be told what they are',
       text: 'A disc is waiting to be told what it is. See “Copied, waiting” below.',
     };
   }
@@ -917,14 +943,30 @@ const TONES = {
     'border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200',
 };
 
+/** A hint about subtitles waiting to be converted, or null when there is nothing to say. */
+export function subtitleHint(
+  subtitles: SubtitlesState | undefined,
+): string | null {
+  if (!subtitles?.available || subtitles.current) return null;
+  const waiting = subtitles.files.filter(
+    (f) => f.pictures > 0 && f.status === null,
+  ).length;
+  if (waiting === 0) return null;
+  const movies = waiting === 1 ? '1 movie has' : `${waiting} movies have`;
+  return `${movies} subtitles that many TVs cannot show. Open “Subtitles” below and press Convert.`;
+}
+
 function StatusBanner({
   state,
   updatedAt,
+  subtitles,
 }: {
   state: DiscsState;
   updatedAt: number;
+  subtitles?: SubtitlesState;
 }) {
-  const { tone, text } = summarize(state);
+  const { tone, text, goto } = summarize(state);
+  const note = subtitleHint(subtitles);
   // The browser tab says so too, for when the page is in another tab.
   useEffect(() => {
     const before = document.title;
@@ -939,6 +981,27 @@ function StatusBanner({
       className={`rounded-xl border-2 p-4 text-lg font-medium ${TONES[tone]}`}
     >
       {text}
+      {goto && (
+        <button
+          type="button"
+          className={`${SECONDARY} ml-3 align-middle`}
+          onClick={() => showSection(goto)}
+        >
+          Show me
+        </button>
+      )}
+      {note && (
+        <div className="mt-2 text-base font-normal">
+          {note}
+          <button
+            type="button"
+            className={`${SECONDARY} ml-3 align-middle`}
+            onClick={() => showSection('Subtitles')}
+          >
+            Show me
+          </button>
+        </div>
+      )}
       <div className="mt-1 text-xs font-normal opacity-75">
         Updated {secondsAgo(Math.floor(updatedAt / 1000))}
       </div>
@@ -948,6 +1011,7 @@ function StatusBanner({
 
 function DiscsContent() {
   const { data: state, isLoading, error, dataUpdatedAt } = useDiscs();
+  const { data: subtitles } = useSubtitles();
 
   if (isLoading) {
     return <p className="text-gray-600 dark:text-gray-300">Loading…</p>;
@@ -973,7 +1037,11 @@ function DiscsContent() {
 
   return (
     <div className="space-y-6">
-      <StatusBanner state={state} updatedAt={dataUpdatedAt} />
+      <StatusBanner
+        state={state}
+        updatedAt={dataUpdatedAt}
+        subtitles={subtitles}
+      />
       <div className="flex justify-end gap-2">
         <button
           type="button"
