@@ -21,6 +21,36 @@ import type {
 
 const MAX_RECENT = 40;
 
+/** Plex's folders for a movie's extras: their subtitles are not converted, so not listed. */
+const EXTRA_FOLDERS = new Set([
+  'other',
+  'extras',
+  'featurettes',
+  'behind the scenes',
+  'deleted scenes',
+  'interviews',
+  'scenes',
+  'shorts',
+  'trailers',
+]);
+
+export function isExtra(file: string): boolean {
+  return file
+    .split('/')
+    .slice(0, -1)
+    .some((part) => EXTRA_FOLDERS.has(part.toLowerCase()));
+}
+
+function requestName(relative: string, action: string = 'convert'): string {
+  const key =
+    action === 'convert'
+      ? relative
+      : action === 'clear'
+        ? 'clear'
+        : `${action}:${relative}`;
+  return createHash('md5').update(key).digest('hex').slice(0, 12);
+}
+
 async function readText(file: string): Promise<string | null> {
   try {
     return await fs.readFile(file, 'utf8');
@@ -103,9 +133,12 @@ export async function readSubtitlesState(
     updated = typeof index.updated === 'number' ? index.updated : null;
     for (const raw of index.files) {
       if (!isRecord(raw) || typeof raw.path !== 'string') continue;
+      if (isExtra(raw.path)) continue;
       const tracks = (Array.isArray(raw.tracks) ? raw.tracks : [])
         .map(readTrack)
         .filter((t): t is SubtitleTrack => t !== null);
+      // A file with no subtitle tracks has nothing to show or convert.
+      if (tracks.length === 0) continue;
       const status =
         current?.path === raw.path
           ? 'converting'
@@ -140,6 +173,7 @@ export async function readSubtitlesState(
       const raw = await readJson(path.join(folder, name));
       if (!isRecord(raw) || typeof raw.path !== 'string') continue;
       recent.push({
+        id: name,
         path: raw.path,
         ok: raw.ok === true,
         message: typeof raw.message === 'string' ? raw.message : '',
@@ -199,13 +233,7 @@ async function writeRequest(
   // Written here as root and cleaned up by the converter as another user, so open to both.
   await fs.chmod(folder, 0o777).catch(() => undefined);
   // The same name the converter gives, so asking twice is one request.
-  const key =
-    action === 'convert'
-      ? relative
-      : action === 'clear'
-        ? 'clear'
-        : `restore:${relative}`;
-  const name = createHash('md5').update(key).digest('hex').slice(0, 12);
+  const name = requestName(relative, action);
   const file = path.join(folder, `${name}.req`);
   try {
     await fs.writeFile(
@@ -264,6 +292,63 @@ export async function requestClearOldCopies(dir: string): Promise<number> {
   if (state.held.length === 0) throw new Error('There are no old copies');
   await writeRequest(dir, '', 'clear');
   return state.held.length;
+}
+
+/**
+ * Takes things off the page's list. Waiting requests are removed before the converter picks
+ * them up; finished entries are only records of what was done, so no movie file is touched.
+ */
+export async function dismissSubtitles(
+  dir: string,
+  what: Record<string, unknown>,
+): Promise<number> {
+  const queueDir = path.join(dir, '_subs', 'queue');
+  const doneDir = path.join(dir, '_subs', 'done');
+  if (typeof what.queued === 'string') {
+    const relative = cleanSubtitlePath(what.queued);
+    const file = path.join(queueDir, `${requestName(relative)}.req`);
+    const existed = await fs
+      .rm(file)
+      .then(() => 1)
+      .catch(() => 0);
+    return existed;
+  }
+  if (what.queue === 'all') {
+    let removed = 0;
+    for (const name of await fs.readdir(queueDir).catch(() => [] as string[])) {
+      if (!name.endsWith('.req')) continue;
+      const text = await readText(path.join(queueDir, name));
+      const action = text?.split('\n').find((l) => l.startsWith('action='));
+      // Only the conversions waiting; a restore or a delete the person asked for stays.
+      if (action && action !== 'action=convert') continue;
+      removed += await fs
+        .rm(path.join(queueDir, name))
+        .then(() => 1)
+        .catch(() => 0);
+    }
+    return removed;
+  }
+  if (typeof what.result === 'string') {
+    if (!/^[A-Za-z0-9._-]+\.json$/.test(what.result)) {
+      throw new Error('That is not a record');
+    }
+    return fs
+      .rm(path.join(doneDir, what.result))
+      .then(() => 1)
+      .catch(() => 0);
+  }
+  if (what.results === 'all') {
+    let removed = 0;
+    for (const name of await fs.readdir(doneDir).catch(() => [] as string[])) {
+      if (!name.endsWith('.json')) continue;
+      removed += await fs
+        .rm(path.join(doneDir, name))
+        .then(() => 1)
+        .catch(() => 0);
+    }
+    return removed;
+  }
+  throw new Error('Say what to dismiss');
 }
 
 /** Turns converting the subtitles of new discs on or off. */

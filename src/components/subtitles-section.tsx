@@ -1,15 +1,15 @@
 import { useState } from 'react';
+import { CollapsibleCard } from '@/components/collapsible-card';
 import {
   useClearOldCopies,
   useConvertSubtitles,
+  useDismissSubtitles,
   useRestoreSubtitles,
   useSetSubtitlesAuto,
   useSubtitles,
 } from '@/lib/api-hooks';
 import type { SubtitleFile, SubtitleTrack } from '@/types/subtitles';
 
-const CARD =
-  'bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-600 p-6 shadow-sm';
 const BUTTON =
   'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-700`;
@@ -65,10 +65,12 @@ function FileRow({
   file,
   busy,
   onConvert,
+  onRemove,
 }: {
   file: SubtitleFile;
   busy: boolean;
   onConvert: () => void;
+  onRemove: () => void;
 }) {
   const waiting = file.status !== null;
   return (
@@ -101,18 +103,25 @@ function FileRow({
         </div>
       </div>
       {file.pictures > 0 ? (
-        <button
-          type="button"
-          className={SMALL}
-          disabled={busy || waiting}
-          onClick={onConvert}
-        >
-          {file.status === 'converting'
-            ? 'Converting…'
-            : file.status === 'queued'
-              ? 'Waiting'
-              : 'Convert'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className={SMALL}
+            disabled={busy || waiting}
+            onClick={onConvert}
+          >
+            {file.status === 'converting'
+              ? 'Converting…'
+              : file.status === 'queued'
+                ? 'Waiting'
+                : 'Convert'}
+          </button>
+          {file.status === 'queued' && (
+            <button type="button" className={SMALL} onClick={onRemove}>
+              Remove
+            </button>
+          )}
+        </div>
       ) : (
         <span className="text-sm text-green-700 dark:text-green-400">
           ✓ Text
@@ -131,6 +140,7 @@ export function SubtitlesSection() {
   const convert = useConvertSubtitles();
   const auto = useSetSubtitlesAuto();
   const restore = useRestoreSubtitles();
+  const dismiss = useDismissSubtitles();
   const clear = useClearOldCopies();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -138,14 +148,11 @@ export function SubtitlesSection() {
 
   if (error) {
     return (
-      <section className={CARD}>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-          Subtitles
-        </h2>
-        <p className="mt-3 text-red-600 dark:text-red-400">
+      <CollapsibleCard title="Subtitles">
+        <p className="text-red-600 dark:text-red-400">
           {error instanceof Error ? error.message : 'Could not load'}
         </p>
-      </section>
+      </CollapsibleCard>
     );
   }
   if (!state) return null;
@@ -161,24 +168,17 @@ export function SubtitlesSection() {
   const history = showHistory ? state.recent : state.recent.slice(0, 3);
 
   return (
-    <section className={CARD}>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-        Subtitles
-      </h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-        A DVD’s subtitles are pictures, which many Plex clients cannot show.
-        This reads them into text, drops repeated and empty tracks, marks forced
-        and SDH tracks, and makes English the default. The file as it was is
-        kept under “Old copies” until you delete it.
-      </p>
-
+    <CollapsibleCard
+      title="Subtitles"
+      hint="A DVD’s subtitles are pictures, which many Plex clients cannot show. This reads them into text, drops repeated and empty tracks, marks forced and SDH tracks, and makes English the default. The file as it was is kept under “Old copies” until you delete it."
+    >
       {!state.available ? (
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
           The converter has not made its list of movies yet. It does within a
           few minutes of being set up.
         </p>
       ) : (
-        <div className="mt-4 space-y-4">
+        <div className="space-y-4">
           <label className="flex items-center gap-2 text-gray-900 dark:text-white">
             <input
               type="checkbox"
@@ -219,6 +219,16 @@ export function SubtitlesSection() {
                 ? 'Nothing left to convert'
                 : `Convert ${free.length} movie${free.length === 1 ? '' : 's'}`}
             </button>
+            {todo.length - free.length > 0 && (
+              <button
+                type="button"
+                className={SMALL}
+                disabled={dismiss.isPending}
+                onClick={() => dismiss.mutate({ queue: 'all' })}
+              >
+                Clear queue
+              </button>
+            )}
             <span className="text-sm text-gray-600 dark:text-gray-300">
               {todo.length} of {state.files.length} files still have picture
               subtitles
@@ -238,6 +248,7 @@ export function SubtitlesSection() {
                   file={file}
                   busy={convert.isPending}
                   onConvert={() => convert.mutate({ path: file.path })}
+                  onRemove={() => dismiss.mutate({ queued: file.path })}
                 />
               ))}
             </ul>
@@ -360,27 +371,44 @@ export function SubtitlesSection() {
                     <span className="text-xs text-gray-500">
                       {ago(result.at)}
                     </span>
+                    <button
+                      type="button"
+                      className="ml-2 text-xs text-gray-500 underline hover:text-gray-700 dark:hover:text-gray-300"
+                      onClick={() => dismiss.mutate({ result: result.id })}
+                    >
+                      Dismiss
+                    </button>
                     <div className="text-xs text-gray-600 dark:text-gray-400 break-words">
                       {result.message}
                     </div>
                   </li>
                 ))}
               </ul>
-              {state.recent.length > 3 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {state.recent.length > 3 && (
+                  <button
+                    type="button"
+                    className={SMALL}
+                    onClick={() => setShowHistory((value) => !value)}
+                  >
+                    {showHistory
+                      ? 'Show fewer'
+                      : `Show all ${state.recent.length}`}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className={`${SMALL} mt-2`}
-                  onClick={() => setShowHistory((value) => !value)}
+                  className={SMALL}
+                  disabled={dismiss.isPending}
+                  onClick={() => dismiss.mutate({ results: 'all' })}
                 >
-                  {showHistory
-                    ? 'Show fewer'
-                    : `Show all ${state.recent.length}`}
+                  Clear this list
                 </button>
-              )}
+              </div>
             </div>
           )}
         </div>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

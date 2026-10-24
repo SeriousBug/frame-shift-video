@@ -6,7 +6,11 @@ import { FileSystemItem, FilePickerState } from '@/types/files';
 import { Job } from '@/types/database';
 import type { ConversionOptions } from '@/types/conversion';
 import type { HobworkChanges, HobworkState } from '@/types/hobwork';
-import type { SubtitleRequest, SubtitlesState } from '@/types/subtitles';
+import type {
+  SubtitleDismiss,
+  SubtitleRequest,
+  SubtitlesState,
+} from '@/types/subtitles';
 import type {
   DiscCommand,
   DiscCommandResult,
@@ -512,6 +516,19 @@ export async function convertSubtitles(
     throw new Error(body.error || 'Failed to ask for the conversion');
   }
   return body;
+}
+
+/**
+ * Take a waiting file, the whole waiting list, or finished entries off the subtitles box
+ */
+export async function dismissSubtitles(what: SubtitleDismiss): Promise<void> {
+  const response = await fetch(`${API_BASE}/subtitles/dismiss`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(what),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Failed to remove');
 }
 
 /**

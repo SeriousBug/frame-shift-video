@@ -29,6 +29,8 @@ export interface HeldFile {
 }
 
 export interface SubtitleResult {
+  /** The name of its record, to dismiss it by */
+  id: string;
   path: string;
   ok: boolean;
   message: string;
@@ -59,3 +61,10 @@ export interface SubtitlesState {
 
 /** What can be asked: one file, or every file that still has picture subtitles. */
 export type SubtitleRequest = { path: string } | { all: true };
+
+/** What can be taken off the page: a waiting file, every waiting file, or finished entries. */
+export type SubtitleDismiss =
+  | { queued: string }
+  | { queue: 'all' }
+  | { result: string }
+  | { results: 'all' };

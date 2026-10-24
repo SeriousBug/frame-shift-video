@@ -39,6 +39,7 @@ import {
   convertSubtitles,
   setSubtitlesAuto,
   restoreSubtitles,
+  dismissSubtitles,
   clearOldCopies,
   setDiscMovieOnly,
   setDiscNext,
@@ -378,6 +379,18 @@ export function useConvertSubtitles() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: convertSubtitles,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
+  });
+}
+
+/**
+ * Hook to take things off the subtitles box
+ */
+export function useDismissSubtitles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: dismissSubtitles,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
   });
