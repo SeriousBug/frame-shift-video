@@ -1,0 +1,292 @@
+import { useState } from 'react';
+import {
+  useConvertSubtitles,
+  useSetSubtitlesAuto,
+  useSubtitles,
+} from '@/lib/api-hooks';
+import type { SubtitleFile, SubtitleTrack } from '@/types/subtitles';
+
+const CARD =
+  'bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-600 p-6 shadow-sm';
+const BUTTON =
+  'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-700`;
+const SMALL =
+  'px-3 py-1 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600';
+
+const LANGUAGES: Record<string, string> = {
+  eng: 'English',
+  fre: 'French',
+  fra: 'French',
+  spa: 'Spanish',
+  ger: 'German',
+  deu: 'German',
+  ita: 'Italian',
+  por: 'Portuguese',
+  dut: 'Dutch',
+  nld: 'Dutch',
+  und: 'Unknown',
+};
+
+const HOURS = 3600;
+
+function ago(epochSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
+  if (seconds < 90) return 'just now';
+  if (seconds < 5400) return `${Math.round(seconds / 60)} minutes ago`;
+  if (seconds < 48 * HOURS) return `${Math.round(seconds / HOURS)} hours ago`;
+  return `${Math.round(seconds / (24 * HOURS))} days ago`;
+}
+
+/** "English", "Spanish (forced)", "French (picture)" for one track. */
+export function describeTrack(track: SubtitleTrack): string {
+  const language = LANGUAGES[track.language] ?? track.language;
+  const flags = [
+    track.codec === 'picture' ? 'picture' : '',
+    track.forced ? 'forced' : '',
+    track.default ? 'default' : '',
+  ].filter(Boolean);
+  return flags.length > 0 ? `${language} (${flags.join(', ')})` : language;
+}
+
+/** The movie's name: the folder it is filed in, or the file name for a single file. */
+export function movieName(file: string): string {
+  const parts = file.split('/');
+  return parts.length > 1 ? parts.slice(0, -1).join(' / ') : parts[0];
+}
+
+function FileRow({
+  file,
+  busy,
+  onConvert,
+}: {
+  file: SubtitleFile;
+  busy: boolean;
+  onConvert: () => void;
+}) {
+  const waiting = file.status !== null;
+  return (
+    <li className="py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="font-medium text-gray-900 dark:text-white break-words">
+          {file.path.split('/').pop()}
+        </div>
+        {file.path.includes('/') && (
+          <div className="text-xs text-gray-500 break-words">
+            {movieName(file.path)}
+          </div>
+        )}
+        <div className="mt-1 flex flex-wrap gap-1">
+          {file.tracks.length === 0 && (
+            <span className="text-xs text-gray-500">No subtitles</span>
+          )}
+          {file.tracks.map((track, index) => (
+            <span
+              key={index}
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                track.codec === 'picture'
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+              }`}
+            >
+              {describeTrack(track)}
+            </span>
+          ))}
+        </div>
+      </div>
+      {file.pictures > 0 ? (
+        <button
+          type="button"
+          className={SMALL}
+          disabled={busy || waiting}
+          onClick={onConvert}
+        >
+          {file.status === 'converting'
+            ? 'Converting…'
+            : file.status === 'queued'
+              ? 'Waiting'
+              : 'Convert'}
+        </button>
+      ) : (
+        <span className="text-sm text-green-700 dark:text-green-400">
+          ✓ Text
+        </span>
+      )}
+    </li>
+  );
+}
+
+/**
+ * A DVD's subtitles are pictures, which most Plex clients cannot show without burning them in.
+ * This turns them into text, one movie at a time, on the host.
+ */
+export function SubtitlesSection() {
+  const { data: state, error } = useSubtitles();
+  const convert = useConvertSubtitles();
+  const auto = useSetSubtitlesAuto();
+  const [showAll, setShowAll] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  if (error) {
+    return (
+      <section className={CARD}>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+          Subtitles
+        </h2>
+        <p className="mt-3 text-red-600 dark:text-red-400">
+          {error instanceof Error ? error.message : 'Could not load'}
+        </p>
+      </section>
+    );
+  }
+  if (!state) return null;
+
+  const todo = state.files.filter((file) => file.pictures > 0);
+  const free = todo.filter((file) => file.status === null);
+  const listed = showAll ? state.files : todo;
+  const current = state.current;
+  const percent =
+    current?.total && current.done !== null
+      ? Math.min(100, Math.round((current.done / current.total) * 100))
+      : null;
+  const history = showHistory ? state.recent : state.recent.slice(0, 3);
+
+  return (
+    <section className={CARD}>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+        Subtitles
+      </h2>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+        A DVD’s subtitles are pictures, which many Plex clients cannot show.
+        This reads them into text, drops repeated and empty tracks, marks forced
+        and SDH tracks, and makes English the default. The picture tracks are
+        removed from the file.
+      </p>
+
+      {!state.available ? (
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+          The converter has not made its list of movies yet. It does within a
+          few minutes of being set up.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <label className="flex items-center gap-2 text-gray-900 dark:text-white">
+            <input
+              type="checkbox"
+              checked={state.auto}
+              disabled={auto.isPending}
+              onChange={(event) => auto.mutate(event.target.checked)}
+            />
+            Convert the subtitles of new discs by itself
+          </label>
+
+          {current && (
+            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3">
+              <div className="font-medium text-gray-900 dark:text-white break-words">
+                Converting {current.path.split('/').pop()}
+              </div>
+              <div className="text-sm text-gray-700 dark:text-gray-300">
+                {current.step}
+              </div>
+              {percent !== null && (
+                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div
+                    className="h-2 rounded-full bg-blue-600"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className={PRIMARY}
+              disabled={convert.isPending || free.length === 0}
+              onClick={() => convert.mutate({ all: true })}
+            >
+              {free.length === 0
+                ? 'Nothing left to convert'
+                : `Convert ${free.length} movie${free.length === 1 ? '' : 's'}`}
+            </button>
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              {todo.length} of {state.files.length} files still have picture
+              subtitles
+            </span>
+          </div>
+          {convert.error && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {convert.error.message}
+            </p>
+          )}
+
+          {listed.length > 0 && (
+            <ul className="divide-y divide-gray-200 dark:divide-gray-600">
+              {listed.map((file) => (
+                <FileRow
+                  key={file.path}
+                  file={file}
+                  busy={convert.isPending}
+                  onConvert={() => convert.mutate({ path: file.path })}
+                />
+              ))}
+            </ul>
+          )}
+          {state.files.length > todo.length && (
+            <button
+              type="button"
+              className={SMALL}
+              onClick={() => setShowAll((value) => !value)}
+            >
+              {showAll
+                ? 'Show only the ones to convert'
+                : `Show all ${state.files.length} files`}
+            </button>
+          )}
+
+          {state.recent.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Done
+              </h3>
+              <ul className="mt-1 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                {history.map((result) => (
+                  <li key={`${result.path}${result.at}`}>
+                    <span
+                      className={
+                        result.ok
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }
+                    >
+                      {result.ok ? '✓' : '✗'}
+                    </span>{' '}
+                    {result.path.split('/').pop()}{' '}
+                    <span className="text-xs text-gray-500">
+                      {ago(result.at)}
+                    </span>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 break-words">
+                      {result.message}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {state.recent.length > 3 && (
+                <button
+                  type="button"
+                  className={`${SMALL} mt-2`}
+                  onClick={() => setShowHistory((value) => !value)}
+                >
+                  {showHistory
+                    ? 'Show fewer'
+                    : `Show all ${state.recent.length}`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

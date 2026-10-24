@@ -6,6 +6,7 @@ import { FileSystemItem, FilePickerState } from '@/types/files';
 import { Job } from '@/types/database';
 import type { ConversionOptions } from '@/types/conversion';
 import type { HobworkChanges, HobworkState } from '@/types/hobwork';
+import type { SubtitleRequest, SubtitlesState } from '@/types/subtitles';
 import type {
   DiscCommand,
   DiscCommandResult,
@@ -484,6 +485,45 @@ export async function sendTestNotification(): Promise<{
   }
 
   return response.json();
+}
+
+/**
+ * The movie files, their subtitle tracks and what the converter is doing
+ */
+export async function fetchSubtitles(): Promise<SubtitlesState> {
+  const response = await fetch(`${API_BASE}/subtitles`);
+  if (!response.ok) throw new Error('Failed to read the subtitles');
+  return response.json();
+}
+
+/**
+ * Ask for one file, or all of them, to have their picture subtitles converted
+ */
+export async function convertSubtitles(
+  request: SubtitleRequest,
+): Promise<{ queued: number }> {
+  const response = await fetch(`${API_BASE}/subtitles/convert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || 'Failed to ask for the conversion');
+  }
+  return body;
+}
+
+/**
+ * Turn converting the subtitles of new discs on or off
+ */
+export async function setSubtitlesAuto(enabled: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE}/subtitles/auto`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!response.ok) throw new Error('Failed to change the setting');
 }
 
 /**

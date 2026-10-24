@@ -42,7 +42,8 @@ import type {
 const DRIVE_ALIVE_SECONDS = 90;
 const MAX_NAME_LENGTH = 100;
 const MAX_LIST = 100;
-const RECENT_COUNT = 5;
+/** How many filed discs the page can show when it is asked for all of them. */
+const RECENT_COUNT = 200;
 
 /** Where the ripper's folder is, as this server sees it. */
 export function discsDir(): string {
