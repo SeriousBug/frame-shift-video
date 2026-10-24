@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { CollapsibleCard } from '@/components/collapsible-card';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import { parseLabel } from '@/lib/tmdb-results';
@@ -115,8 +116,6 @@ function secondsAgo(epochSeconds: number | null): string {
   return `${Math.round(seconds / 3600)} hours ago`;
 }
 
-const CARD =
-  'bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-600 p-6 shadow-sm';
 const INPUT =
   'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white';
 const BUTTON =
@@ -134,15 +133,9 @@ function Section({
   hint?: string;
 }) {
   return (
-    <section className={CARD}>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-        {title}
-      </h2>
-      {hint && (
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{hint}</p>
-      )}
-      <div className="mt-4">{children}</div>
-    </section>
+    <CollapsibleCard title={title} hint={hint}>
+      {children}
+    </CollapsibleCard>
   );
 }
 

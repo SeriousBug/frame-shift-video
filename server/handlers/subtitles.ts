@@ -1,4 +1,5 @@
 import {
+  dismissSubtitles,
   readSubtitlesState,
   requestClearOldCopies,
   requestRestore,
@@ -96,6 +97,28 @@ export async function subtitlesClearOldHandler(
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'Could not ask' },
+      400,
+      corsHeaders,
+    );
+  }
+}
+
+/**
+ * POST /api/subtitles/dismiss
+ * Body: { queued: path } | { queue: "all" } | { result: id } | { results: "all" }
+ */
+export async function subtitlesDismissHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body) return json({ error: 'Send JSON' }, 400, corsHeaders);
+  try {
+    const removed = await dismissSubtitles(discsDir(), body);
+    return json({ removed }, 200, corsHeaders);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : 'Could not remove' },
       400,
       corsHeaders,
     );

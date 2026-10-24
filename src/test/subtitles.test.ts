@@ -4,6 +4,8 @@ import os from 'os';
 import path from 'path';
 import {
   cleanSubtitlePath,
+  dismissSubtitles,
+  isExtra,
   readSubtitlesState,
   requestClearOldCopies,
   requestRestore,
@@ -95,7 +97,6 @@ describe('the subtitles state', () => {
     expect(state.files.map((f) => [f.path, f.pictures, f.status])).toEqual([
       [DUMA, 2, null],
       [HERO, 0, null],
-      ['Odd/odd.mkv', 0, null],
     ]);
   });
 
@@ -224,6 +225,101 @@ describe('asking for a conversion', () => {
   });
 });
 
+describe('what is listed', () => {
+  test('files with no subtitle tracks and movie extras are left out', async () => {
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [
+          {
+            path: 'Odd/odd.mkv',
+            tracks: [],
+          },
+          {
+            path: 'Movie (2000)/Other/Extra 01 (2 min).mkv',
+            tracks: [
+              {
+                language: 'eng',
+                codec: 'picture',
+                name: '',
+                default: false,
+                forced: false,
+              },
+            ],
+          },
+          {
+            path: 'Movie (2000)/Movie (2000).mkv',
+            tracks: [
+              {
+                language: 'eng',
+                codec: 'picture',
+                name: '',
+                default: false,
+                forced: false,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const state = await readSubtitlesState(dir);
+    expect(state.files.map((f) => f.path)).toEqual([
+      'Movie (2000)/Movie (2000).mkv',
+    ]);
+    expect(isExtra('A (1)/Featurettes/x.mkv')).toBe(true);
+    expect(isExtra('A (1)/A (1).mkv')).toBe(false);
+  });
+});
+
+describe('dismissing', () => {
+  test('a waiting file, the whole queue, and finished entries can be removed', async () => {
+    await writeIndex();
+    await requestSubtitles(dir, { path: DUMA });
+    await write('_subs/queue/zz.req', `path=${HERO}\nat=1\n`);
+    const queue = path.join(dir, '_subs', 'queue');
+    expect(await dismissSubtitles(dir, { queued: DUMA })).toBe(1);
+    expect(await fs.readdir(queue)).toHaveLength(1);
+    await requestSubtitles(dir, { path: DUMA });
+    expect(await dismissSubtitles(dir, { queue: 'all' })).toBe(2);
+    expect(await fs.readdir(queue)).toHaveLength(0);
+
+    await write(
+      '_subs/done/a-1.json',
+      JSON.stringify({ path: DUMA, ok: true, at: 1 }),
+    );
+    await write(
+      '_subs/done/b-2.json',
+      JSON.stringify({ path: HERO, ok: true, at: 2 }),
+    );
+    const state = await readSubtitlesState(dir);
+    expect(state.recent.map((r) => r.id).sort()).toEqual([
+      'a-1.json',
+      'b-2.json',
+    ]);
+    expect(await dismissSubtitles(dir, { result: 'a-1.json' })).toBe(1);
+    await expect(
+      dismissSubtitles(dir, { result: '../x.json' }),
+    ).rejects.toThrow();
+    expect(await dismissSubtitles(dir, { results: 'all' })).toBe(1);
+  });
+
+  test('clearing the queue leaves a restore or a delete the person asked for', async () => {
+    await writeIndex();
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [],
+        held: [{ path: DUMA, size: 1, at: 1 }],
+      }),
+    );
+    await requestRestore(dir, DUMA);
+    expect(await dismissSubtitles(dir, { queue: 'all' })).toBe(0);
+    expect(await fs.readdir(path.join(dir, '_subs', 'queue'))).toHaveLength(1);
+  });
+});
+
 describe('the old copies', () => {
   async function withHeld() {
     await write(
@@ -260,7 +356,22 @@ describe('the old copies', () => {
       '_subs/index.json',
       JSON.stringify({
         updated: 1,
-        files: [{ path: DUMA, size: 1, mtime: 1, tracks: [] }],
+        files: [
+          {
+            path: DUMA,
+            size: 1,
+            mtime: 1,
+            tracks: [
+              {
+                language: 'eng',
+                codec: 'S_TEXT/UTF8',
+                name: '',
+                default: true,
+                forced: false,
+              },
+            ],
+          },
+        ],
         held: [{ path: DUMA, size: 1, at: 1 }],
       }),
     );
