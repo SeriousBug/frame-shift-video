@@ -11,6 +11,7 @@ import path from 'path';
 import { createHash } from 'crypto';
 import { discsDir } from './disc-state';
 import type {
+  HeldFile,
   SubtitleFile,
   SubtitleRequest,
   SubtitleResult,
@@ -54,7 +55,11 @@ async function readQueued(dir: string): Promise<string[]> {
   const queued: string[] = [];
   for (const name of names.filter((n) => n.endsWith('.req')).sort()) {
     const text = await readText(path.join(folder, name));
-    const line = text?.split('\n').find((l) => l.startsWith('path='));
+    const lines = text?.split('\n') ?? [];
+    // Only conversions mark a file as waiting; a restore or a clear is another kind of request.
+    const action = lines.find((l) => l.startsWith('action='));
+    if (action && action !== 'action=convert') continue;
+    const line = lines.find((l) => l.startsWith('path='));
     if (line) queued.push(line.slice('path='.length));
   }
   return queued;
@@ -116,6 +121,18 @@ export async function readSubtitlesState(
     }
   }
 
+  const held: HeldFile[] = [];
+  if (isRecord(index) && Array.isArray(index.held)) {
+    for (const raw of index.held) {
+      if (!isRecord(raw) || typeof raw.path !== 'string') continue;
+      held.push({
+        path: raw.path,
+        size: typeof raw.size === 'number' ? raw.size : 0,
+        at: typeof raw.at === 'number' ? raw.at : 0,
+      });
+    }
+  }
+
   const recent: SubtitleResult[] = [];
   try {
     const folder = path.join(dir, '_subs', 'done');
@@ -139,6 +156,7 @@ export async function readSubtitlesState(
     auto,
     updated,
     files,
+    held,
     current,
     recent: recent.slice(0, MAX_RECENT),
   };
@@ -169,18 +187,32 @@ export function cleanSubtitlePath(value: unknown): string {
   return text;
 }
 
-async function writeRequest(dir: string, relative: string): Promise<void> {
+type Action = 'convert' | 'restore' | 'clear';
+
+async function writeRequest(
+  dir: string,
+  relative: string,
+  action: Action = 'convert',
+): Promise<void> {
   const folder = path.join(dir, '_subs', 'queue');
   await fs.mkdir(folder, { recursive: true });
   // Written here as root and cleaned up by the converter as another user, so open to both.
   await fs.chmod(folder, 0o777).catch(() => undefined);
   // The same name the converter gives, so asking twice is one request.
-  const name = createHash('md5').update(relative).digest('hex').slice(0, 12);
+  const key =
+    action === 'convert'
+      ? relative
+      : action === 'clear'
+        ? 'clear'
+        : `restore:${relative}`;
+  const name = createHash('md5').update(key).digest('hex').slice(0, 12);
   const file = path.join(folder, `${name}.req`);
   try {
     await fs.writeFile(
       file,
-      `path=${relative}\nat=${Math.floor(Date.now() / 1000)}\n`,
+      action === 'clear'
+        ? `action=clear\nat=${Math.floor(Date.now() / 1000)}\n`
+        : `action=${action}\npath=${relative}\nat=${Math.floor(Date.now() / 1000)}\n`,
       { flag: 'wx', mode: 0o666 },
     );
     await fs.chmod(file, 0o666).catch(() => undefined);
@@ -210,6 +242,28 @@ export async function requestSubtitles(
   if (known.pictures === 0) throw new Error('It has no picture subtitles');
   await writeRequest(dir, relative);
   return 1;
+}
+
+/** Asks for the old copy of a file to be put back; the converted file is kept in its place. */
+export async function requestRestore(
+  dir: string,
+  value: unknown,
+): Promise<string> {
+  const relative = cleanSubtitlePath(value);
+  const state = await readSubtitlesState(dir);
+  if (!state.held.some((h) => h.path === relative)) {
+    throw new Error('There is no old copy of that file');
+  }
+  await writeRequest(dir, relative, 'restore');
+  return relative;
+}
+
+/** Asks for every old copy to be deleted for good. Only the page's confirmed button calls this. */
+export async function requestClearOldCopies(dir: string): Promise<number> {
+  const state = await readSubtitlesState(dir);
+  if (state.held.length === 0) throw new Error('There are no old copies');
+  await writeRequest(dir, '', 'clear');
+  return state.held.length;
 }
 
 /** Turns converting the subtitles of new discs on or off. */

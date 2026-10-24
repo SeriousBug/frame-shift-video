@@ -5,6 +5,8 @@ import path from 'path';
 import {
   cleanSubtitlePath,
   readSubtitlesState,
+  requestClearOldCopies,
+  requestRestore,
   requestSubtitles,
   setSubtitlesAuto,
 } from '../../server/subtitles-state';
@@ -179,7 +181,7 @@ describe('asking for a conversion', () => {
       path.join(dir, '_subs', 'queue', names[0] as string),
       'utf8',
     );
-    expect(text.split('\n')[0]).toBe(`path=${DUMA}`);
+    expect(text.split('\n')).toContain(`path=${DUMA}`);
   });
 
   test('the queue folder and the request are open to the converter, which is another user', async () => {
@@ -219,6 +221,69 @@ describe('asking for a conversion', () => {
     await fs.rm(path.join(dir, '_subs', 'queue', 'x.req'));
     expect(await requestSubtitles(dir, { all: true })).toBe(1);
     expect(await requestSubtitles(dir, { all: true })).toBe(0);
+  });
+});
+
+describe('the old copies', () => {
+  async function withHeld() {
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [],
+        held: [{ path: DUMA, size: 2e9, at: 50 }, { path: 'bad' }, 7],
+      }),
+    );
+  }
+
+  test('are listed from the converter, skipping what is not a copy', async () => {
+    await withHeld();
+    const state = await readSubtitlesState(dir);
+    expect(state.held).toEqual([
+      { path: DUMA, size: 2e9, at: 50 },
+      { path: 'bad', size: 0, at: 0 },
+    ]);
+  });
+
+  test('a restore request names the file and is not a conversion', async () => {
+    await withHeld();
+    await requestRestore(dir, DUMA);
+    const names = await fs.readdir(path.join(dir, '_subs', 'queue'));
+    expect(names).toHaveLength(1);
+    const text = await fs.readFile(
+      path.join(dir, '_subs', 'queue', names[0] as string),
+      'utf8',
+    );
+    expect(text).toContain('action=restore\n');
+    expect(text).toContain(`path=${DUMA}\n`);
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [{ path: DUMA, size: 1, mtime: 1, tracks: [] }],
+        held: [{ path: DUMA, size: 1, at: 1 }],
+      }),
+    );
+    expect((await readSubtitlesState(dir)).files[0]?.status).toBeNull();
+  });
+
+  test('only a file that has an old copy can be restored', async () => {
+    await withHeld();
+    await expect(requestRestore(dir, HERO)).rejects.toThrow('no old copy');
+    await expect(requestRestore(dir, '../x.mkv')).rejects.toThrow();
+  });
+
+  test('deleting them is a request of its own and needs there to be some', async () => {
+    await expect(requestClearOldCopies(dir)).rejects.toThrow('no old copies');
+    await withHeld();
+    expect(await requestClearOldCopies(dir)).toBe(2);
+    const names = await fs.readdir(path.join(dir, '_subs', 'queue'));
+    const text = await fs.readFile(
+      path.join(dir, '_subs', 'queue', names[0] as string),
+      'utf8',
+    );
+    expect(text).toContain('action=clear');
+    expect(text).not.toContain('path=');
   });
 });
 

@@ -515,6 +515,32 @@ export async function convertSubtitles(
 }
 
 /**
+ * Ask for the old copy of a file to be put back (the converted file is kept in its place)
+ */
+export async function restoreSubtitles(path: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/subtitles/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Failed to put it back');
+}
+
+/**
+ * Delete every old copy for good. The page asks the person to confirm first.
+ */
+export async function clearOldCopies(): Promise<void> {
+  const response = await fetch(`${API_BASE}/subtitles/clear-old`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Failed to delete');
+}
+
+/**
  * Turn converting the subtitles of new discs on or off
  */
 export async function setSubtitlesAuto(enabled: boolean): Promise<void> {
