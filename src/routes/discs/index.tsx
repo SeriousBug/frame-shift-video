@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { TmdbPicker } from '@/components/tmdb-picker';
+import { SubtitlesSection } from '@/components/subtitles-section';
 import { parseLabel } from '@/lib/tmdb-results';
 import {
   useDiscs,
@@ -590,7 +591,11 @@ function Pipeline({ stage }: { stage: DiscStage | 'scanning' }) {
   );
 }
 
+/** How many filed discs the queue shows before it is asked to show them all. */
+const FILED_SHOWN = 5;
+
 function WorkingSection({ state }: { state: DiscsState }) {
+  const [showFiled, setShowFiled] = useState(false);
   const queue = queueOf(state);
   const drive = state.drive;
   const driveBusy = state.run?.state === 'running';
@@ -662,7 +667,10 @@ function WorkingSection({ state }: { state: DiscsState }) {
             Filed
           </h3>
           <ul className="mt-1 space-y-1 text-sm text-gray-700 dark:text-gray-300">
-            {state.recent.map((done) => (
+            {(showFiled
+              ? state.recent
+              : state.recent.slice(0, FILED_SHOWN)
+            ).map((done) => (
               <li key={done.name}>
                 <span className="text-green-600 dark:text-green-400">✓</span>{' '}
                 {done.name}{' '}
@@ -672,6 +680,19 @@ function WorkingSection({ state }: { state: DiscsState }) {
               </li>
             ))}
           </ul>
+          {state.recent.length > FILED_SHOWN && (
+            <button
+              type="button"
+              className={`${SECONDARY} mt-2 !px-3 !py-1 text-sm`}
+              onClick={() => setShowFiled((value) => !value)}
+            >
+              {showFiled
+                ? 'Show fewer'
+                : state.finishedCount > state.recent.length
+                  ? `Show all ${state.recent.length} of the ${state.finishedCount} filed`
+                  : `Show all ${state.recent.length}`}
+            </button>
+          )}
         </div>
       )}
     </Section>
@@ -855,6 +876,7 @@ function DiscsContent() {
       <AttentionSection state={state} />
       <NextSection state={state} />
       <WorkingSection state={state} />
+      <SubtitlesSection />
       <ParkedSection state={state} />
       <NeedsYearSection state={state} />
       <p className="text-center text-sm text-gray-500">

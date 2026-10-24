@@ -48,6 +48,11 @@ import {
   hobworkTestHandler,
   discNoticeHandler,
 } from './handlers/hobwork';
+import {
+  subtitlesStateHandler,
+  subtitlesConvertHandler,
+  subtitlesAutoHandler,
+} from './handlers/subtitles';
 
 function getSettingsResponse(corsHeaders: Record<string, string>): Response {
   const version = process.env.APP_VERSION || null;
@@ -183,6 +188,18 @@ const wrappedHobworkTestHandler = withErrorHandler(
 const wrappedDiscNoticeHandler = withErrorHandler(
   discNoticeHandler,
   'DiscNoticeHandler',
+);
+const wrappedSubtitlesStateHandler = withErrorHandler(
+  subtitlesStateHandler,
+  'SubtitlesStateHandler',
+);
+const wrappedSubtitlesConvertHandler = withErrorHandler(
+  subtitlesConvertHandler,
+  'SubtitlesConvertHandler',
+);
+const wrappedSubtitlesAutoHandler = withErrorHandler(
+  subtitlesAutoHandler,
+  'SubtitlesAutoHandler',
 );
 const wrappedDiscsNextHandler = withErrorHandler(
   discsNextHandler,
@@ -337,6 +354,17 @@ export async function setupRoutes(req: Request): Promise<Response> {
     // From the disc ripper on the same host
     if (pathname === '/api/disc-notice' && req.method === 'POST') {
       return await wrappedDiscNoticeHandler(req, corsHeaders);
+    }
+
+    // Routes for the subtitle converter (picture subtitles to text)
+    if (pathname === '/api/subtitles' && req.method === 'GET') {
+      return await wrappedSubtitlesStateHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/subtitles/convert' && req.method === 'POST') {
+      return await wrappedSubtitlesConvertHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/subtitles/auto' && req.method === 'PUT') {
+      return await wrappedSubtitlesAutoHandler(req, corsHeaders);
     }
 
     // Routes for the Discs page (the DVD ripper on the server host)

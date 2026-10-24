@@ -35,6 +35,9 @@ import {
   setDiscAutoScan,
   fetchHobwork,
   saveHobwork,
+  fetchSubtitles,
+  convertSubtitles,
+  setSubtitlesAuto,
   setDiscMovieOnly,
   setDiscNext,
   dismissDiscAttention,
@@ -61,6 +64,7 @@ export const queryKeys = {
   settings: ['settings'] as const,
   discs: ['discs'] as const,
   hobwork: ['hobwork'] as const,
+  subtitles: ['subtitles'] as const,
 };
 
 /**
@@ -350,6 +354,42 @@ export function useRetryFollowers() {
       // Invalidate followers status to refetch
       queryClient.invalidateQueries({ queryKey: queryKeys.followersStatus });
     },
+  });
+}
+
+/**
+ * Hook to read the subtitles of the movie files. It looks again every few seconds, because the
+ * converter works in the background.
+ */
+export function useSubtitles() {
+  return useQuery({
+    queryKey: queryKeys.subtitles,
+    queryFn: fetchSubtitles,
+    refetchInterval: 3000,
+  });
+}
+
+/**
+ * Hook to ask for subtitles to be converted
+ */
+export function useConvertSubtitles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: convertSubtitles,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
+  });
+}
+
+/**
+ * Hook to turn converting the subtitles of new discs on or off
+ */
+export function useSetSubtitlesAuto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setSubtitlesAuto,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.subtitles }),
   });
 }
 
