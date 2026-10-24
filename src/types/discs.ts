@@ -139,7 +139,14 @@ export interface DiscsState {
 /** What the page can ask the host to do. */
 export type DiscCommand =
   | { action: 'eject' }
-  | { action: 'rip'; mode: 'movie'; name?: string; image?: string }
+  | {
+      action: 'rip';
+      mode: 'movie';
+      name?: string;
+      image?: string;
+      /** Redo a movie that is already filed: the old file is kept, not a second copy made */
+      replace?: boolean;
+    }
   | {
       action: 'rip';
       mode: 'tv';
