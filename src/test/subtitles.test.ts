@@ -182,6 +182,17 @@ describe('asking for a conversion', () => {
     expect(text.split('\n')[0]).toBe(`path=${DUMA}`);
   });
 
+  test('the queue folder and the request are open to the converter, which is another user', async () => {
+    await writeIndex();
+    await requestSubtitles(dir, { path: DUMA });
+    const folder = path.join(dir, '_subs', 'queue');
+    expect((await fs.stat(folder)).mode & 0o777).toBe(0o777);
+    const [name] = await fs.readdir(folder);
+    expect(
+      (await fs.stat(path.join(folder, name as string))).mode & 0o666,
+    ).toBe(0o666);
+  });
+
   test('the request has the name the converter gives it', async () => {
     await writeIndex();
     await requestSubtitles(dir, { path: DUMA });
