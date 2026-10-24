@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CollapsibleCard } from '@/components/collapsible-card';
 import {
   useClearOldCopies,
+  useCleanSubtitles,
   useConvertSubtitles,
   useDismissSubtitles,
   useRestoreSubtitles,
@@ -141,6 +142,7 @@ export function SubtitlesSection() {
   const auto = useSetSubtitlesAuto();
   const restore = useRestoreSubtitles();
   const dismiss = useDismissSubtitles();
+  const clean = useCleanSubtitles();
   const clear = useClearOldCopies();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -234,6 +236,29 @@ export function SubtitlesSection() {
               subtitles
             </span>
           </div>
+          {state.files.some((f) => f.needsClean) && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+              <div className="text-sm text-gray-900 dark:text-white">
+                {state.files.filter((f) => f.needsClean).length} converted
+                file(s) can have their text cleaned up with the newest rules
+                (stray brackets, mixed-up letters, music marks). The old file is
+                kept first.
+              </div>
+              <button
+                type="button"
+                className={`${SMALL} mt-2`}
+                disabled={clean.isPending}
+                onClick={() => clean.mutate({ all: true })}
+              >
+                Clean up text
+              </button>
+              {clean.error && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {clean.error.message}
+                </p>
+              )}
+            </div>
+          )}
           {convert.error && (
             <p className="text-sm text-red-600 dark:text-red-400">
               {convert.error.message}

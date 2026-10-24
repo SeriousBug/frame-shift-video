@@ -52,6 +52,7 @@ import {
   subtitlesStateHandler,
   subtitlesConvertHandler,
   subtitlesAutoHandler,
+  subtitlesCleanHandler,
   subtitlesDismissHandler,
   subtitlesRestoreHandler,
   subtitlesClearOldHandler,
@@ -199,6 +200,10 @@ const wrappedSubtitlesStateHandler = withErrorHandler(
 const wrappedSubtitlesConvertHandler = withErrorHandler(
   subtitlesConvertHandler,
   'SubtitlesConvertHandler',
+);
+const wrappedSubtitlesCleanHandler = withErrorHandler(
+  subtitlesCleanHandler,
+  'SubtitlesCleanHandler',
 );
 const wrappedSubtitlesDismissHandler = withErrorHandler(
   subtitlesDismissHandler,
@@ -377,6 +382,9 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/subtitles/convert' && req.method === 'POST') {
       return await wrappedSubtitlesConvertHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/subtitles/clean' && req.method === 'POST') {
+      return await wrappedSubtitlesCleanHandler(req, corsHeaders);
     }
     if (pathname === '/api/subtitles/dismiss' && req.method === 'POST') {
       return await wrappedSubtitlesDismissHandler(req, corsHeaders);

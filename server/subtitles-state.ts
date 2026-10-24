@@ -88,7 +88,8 @@ async function readQueued(dir: string): Promise<string[]> {
     const lines = text?.split('\n') ?? [];
     // Only conversions mark a file as waiting; a restore or a clear is another kind of request.
     const action = lines.find((l) => l.startsWith('action='));
-    if (action && action !== 'action=convert') continue;
+    if (action && action !== 'action=convert' && action !== 'action=recheck')
+      continue;
     const line = lines.find((l) => l.startsWith('path='));
     if (line) queued.push(line.slice('path='.length));
   }
@@ -149,6 +150,7 @@ export async function readSubtitlesState(
         path: raw.path,
         tracks,
         pictures: tracks.filter((t) => t.codec === 'picture').length,
+        needsClean: raw.needs_clean === true,
         status,
       });
     }
@@ -221,7 +223,7 @@ export function cleanSubtitlePath(value: unknown): string {
   return text;
 }
 
-type Action = 'convert' | 'restore' | 'clear';
+type Action = 'convert' | 'restore' | 'clear' | 'recheck';
 
 async function writeRequest(
   dir: string,
@@ -269,6 +271,26 @@ export async function requestSubtitles(
   if (!known) throw new Error('That file is not in the list of movies');
   if (known.pictures === 0) throw new Error('It has no picture subtitles');
   await writeRequest(dir, relative);
+  return 1;
+}
+
+/** Asks for the text subtitles in one file, or in every file that needs it, to be cleaned. */
+export async function requestClean(
+  dir: string,
+  request: { path: string } | { all: true },
+): Promise<number> {
+  const state = await readSubtitlesState(dir);
+  if ('all' in request) {
+    const wanted = state.files.filter((f) => f.needsClean && f.status === null);
+    for (const file of wanted) {
+      await writeRequest(dir, cleanSubtitlePath(file.path), 'recheck');
+    }
+    return wanted.length;
+  }
+  const relative = cleanSubtitlePath(request.path);
+  const known = state.files.find((f) => f.path === relative);
+  if (!known) throw new Error('That file is not in the list of movies');
+  await writeRequest(dir, relative, 'recheck');
   return 1;
 }
 
@@ -320,7 +342,8 @@ export async function dismissSubtitles(
       const text = await readText(path.join(queueDir, name));
       const action = text?.split('\n').find((l) => l.startsWith('action='));
       // Only the conversions waiting; a restore or a delete the person asked for stays.
-      if (action && action !== 'action=convert') continue;
+      if (action && action !== 'action=convert' && action !== 'action=recheck')
+        continue;
       removed += await fs
         .rm(path.join(queueDir, name))
         .then(() => 1)
