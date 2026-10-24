@@ -549,6 +549,22 @@ export async function dismissSubtitles(what: SubtitleDismiss): Promise<void> {
 }
 
 /**
+ * Ask for one subtitle track to be taken out of a file (the old file is kept first)
+ */
+export async function removeSubtitleTrack(
+  path: string,
+  track: number,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/subtitles/remove-track`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, track }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Failed to ask');
+}
+
+/**
  * Ask for the old copy of a file to be put back (the converted file is kept in its place)
  */
 export async function restoreSubtitles(path: string): Promise<void> {

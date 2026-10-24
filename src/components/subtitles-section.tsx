@@ -5,6 +5,7 @@ import {
   useCleanSubtitles,
   useConvertSubtitles,
   useDismissSubtitles,
+  useRemoveSubtitleTrack,
   useRestoreSubtitles,
   useSetSubtitlesAuto,
   useSubtitles,
@@ -67,11 +68,14 @@ function FileRow({
   busy,
   onConvert,
   onRemove,
+  onRemoveTrack,
 }: {
   file: SubtitleFile;
   busy: boolean;
   onConvert: () => void;
   onRemove: () => void;
+  /** Shown only when the full list is open: takes one subtitle track out of the file */
+  onRemoveTrack?: (index: number) => void;
 }) {
   const waiting = file.status !== null;
   return (
@@ -102,6 +106,25 @@ function FileRow({
             </span>
           ))}
         </div>
+        {onRemoveTrack && file.tracks.length > 0 && !waiting && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-300">
+              Remove a subtitle track…
+            </summary>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {file.tracks.map((track, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className={SMALL}
+                  onClick={() => onRemoveTrack(index)}
+                >
+                  Remove {describeTrack(track)}
+                </button>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
       {file.pictures > 0 ? (
         <div className="flex gap-2">
@@ -143,6 +166,7 @@ export function SubtitlesSection() {
   const restore = useRestoreSubtitles();
   const dismiss = useDismissSubtitles();
   const clean = useCleanSubtitles();
+  const removeTrack = useRemoveSubtitleTrack();
   const clear = useClearOldCopies();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -298,9 +322,14 @@ export function SubtitlesSection() {
               Asked. It starts within a minute. You can leave this page.
             </p>
           )}
-          {(dismiss.error || auto.error) && (
+          {(dismiss.error || auto.error || removeTrack.error) && (
             <p className="text-sm text-red-600 dark:text-red-400">
-              {(dismiss.error ?? auto.error)?.message}
+              {(dismiss.error ?? auto.error ?? removeTrack.error)?.message}
+            </p>
+          )}
+          {removeTrack.isSuccess && (
+            <p className="text-sm text-green-700 dark:text-green-400">
+              Asked. It starts within a minute.
             </p>
           )}
           {convert.error && (
@@ -318,6 +347,24 @@ export function SubtitlesSection() {
                   busy={convert.isPending}
                   onConvert={() => convert.mutate({ path: file.path })}
                   onRemove={() => dismiss.mutate({ queued: file.path })}
+                  onRemoveTrack={
+                    showAll
+                      ? (index) => {
+                          const track = file.tracks[index];
+                          if (
+                            track &&
+                            window.confirm(
+                              `Take the ${describeTrack(track)} subtitle track out of ${movieName(file.path)}? The old file is kept until you delete it.`,
+                            )
+                          ) {
+                            removeTrack.mutate({
+                              path: file.path,
+                              track: index,
+                            });
+                          }
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </ul>

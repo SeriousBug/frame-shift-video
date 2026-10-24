@@ -3,6 +3,7 @@ import {
   readSubtitlesState,
   requestClean,
   requestClearOldCopies,
+  requestDropTrack,
   requestRestore,
   requestSubtitles,
   setSubtitlesAuto,
@@ -77,6 +78,25 @@ export async function subtitlesCleanHandler(
       body.all === true ? { all: true } : { path: body.path as string },
     );
     return json({ queued: count }, 200, corsHeaders);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : 'Could not ask' },
+      400,
+      corsHeaders,
+    );
+  }
+}
+
+/** POST /api/subtitles/remove-track, body { path, track }: take one subtitle track out of a file. */
+export async function subtitlesRemoveTrackHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body) return json({ error: 'Send JSON' }, 400, corsHeaders);
+  try {
+    const path = await requestDropTrack(discsDir(), body.path, body.track);
+    return json({ removing: path }, 200, corsHeaders);
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'Could not ask' },

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { createHash } from 'crypto';
 import {
   cleanSubtitlePath,
   dismissSubtitles,
@@ -9,6 +10,7 @@ import {
   readSubtitlesState,
   requestClean,
   requestClearOldCopies,
+  requestDropTrack,
   requestRestore,
   requestSubtitles,
   setSubtitlesAuto,
@@ -308,6 +310,44 @@ describe('cleaning converted text', () => {
     expect(text).toContain(`path=${HERO}\n`);
     expect((await readSubtitlesState(dir)).files[0]?.status).toBe('queued');
     expect(await requestClean(dir, { all: true })).toBe(0);
+  });
+});
+
+describe('taking a subtitle track out', () => {
+  test('writes a request the converter will recognise, named as it names it', async () => {
+    await writeIndex();
+    await requestDropTrack(dir, DUMA, 1);
+    const name = createHash('md5')
+      .update(`droptrack:${DUMA}:1`)
+      .digest('hex')
+      .slice(0, 12);
+    const text = await fs.readFile(
+      path.join(dir, '_subs', 'queue', `${name}.req`),
+      'utf8',
+    );
+    expect(text).toContain('action=droptrack\n');
+    expect(text).toContain(`path=${DUMA}\n`);
+    expect(text).toContain('track=1\n');
+  });
+
+  test('refuses a track the file does not have, a bad number, or a file that is busy', async () => {
+    await writeIndex();
+    await expect(requestDropTrack(dir, DUMA, 2)).rejects.toThrow(
+      'not in the file',
+    );
+    await expect(requestDropTrack(dir, DUMA, -1)).rejects.toThrow();
+    await expect(requestDropTrack(dir, DUMA, 0.5)).rejects.toThrow();
+    await expect(requestDropTrack(dir, DUMA, '0')).rejects.toThrow();
+    await expect(requestDropTrack(dir, 'Nope/x.mkv', 0)).rejects.toThrow(
+      'not in the list',
+    );
+    await write('_subs/queue/abc.req', `path=${DUMA}\nat=5\n`);
+    await expect(requestDropTrack(dir, DUMA, 0)).rejects.toThrow(
+      'being worked on',
+    );
+    expect(await fs.readdir(path.join(dir, '_subs', 'queue'))).toEqual([
+      'abc.req',
+    ]);
   });
 });
 
