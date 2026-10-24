@@ -238,7 +238,7 @@ function SettingsPage() {
         <div className="flex items-center gap-4 mb-4">
           <Link
             to="/"
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="inline-flex min-h-[44px] items-center text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           >
             &larr; Back to Home
           </Link>
@@ -264,7 +264,7 @@ function SettingsPage() {
                 </div>
                 <div className="flex items-center gap-4 text-sm">
                   {lastSystemStatusUpdate > 0 && (
-                    <span className="text-gray-400 dark:text-gray-500">
+                    <span className="text-gray-600 dark:text-gray-400">
                       Updated {formatSecondsAgo(lastSystemStatusUpdate)}
                     </span>
                   )}
@@ -454,7 +454,7 @@ function SettingsPage() {
                         !followersStatus.hasDeadFollowers ||
                         retryFollowers.isPending
                       }
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-2"
+                      className="min-h-[44px] px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-2"
                     >
                       {retryFollowers.isPending ? (
                         <>
@@ -638,17 +638,17 @@ function SettingsPage() {
                     <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                       <li>
                         <span className="font-medium">Discord:</span> Set{' '}
-                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white rounded text-sm">
                           DISCORD_WEBHOOK_URL
                         </code>
                       </li>
                       <li>
                         <span className="font-medium">Pushover:</span> Set{' '}
-                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white rounded text-sm">
                           PUSHOVER_API_TOKEN
                         </code>{' '}
                         and{' '}
-                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                        <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white rounded text-sm">
                           PUSHOVER_USER_KEY
                         </code>
                       </li>
@@ -663,7 +663,7 @@ function SettingsPage() {
                         !notificationStatus?.enabled ||
                         testNotificationStatus === 'loading'
                       }
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-2"
+                      className="min-h-[44px] px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-2"
                     >
                       {testNotificationStatus === 'loading' ? (
                         <>
