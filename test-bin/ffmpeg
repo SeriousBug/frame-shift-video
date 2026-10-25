@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# True when one of the arguments is exactly the given option. Matching the joined arguments
+# instead would also match a path that happens to contain the same letters ("test-h3xK" holds "-h").
+has_arg() {
+    local want=$1 arg
+    shift
+    for arg in "$@"; do
+        [ "$arg" = "$want" ] && return 0
+    done
+    return 1
+}
+
 # Mock ffmpeg script for testing
 # This script simulates ffmpeg behavior for tests
 
@@ -19,14 +30,14 @@ if [[ "$*" == *"-h encoder=libx264"* ]]; then
 fi
 
 # Check if general help was requested
-if [[ "$*" == *"-h"* ]] || [[ "$*" == *"--help"* ]] || [[ "$*" == *"-help"* ]]; then
+if has_arg -h "$@" || has_arg --help "$@" || has_arg -help "$@"; then
     echo "Mock FFmpeg for testing"
     echo "frame-shift-video test version"
     exit 0
 fi
 
 # Check if version was requested
-if [[ "$*" == *"-version"* ]]; then
+if has_arg -version "$@"; then
     echo "ffmpeg version mock-test-1.0"
     echo "Mock FFmpeg for frame-shift-video tests"
     exit 0

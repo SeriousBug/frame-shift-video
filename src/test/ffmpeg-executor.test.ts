@@ -56,6 +56,46 @@ describe('FFmpegExecutor', () => {
     },
   };
 
+  describe('Mock scripts and file names', () => {
+    // The mock ffmpeg answered "help" (and exited at once) for any argument that merely held
+    // the letters "-h", such as a temporary folder called "ffmpeg-test-h4Kx9q". That made
+    // roughly one test run in four fail for no reason, so a folder like that is used on purpose.
+    it('runs the conversion when a path contains "-h"', async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ffmpeg-test-'));
+      const unlucky = path.join(dir, 'ffmpeg-test-help-me');
+      await fs.mkdir(unlucky);
+      const inputPath = path.join(unlucky, 'test-input.mkv');
+      await fs.writeFile(inputPath, 'mock video content');
+      const outputPath = path.join(unlucky, 'test-output.mp4');
+
+      const result = await new FFmpegExecutor({}).execute({
+        args: ['ffmpeg', '-i', inputPath, '-y', outputPath],
+        displayCommand: `ffmpeg -i ${inputPath} -y ${outputPath}`,
+        inputPath,
+        outputPath,
+        config: {
+          inputFile: inputPath,
+          outputFile: outputPath,
+          options: {
+            ...DEFAULT_CONVERSION_OPTIONS,
+            selectedFiles: [],
+            basic: {
+              videoCodec: 'libx265',
+              quality: 22,
+              outputFormat: 'mp4',
+            },
+          },
+          jobName: 'Test Job',
+        },
+      });
+
+      expect(result.success).toBe(true);
+      // The mock prints its version on stderr only when it actually runs a conversion.
+      expect(result.stderr).toContain('ffmpeg version mock-test-1.0');
+      await fs.rm(dir, { recursive: true, force: true });
+    });
+  });
+
   describe('Basic Execution', () => {
     it('should execute ffmpeg successfully with mock script', async () => {
       const inputPath = await createTestFile('test-input.mkv');
