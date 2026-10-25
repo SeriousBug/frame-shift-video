@@ -24,7 +24,7 @@ export function DiscsCornerButton() {
       {!onDiscs && (needsYou || working) && (
         <span
           className={`inline-block h-2.5 w-2.5 rounded-full ${needsYou ? 'bg-amber-300' : 'bg-green-300 animate-pulse'}`}
-          title={needsYou ? 'A note needs you' : 'The ripper is working'}
+          title={needsYou ? 'A note needs you' : 'A disc is being worked on'}
         />
       )}
     </Link>

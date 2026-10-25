@@ -146,7 +146,7 @@ const HELP: Record<string, string> = {
   Drive:
     'This is the DVD drive. Put a disc in and, by default, it is copied by itself. When the copy is done the disc comes out, and you can put the next one in.',
   'Tell it what the disc is':
-    'Optional. If you know the name of the disc, or that it is a TV show, say so here before putting it in. Otherwise the ripper works it out from the disc.',
+    'Optional. If you know the name of the disc, or that it is a TV show, say so here before putting it in. Otherwise it works it out from the disc.',
   'Needs you':
     'Something shows up here only when it cannot go on without you. Read the note, do what it says, then press Dismiss.',
   Queue:
@@ -295,8 +295,8 @@ function DriveSection({ state }: { state: DiscsState }) {
       {!drive || !drive.alive ? (
         <p className="text-amber-700 dark:text-amber-400">
           The disc helper on the server has not reported{' '}
-          {drive ? secondsAgo(drive.updated) : 'yet'}. Discs still rip on their
-          own, but the buttons here will not work until it is running.
+          {drive ? secondsAgo(drive.updated) : 'yet'}. Discs still copy by
+          themselves, but the buttons here will not work until it is running.
         </p>
       ) : (
         <p className="text-gray-900 dark:text-white">
@@ -409,7 +409,7 @@ function NextSection({ state }: { state: DiscsState }) {
     >
       {state.next && (
         <p className="mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/30 p-3 text-blue-900 dark:text-blue-100">
-          {state.next.current ? 'The disc being ripped' : 'The next disc'} will
+          {state.next.current ? 'The disc being copied' : 'The next disc'} will
           be treated as {describeNote(state.next)}.{' '}
           <button
             type="button"
@@ -464,7 +464,7 @@ function NextSection({ state }: { state: DiscsState }) {
               setNext.mutate({ ...toNote(details), current: true })
             }
           >
-            For the disc being ripped
+            For the disc being copied
           </button>
         )}
         <button
@@ -475,7 +475,7 @@ function NextSection({ state }: { state: DiscsState }) {
             !diskIn
               ? 'There is no disc in the drive'
               : ripping
-                ? 'The disc is already being ripped'
+                ? 'The disc is already being copied'
                 : undefined
           }
           onClick={() => command.mutate(toRip(details, undefined, replace))}
@@ -925,7 +925,7 @@ export function summarize(state: DiscsState): {
   if (!state.drive || !state.drive.alive) {
     return {
       tone: 'attention',
-      text: 'The disc helper on the server is not answering. Discs still rip by themselves, but the buttons here will not work.',
+      text: 'The disc helper on the server is not answering. Discs still copy by themselves, but the buttons here will not work.',
     };
   }
   if (state.parked.length > 0) {
@@ -1083,7 +1083,7 @@ function DiscsContent() {
     return (
       <Section title="No DVDs folder">
         <p className="text-gray-700 dark:text-gray-300">
-          This server has no DVDs folder yet, so the ripper has nothing to show.
+          This server has no DVDs folder yet, so there is nothing to show yet.
           It is the folder named DVDs inside the folder Frame Shift is allowed
           to browse.
         </p>
