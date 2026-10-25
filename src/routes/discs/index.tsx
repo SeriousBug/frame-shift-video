@@ -549,12 +549,12 @@ function AttentionSection({ state }: { state: DiscsState }) {
 
 /** The steps a disc goes through, in order, as the queue shows them. */
 const PIPELINE: { stage: DiscStage | 'scanning'; label: string }[] = [
-  { stage: 'scanning', label: 'Scan' },
-  { stage: 'copying', label: 'Copy' },
-  { stage: 'extracting', label: 'Extract' },
-  { stage: 'waiting', label: 'Queue' },
-  { stage: 'converting', label: 'Convert' },
-  { stage: 'filing', label: 'File' },
+  { stage: 'scanning', label: 'Reading' },
+  { stage: 'copying', label: 'Copying' },
+  { stage: 'extracting', label: 'Preparing' },
+  { stage: 'waiting', label: 'Waiting' },
+  { stage: 'converting', label: 'Converting' },
+  { stage: 'filing', label: 'Saving' },
 ];
 
 /** Past this many quiet seconds a step is called slow, not busy. */
@@ -563,19 +563,19 @@ const QUIET_SECONDS = 30 * 60;
 function describeStage(disc: QueueEntry): string {
   switch (disc.stage) {
     case 'scanning':
-      return 'Checking how well the disc reads';
+      return 'Checking that the disc can be read';
     case 'copying':
-      return 'Copying the disc. It can come out when this is done, and the next one can go in.';
+      return 'Copying the disc. The tray opens when this is done, and the next disc can go in.';
     case 'extracting':
-      return 'The disc is out of the drive. Taking the movie out of the copy.';
+      return 'The disc is out. Getting the movie out of the copy.';
     case 'waiting':
       return disc.queued
-        ? 'Queued in Frame Shift, waiting its turn'
-        : 'Ready. Frame Shift gets it within a few minutes.';
+        ? 'In line to be converted'
+        : 'Ready. It joins the line within a few minutes.';
     case 'converting':
-      return 'Converting in Frame Shift';
+      return 'Being converted into a movie file that plays everywhere';
     case 'filing':
-      return 'Converted. Moving it into place.';
+      return 'Done converting. Putting it in the library.';
   }
 }
 
@@ -656,7 +656,7 @@ function WorkingSection({ state }: { state: DiscsState }) {
       badge={
         state.working.length > 0 ? `${state.working.length} working` : undefined
       }
-      hint="Every disc from the scan to the file. The drive is free as soon as a disc has been copied and is out, so the next one can go in while this one is extracted and converted."
+      hint="Every disc, from being read to being ready to watch. The tray opens when a disc has been copied, so the next one can go in while this one is made ready."
     >
       <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">
         {driveBusy
