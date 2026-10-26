@@ -8,6 +8,7 @@ import {
 } from '@/components/collapsible-card';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
+import { copyProgress } from '@/lib/copy-progress';
 import { parseLabel } from '@/lib/tmdb-results';
 import {
   applyTextSize,
@@ -32,6 +33,7 @@ import type {
   DiscCommand,
   DiscCommandResult,
   DiscConversion,
+  DiscCopy,
   DiscNext,
   DiscParked,
   DiscsState,
@@ -607,6 +609,7 @@ interface QueueEntry {
   conversion: DiscConversion | null;
   lines: string[];
   quietSeconds: number | null;
+  copy: DiscCopy | null;
 }
 
 function queueOf(state: DiscsState): QueueEntry[] {
@@ -618,6 +621,7 @@ function queueOf(state: DiscsState): QueueEntry[] {
     conversion: disc.conversion,
     lines: disc.lines,
     quietSeconds: disc.quietSeconds,
+    copy: disc.copy,
   }));
   // The disc being scanned has no folder yet, so it comes from the ripper's own status.
   if (
@@ -632,9 +636,42 @@ function queueOf(state: DiscsState): QueueEntry[] {
       conversion: null,
       lines: state.run.step ? [state.run.step] : [],
       quietSeconds: null,
+      copy: null,
     });
   }
   return entries;
+}
+
+/** The bar for a disc that is being copied, with how much is done and how long is left. */
+function CopyBar({ copy }: { copy: DiscCopy }) {
+  const progress = copyProgress(copy, Math.floor(Date.now() / 1000));
+  if (!progress) return null;
+  return (
+    <div className="mt-2">
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress.percent}
+        aria-label="How much of the disc is copied"
+        className="h-3 w-full rounded-full bg-gray-200 dark:bg-gray-700"
+      >
+        <div
+          className="h-3 rounded-full bg-blue-600"
+          style={{ width: `${progress.percent}%` }}
+        />
+      </div>
+      <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+        {progress.percent}% · {progress.copied} of {progress.total}
+        {progress.speed ? ` · ${progress.speed}` : ''}
+        {progress.left
+          ? ` · ${progress.left}`
+          : progress.stalled
+            ? ' · not updating, it may be stuck'
+            : ' · working out the time left…'}
+      </p>
+    </div>
+  );
 }
 
 function Pipeline({ stage }: { stage: DiscStage | 'scanning' }) {
@@ -708,6 +745,7 @@ function WorkingSection({ state }: { state: DiscsState }) {
                   (disc.stage === 'copying' || disc.stage === 'extracting') &&
                   ' Nothing has been written for a while, so it may be stuck.'}
               </p>
+              {disc.copy && <CopyBar copy={disc.copy} />}
               {disc.conversion && (
                 <div className="mt-2">
                   <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
