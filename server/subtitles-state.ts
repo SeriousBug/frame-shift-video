@@ -187,6 +187,9 @@ export async function readSubtitlesState(
         ok: raw.ok === true,
         message: typeof raw.message === 'string' ? raw.message : '',
         at: typeof raw.at === 'number' ? raw.at : 0,
+        details: Array.isArray(raw.details)
+          ? raw.details.filter((d): d is string => typeof d === 'string')
+          : [],
       });
     }
   } catch {

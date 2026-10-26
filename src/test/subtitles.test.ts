@@ -126,6 +126,39 @@ describe('the subtitles state', () => {
     expect(state.files[1]?.status).toBe('queued');
   });
 
+  test('keeps the words that were corrected, and ignores a details field that is not a list', async () => {
+    await writeIndex();
+    await write(
+      '_subs/done/a.json',
+      JSON.stringify({
+        path: DUMA,
+        ok: true,
+        message: 'ok',
+        at: 1,
+        details: ['commetion → commotion', 7, 'broccoll → broccoli'],
+      }),
+    );
+    await write(
+      '_subs/done/b.json',
+      JSON.stringify({
+        path: HERO,
+        ok: true,
+        message: 'ok',
+        at: 2,
+        details: 'x',
+      }),
+    );
+    await write(
+      '_subs/done/c.json',
+      JSON.stringify({ path: HERO, ok: true, message: 'ok', at: 3 }),
+    );
+    const state = await readSubtitlesState(dir);
+    const byAt = Object.fromEntries(state.recent.map((r) => [r.at, r.details]));
+    expect(byAt[1]).toEqual(['commetion → commotion', 'broccoll → broccoli']);
+    expect(byAt[2]).toEqual([]);
+    expect(byAt[3]).toEqual([]);
+  });
+
   test('keeps what was done, newest first', async () => {
     await writeIndex();
     await write(
