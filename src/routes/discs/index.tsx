@@ -126,6 +126,25 @@ function describeNote(note: DiscNext): string {
   return note.name ? `the movie ${note.name}` : 'a movie';
 }
 
+/**
+ * The name the person picked for the disc that is being read or copied right now, in words, or
+ * null. The disc's own label is all the queue knows until the copy is done, so without this the
+ * row looks as if the pick was lost.
+ */
+export function chosenName(
+  next: DiscNext | null,
+  stage: DiscStage | 'scanning',
+): string | null {
+  if (!next?.current) return null;
+  if (stage !== 'scanning' && stage !== 'copying') return null;
+  if (next.mode === 'tv') {
+    return next.show
+      ? `${next.show}${next.season ? `, season ${next.season}` : ''}`
+      : null;
+  }
+  return next.name ?? null;
+}
+
 function secondsAgo(epochSeconds: number | null): string {
   if (!epochSeconds) return 'never';
   const seconds = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
@@ -675,6 +694,12 @@ function WorkingSection({ state }: { state: DiscsState }) {
               <strong className="text-gray-900 dark:text-white">
                 {disc.title}
               </strong>
+              {chosenName(state.next, disc.stage) && (
+                <p className="mt-1 text-sm font-medium text-green-700 dark:text-green-400">
+                  ✓ You picked “{chosenName(state.next, disc.stage)}”. The disc
+                  gets that name when the copy is done.
+                </p>
+              )}
               <Pipeline stage={disc.stage} />
               <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                 {describeStage(disc)}
