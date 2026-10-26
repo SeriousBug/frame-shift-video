@@ -121,6 +121,44 @@ describe('readDiscsState', () => {
     });
   });
 
+  test('reads how far the copy of a disc has got, only while it is being copied', async () => {
+    const progress =
+      'total=4600000000\nbytes=1200000000\nstarted=1000\nupdated=1600\n';
+    await write('_converting/Copying/STATUS.txt', 'Copying the disc\n');
+    await write('_converting/Copying/stage.txt', 'copying\n');
+    await write('_converting/Copying/progress.txt', progress);
+    // A disc past the copy has no bar, even if an old file was left behind.
+    await write('_converting/Later/STATUS.txt', 'x\n');
+    await write('_converting/Later/stage.txt', 'extracting\n');
+    await write('_converting/Later/progress.txt', progress);
+    // Missing, garbled and impossible files give no bar.
+    await write('_converting/Garbled/STATUS.txt', 'x\n');
+    await write('_converting/Garbled/stage.txt', 'copying\n');
+    await write('_converting/Garbled/progress.txt', 'total=abc\nbytes=\n');
+    await write('_converting/Backwards/STATUS.txt', 'x\n');
+    await write('_converting/Backwards/stage.txt', 'copying\n');
+    await write(
+      '_converting/Backwards/progress.txt',
+      'total=100\nbytes=5\nstarted=50\nupdated=10\n',
+    );
+    await write('_converting/Nothing/STATUS.txt', 'x\n');
+    await write('_converting/Nothing/stage.txt', 'copying\n');
+    const state = await readDiscsState(dir);
+    const byName = Object.fromEntries(
+      state.working.map((w) => [w.name, w.copy]),
+    );
+    expect(byName.Copying).toEqual({
+      total: 4600000000,
+      bytes: 1200000000,
+      startedAt: 1000,
+      updatedAt: 1600,
+    });
+    expect(byName.Later).toBeNull();
+    expect(byName.Garbled).toBeNull();
+    expect(byName.Backwards).toBeNull();
+    expect(byName.Nothing).toBeNull();
+  });
+
   test('reads the notes, the logs and the parked discs', async () => {
     await write('ATTENTION - Andre.txt', 'one\ntwo\n');
     await write('ATTENTION - Other.txt', 'three\n');

@@ -47,6 +47,18 @@ export interface DiscAttention {
   lines: string[];
 }
 
+/** How far the copy of a disc has got, as the ripper wrote it. */
+export interface DiscCopy {
+  /** Bytes on the disc */
+  total: number;
+  /** Bytes copied so far */
+  bytes: number;
+  /** Seconds since the epoch when the copy started */
+  startedAt: number;
+  /** Seconds since the epoch when this was last written */
+  updatedAt: number;
+}
+
 /** A disc that is being copied, extracted or converted. */
 export interface DiscWorking {
   /** Its working folder, which is what identifies it */
@@ -63,6 +75,8 @@ export interface DiscWorking {
   conversion: DiscConversion | null;
   /** Seconds since its log was last written, to tell a slow step from a stuck one */
   quietSeconds: number | null;
+  /** How far the copy has got, while the disc is being copied */
+  copy: DiscCopy | null;
 }
 
 /** The steps a disc goes through after it is scanned. */

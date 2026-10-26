@@ -28,6 +28,7 @@ import type {
   DiscCommand,
   DiscCommandResult,
   DiscConversion,
+  DiscCopy,
   DiscDone,
   DiscDrive,
   DiscNext,
@@ -304,6 +305,22 @@ function titleOf(folder: string, manifest: string | null): string {
   return filed || folder.replace(/_+/g, ' ').trim();
 }
 
+/** How far the copy of a disc has got, from the ripper's progress file, or null. */
+async function readCopy(folder: string): Promise<DiscCopy | null> {
+  const text = await readText(path.join(folder, 'progress.txt'));
+  if (text === null) return null;
+  const values = parseKeyValues(text);
+  const total = Number(values.total);
+  const bytes = Number(values.bytes);
+  const startedAt = Number(values.started);
+  const updatedAt = Number(values.updated);
+  if (![total, bytes, startedAt, updatedAt].every(Number.isFinite)) {
+    return null;
+  }
+  if (total <= 0 || bytes < 0 || updatedAt < startedAt) return null;
+  return { total, bytes, startedAt, updatedAt };
+}
+
 async function readWorking(
   dir: string,
   jobs: QueueJob[],
@@ -326,14 +343,16 @@ async function readWorking(
     } catch {
       quietSeconds = null;
     }
+    const discStage = stageOf(stage, manifest !== null, queued, conversion);
     working.push({
       name,
       title: titleOf(name, manifest),
-      stage: stageOf(stage, manifest !== null, queued, conversion),
+      stage: discStage,
       lines: lastLines(log ?? '', 6),
       queued,
       conversion,
       quietSeconds,
+      copy: discStage === 'copying' ? await readCopy(folder) : null,
     });
   }
   return working.slice(0, MAX_LIST);
