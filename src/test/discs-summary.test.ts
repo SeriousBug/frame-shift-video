@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { subtitleHint, summarize } from '../routes/discs/index';
+import { chosenName, subtitleHint, summarize } from '../routes/discs/index';
 import type { DiscsState } from '../types/discs';
 import type { SubtitleFile, SubtitlesState } from '../types/subtitles';
 
@@ -117,5 +117,35 @@ describe('the hint about subtitles under the status sentence', () => {
         } as never),
       ),
     ).toBeNull();
+  });
+});
+
+describe('the name you picked, shown on the disc being copied', () => {
+  const movie = {
+    current: true,
+    mode: 'movie' as const,
+    name: 'The Proud Family Movie (2005)',
+  };
+
+  test('is shown while the disc is read or copied', () => {
+    expect(chosenName(movie, 'scanning')).toBe('The Proud Family Movie (2005)');
+    expect(chosenName(movie, 'copying')).toBe('The Proud Family Movie (2005)');
+  });
+
+  test('is not shown once the disc has its name, or for a note meant for the next disc', () => {
+    expect(chosenName(movie, 'extracting')).toBeNull();
+    expect(chosenName(movie, 'converting')).toBeNull();
+    expect(chosenName({ ...movie, current: false }, 'copying')).toBeNull();
+    expect(chosenName(null, 'copying')).toBeNull();
+    expect(chosenName({ current: true, mode: 'movie' }, 'copying')).toBeNull();
+  });
+
+  test('names a show with its season', () => {
+    expect(
+      chosenName(
+        { current: true, mode: 'tv', show: 'Show (2001)', season: 2 },
+        'copying',
+      ),
+    ).toBe('Show (2001), season 2');
   });
 });
