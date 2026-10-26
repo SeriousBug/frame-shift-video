@@ -512,6 +512,18 @@ export function SubtitlesSection() {
                     <div className="text-sm text-gray-600 dark:text-gray-400 break-words">
                       {result.message}
                     </div>
+                    {result.details.length > 0 && (
+                      <details className="mt-1">
+                        <summary className="flex min-h-[44px] cursor-pointer items-center text-sm text-gray-600 dark:text-gray-300">
+                          What was changed ({result.details.length})
+                        </summary>
+                        <ul className="mb-2 list-disc pl-6 text-sm text-gray-700 dark:text-gray-300">
+                          {result.details.map((detail, index) => (
+                            <li key={index}>{detail}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </li>
                 ))}
               </ul>

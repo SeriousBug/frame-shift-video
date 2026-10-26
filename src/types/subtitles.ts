@@ -40,6 +40,8 @@ export interface SubtitleResult {
   message: string;
   /** Unix seconds */
   at: number;
+  /** Words that were corrected, as "old → new" (the first few) */
+  details: string[];
 }
 
 export interface SubtitlesState {
