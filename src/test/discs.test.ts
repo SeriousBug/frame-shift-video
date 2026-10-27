@@ -17,6 +17,8 @@ import {
   setAutoScan,
   setMovieOnly,
   setPreset,
+  savePreset,
+  deletePreset,
 } from '../../server/disc-state';
 
 let dir: string;
@@ -725,5 +727,299 @@ describe('how discs are converted', () => {
     expect(
       (await fs.readFile(path.join(dir, '_settings', 'preset'), 'utf8')).trim(),
     ).toBe('h264-mp4');
+  });
+});
+
+describe('presets of your own', () => {
+  // What the ripper's deploy writes, so these tests start from the real list.
+  const seed = [
+    {
+      id: 'hevc-mkv',
+      name: 'Small and sharp (HEVC, MKV)',
+      container: 'mkv',
+      video: 'libx265',
+      quality: 22,
+      speed: 'faster',
+      tenBit: true,
+      audio: 'copy',
+      deinterlace: true,
+      subtitles: 'keep',
+    },
+    {
+      id: 'h264-mp4',
+      name: 'Plays on anything (H.264, MP4)',
+      container: 'mp4',
+      video: 'libx264',
+      quality: 20,
+      speed: 'faster',
+      tenBit: false,
+      audio: 'aac',
+      deinterlace: true,
+      subtitles: 'none',
+    },
+    {
+      id: 'h264-mkv',
+      name: 'Plays on most things, keeps subtitles (H.264, MKV)',
+      container: 'mkv',
+      video: 'libx264',
+      quality: 20,
+      speed: 'faster',
+      tenBit: false,
+      audio: 'copy',
+      deinterlace: true,
+      subtitles: 'keep',
+    },
+    {
+      id: 'original-mkv',
+      name: 'Untouched picture, big files (no re-encode, MKV)',
+      container: 'mkv',
+      video: 'copy',
+      quality: 22,
+      speed: 'faster',
+      tenBit: false,
+      audio: 'copy',
+      deinterlace: false,
+      subtitles: 'keep',
+    },
+  ];
+  const mine = {
+    name: 'My DVDs',
+    container: 'mkv',
+    video: 'libx265',
+    quality: 18,
+    speed: 'slow',
+    tenBit: true,
+    audio: 'ac3',
+    deinterlace: true,
+    subtitles: 'keep',
+  };
+  const file = () => path.join(dir, '_settings', 'presets.json');
+  const onDisk = async () => JSON.parse(await fs.readFile(file(), 'utf8'));
+
+  beforeEach(async () => {
+    await write('_settings/presets.json', JSON.stringify({ presets: seed }));
+  });
+
+  test('a new preset is added after the ones that come with it, and can be chosen', async () => {
+    const saved = await savePreset(dir, mine);
+    expect(saved).toMatchObject({
+      id: 'custom-my-dvds',
+      name: 'My DVDs',
+      quality: 18,
+      speed: 'slow',
+      audio: 'ac3',
+      builtIn: false,
+    });
+    const items = (await onDisk()).presets;
+    expect(items.slice(0, 4)).toEqual(seed);
+    expect(items[4]).toMatchObject({ id: 'custom-my-dvds', quality: 18 });
+    const { convert } = await readDiscsState(dir);
+    expect(convert.presets.map((preset) => preset.builtIn)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
+    await setPreset(dir, 'custom-my-dvds');
+    expect((await readDiscsState(dir)).convert.chosen).toBe('custom-my-dvds');
+  });
+
+  test('the file stays readable by the ripper: other users can read it', async () => {
+    await savePreset(dir, mine);
+    expect((await fs.stat(file())).mode & 0o666).toBe(0o666);
+    expect((await fs.readdir(path.join(dir, '_settings'))).sort()).toEqual([
+      'presets.json',
+    ]);
+  });
+
+  test('the file holds only what the ripper reads', async () => {
+    const first = await savePreset(dir, mine);
+    await savePreset(dir, { ...mine, id: first.id, quality: 19 });
+    const items = (await onDisk()).presets;
+    expect(Object.keys(items[4]).sort()).toEqual(
+      [
+        'audio',
+        'container',
+        'deinterlace',
+        'id',
+        'name',
+        'quality',
+        'speed',
+        'subtitles',
+        'tenBit',
+        'video',
+      ].sort(),
+    );
+  });
+
+  test('two with the same name get different ids', async () => {
+    const first = await savePreset(dir, mine);
+    const second = await savePreset(dir, mine);
+    expect([first.id, second.id]).toEqual([
+      'custom-my-dvds',
+      'custom-my-dvds-2',
+    ]);
+  });
+
+  test('changing one keeps its id and its place, and leaves the others alone', async () => {
+    const first = await savePreset(dir, mine);
+    await savePreset(dir, { ...mine, name: 'Second' });
+    const changed = await savePreset(dir, {
+      ...mine,
+      id: first.id,
+      name: 'Renamed',
+      quality: 30,
+    });
+    expect(changed.id).toBe(first.id);
+    const items = (await onDisk()).presets;
+    expect(items.map((item: { id: string }) => item.id)).toEqual([
+      'hevc-mkv',
+      'h264-mp4',
+      'h264-mkv',
+      'original-mkv',
+      'custom-my-dvds',
+      'custom-second',
+    ]);
+    expect(items[4]).toMatchObject({ name: 'Renamed', quality: 30 });
+    expect(items[5]).toMatchObject({ name: 'Second', quality: 18 });
+  });
+
+  test('the ones that come with it cannot be changed or deleted', async () => {
+    const before = await fs.readFile(file(), 'utf8');
+    await expect(
+      savePreset(dir, { ...mine, id: 'hevc-mkv', quality: 40 }),
+    ).rejects.toThrow('built-in');
+    await expect(deletePreset(dir, 'hevc-mkv')).rejects.toThrow('built-in');
+    await expect(deletePreset(dir, 'original-mkv')).rejects.toThrow('built-in');
+    expect(await fs.readFile(file(), 'utf8')).toBe(before);
+  });
+
+  test('what is wrong is said in plain words, and nothing is written', async () => {
+    const before = await fs.readFile(file(), 'utf8');
+    const bad: [Record<string, unknown>, string][] = [
+      [{ ...mine, name: '   ' }, 'name'],
+      [{ ...mine, name: 'x'.repeat(61) }, '60'],
+      [{ ...mine, quality: 52 }, 'Quality'],
+      [{ ...mine, quality: -1 }, 'Quality'],
+      [{ ...mine, quality: 22.5 }, 'Quality'],
+      [{ ...mine, quality: '22' }, 'Quality'],
+      [{ ...mine, container: 'avi; rm -rf /' }, 'file type'],
+      [{ ...mine, video: 'libvpx' }, 'video'],
+      [{ ...mine, speed: 'warp' }, 'speed'],
+      [{ ...mine, audio: 'opus' }, 'sound'],
+      [{ ...mine, subtitles: 'maybe' }, 'subtitles'],
+      [{ ...mine, id: 'not-there' }, 'not there'],
+    ];
+    for (const [input, word] of bad) {
+      await expect(savePreset(dir, input)).rejects.toThrow(word);
+    }
+    expect(await fs.readFile(file(), 'utf8')).toBe(before);
+  });
+
+  test('values that cannot work together are corrected, as the ripper does', async () => {
+    const mp4 = await savePreset(dir, {
+      ...mine,
+      name: 'Phone',
+      container: 'mp4',
+      subtitles: 'keep',
+    });
+    expect(mp4.subtitles).toBe('none');
+    const old = await savePreset(dir, {
+      ...mine,
+      name: 'Old',
+      video: 'libx264',
+      tenBit: true,
+    });
+    expect(old.tenBit).toBe(false);
+    const raw = await savePreset(dir, {
+      ...mine,
+      name: 'Raw',
+      video: 'copy',
+      deinterlace: true,
+    });
+    expect(raw.deinterlace).toBe(false);
+  });
+
+  test('a name with odd characters stays text, and the id is only letters, digits and dashes', async () => {
+    const saved = await savePreset(dir, {
+      ...mine,
+      name: '../../etc/pass\nwd "; rm -rf / $(x)\u0007',
+    });
+    expect(saved.id).toMatch(/^custom-[a-z0-9-]+$/);
+    expect(saved.id.length).toBeLessThanOrEqual(40);
+    expect(saved.name).not.toMatch(/[\u0000-\u001f]/);
+    expect(saved.name).toContain('etc/pass');
+    const nothing = await savePreset(dir, { ...mine, name: '日本語' });
+    expect(nothing.id).toBe('custom-preset');
+  });
+
+  test('deleting removes only that one, and a deleted pick falls back to the default', async () => {
+    const one = await savePreset(dir, mine);
+    await savePreset(dir, { ...mine, name: 'Keep me' });
+    await setPreset(dir, one.id);
+    await deletePreset(dir, one.id);
+    const { convert } = await readDiscsState(dir);
+    expect(convert.presets.map((preset) => preset.id)).toEqual([
+      'hevc-mkv',
+      'h264-mp4',
+      'h264-mkv',
+      'original-mkv',
+      'custom-keep-me',
+    ]);
+    expect(convert.chosen).toBe('hevc-mkv');
+    await expect(deletePreset(dir, one.id)).rejects.toThrow('not there');
+  });
+
+  test('deleting the chosen one clears the pick, so a new one with the same name is not chosen by surprise', async () => {
+    const one = await savePreset(dir, mine);
+    await setPreset(dir, one.id);
+    await deletePreset(dir, one.id);
+    await expect(
+      fs.stat(path.join(dir, '_settings', 'preset')),
+    ).rejects.toThrow();
+    await savePreset(dir, mine);
+    expect((await readDiscsState(dir)).convert.chosen).toBe('hevc-mkv');
+    // A pick that is somebody else's is left alone.
+    await setPreset(dir, 'h264-mp4');
+    await deletePreset(dir, 'custom-my-dvds');
+    expect((await readDiscsState(dir)).convert.chosen).toBe('h264-mp4');
+  });
+
+  test('without the list there is nothing to add to, and no file is made', async () => {
+    await fs.rm(file());
+    await expect(savePreset(dir, mine)).rejects.toThrow('not there yet');
+    await expect(fs.stat(file())).rejects.toThrow();
+    await write('_settings/presets.json', '{not json');
+    await expect(savePreset(dir, mine)).rejects.toThrow('not there yet');
+    expect(await fs.readFile(file(), 'utf8')).toBe('{not json');
+  });
+
+  test('saves at the same moment all land', async () => {
+    await Promise.all(
+      Array.from({ length: 12 }, (_, n) =>
+        savePreset(dir, { ...mine, name: `Number ${n}` }),
+      ),
+    );
+    expect((await onDisk()).presets).toHaveLength(16);
+  });
+
+  test('the list stops growing at 30', async () => {
+    for (let n = 0; n < 26; n++) {
+      await savePreset(dir, { ...mine, name: `Number ${n}` });
+    }
+    await expect(
+      savePreset(dir, { ...mine, name: 'One more' }),
+    ).rejects.toThrow('plenty');
+    expect((await onDisk()).presets).toHaveLength(30);
+  });
+
+  test('entries the page does not understand are kept when it saves', async () => {
+    await write(
+      '_settings/presets.json',
+      JSON.stringify({ presets: [...seed, { id: 'Bad Id', odd: true }] }),
+    );
+    await savePreset(dir, mine);
+    expect((await onDisk()).presets[4]).toEqual({ id: 'Bad Id', odd: true });
   });
 });

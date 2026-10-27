@@ -45,6 +45,8 @@ import {
   clearOldCopies,
   setDiscMovieOnly,
   setDiscPreset,
+  saveDiscPreset,
+  deleteDiscPreset,
   setDiscNext,
   dismissDiscAttention,
   sendDiscCommand,
@@ -558,6 +560,30 @@ export function useSetDiscPreset() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: setDiscPreset,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to make a conversion preset of your own, or change one
+ */
+export function useSaveDiscPreset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveDiscPreset,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to delete a conversion preset you made
+ */
+export function useDeleteDiscPreset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteDiscPreset,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
   });

@@ -135,9 +135,27 @@ export interface DiscPreset {
   container: string;
   /** libx265, libx264, libsvtav1 or copy */
   video: string;
+  /** How good the picture is kept, 0 to 51. Lower is better and bigger */
+  quality: number;
+  /** ultrafast to veryslow: slower takes longer and makes smaller files */
+  speed: string;
+  /** 10-bit color */
+  tenBit: boolean;
   /** copy, aac or ac3 */
   audio: string;
+  /** Clean up interlaced video */
+  deinterlace: boolean;
+  /** keep or none */
+  subtitles: string;
+  /** One of the ones that come with the ripper: it cannot be changed or deleted */
+  builtIn: boolean;
 }
+
+/** What the person fills in to make or change a preset of their own. */
+export type DiscPresetInput = Omit<DiscPreset, 'id' | 'builtIn'> & {
+  /** Present when changing one that exists, left out to make a new one */
+  id?: string;
+};
 
 export interface DiscConvert {
   presets: DiscPreset[];

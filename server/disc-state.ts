@@ -474,43 +474,92 @@ const PRESET_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const CONTAINERS = ['mkv', 'mp4'];
 const VIDEOS = ['libx265', 'libx264', 'libsvtav1', 'copy'];
 const AUDIOS = ['copy', 'aac', 'ac3'];
+const SUBTITLES = ['keep', 'none'];
+const SPEEDS = [
+  'ultrafast',
+  'superfast',
+  'veryfast',
+  'faster',
+  'fast',
+  'medium',
+  'slow',
+  'slower',
+  'veryslow',
+];
+/** The ones the ripper writes the first time: they are not changed or deleted from the page. */
+const BUILT_IN_PRESETS = ['hevc-mkv', 'h264-mp4', 'h264-mkv', 'original-mkv'];
+/** The most presets the page will let the list grow to. */
+const MAX_PRESETS = 30;
+
+/**
+ * One preset made safe, or null when it has no usable id or name. The same rules as the ripper's
+ * disc-preset: values that cannot work together are corrected, so a preset is always usable.
+ */
+function cleanPreset(raw: unknown): DiscPreset | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Record<string, unknown>;
+  if (typeof item.id !== 'string' || !PRESET_ID.test(item.id)) return null;
+  if (typeof item.name !== 'string') return null;
+  const name = [...item.name]
+    .map((char) => (/\p{C}/u.test(char) ? ' ' : char))
+    .join('')
+    .trim()
+    .slice(0, 60);
+  if (!name) return null;
+  const container = CONTAINERS.includes(String(item.container))
+    ? String(item.container)
+    : 'mkv';
+  const video = VIDEOS.includes(String(item.video))
+    ? String(item.video)
+    : 'libx265';
+  const quality =
+    typeof item.quality === 'number' &&
+    Number.isFinite(item.quality) &&
+    item.quality >= 0 &&
+    item.quality <= 51
+      ? Math.trunc(item.quality)
+      : 22;
+  return {
+    id: item.id,
+    name,
+    container,
+    video,
+    quality,
+    speed: SPEEDS.includes(String(item.speed)) ? String(item.speed) : 'faster',
+    // The ffmpeg build in Frame Shift has 10-bit for x265 and AV1 only.
+    tenBit:
+      item.tenBit === true && (video === 'libx265' || video === 'libsvtav1'),
+    audio: AUDIOS.includes(String(item.audio)) ? String(item.audio) : 'copy',
+    // A copied picture cannot be filtered.
+    deinterlace: item.deinterlace !== false && video !== 'copy',
+    // A DVD's subtitles are pictures, which an MP4 cannot hold.
+    subtitles:
+      container === 'mp4' || item.subtitles === 'none' ? 'none' : 'keep',
+    builtIn: BUILT_IN_PRESETS.includes(item.id),
+  };
+}
+
+async function readPresetItems(dir: string): Promise<unknown[] | null> {
+  const text = await readText(path.join(dir, '_settings', 'presets.json'));
+  try {
+    const items: unknown = JSON.parse(text ?? '').presets;
+    return Array.isArray(items) ? items : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The conversion presets the ripper offers and the one chosen, from _settings/presets.json and
- * _settings/preset. The ripper writes the file the first time it queues a disc, so before that
- * there are none to show.
+ * _settings/preset. The deploy writes the file, so it is there before the first disc.
  */
-async function readConvert(dir: string): Promise<DiscConvert> {
-  const text = await readText(path.join(dir, '_settings', 'presets.json'));
+export async function readConvert(dir: string): Promise<DiscConvert> {
   const presets: DiscPreset[] = [];
-  try {
-    const items: unknown = JSON.parse(text ?? '').presets;
-    for (const item of Array.isArray(items) ? items : []) {
-      const preset = item as Record<string, unknown>;
-      if (
-        typeof preset?.id === 'string' &&
-        PRESET_ID.test(preset.id) &&
-        typeof preset.name === 'string' &&
-        preset.name.trim() &&
-        !presets.some((existing) => existing.id === preset.id)
-      ) {
-        presets.push({
-          id: preset.id,
-          name: preset.name.trim().slice(0, 60),
-          container: CONTAINERS.includes(String(preset.container))
-            ? String(preset.container)
-            : 'mkv',
-          video: VIDEOS.includes(String(preset.video))
-            ? String(preset.video)
-            : 'libx265',
-          audio: AUDIOS.includes(String(preset.audio))
-            ? String(preset.audio)
-            : 'copy',
-        });
-      }
+  for (const item of (await readPresetItems(dir)) ?? []) {
+    const preset = cleanPreset(item);
+    if (preset && !presets.some((existing) => existing.id === preset.id)) {
+      presets.push(preset);
     }
-  } catch {
-    // No file yet, or one that cannot be read: nothing to choose from.
   }
   const picked = (
     await readText(path.join(dir, '_settings', 'preset'))
@@ -532,6 +581,138 @@ export async function setPreset(dir: string, id: string): Promise<void> {
   }
   await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
   await fs.writeFile(path.join(dir, '_settings', 'preset'), `${id}\n`);
+}
+
+/** A preset as the file holds it: whether it is built in is worked out when it is read. */
+function stored(preset: DiscPreset): Omit<DiscPreset, 'builtIn'> {
+  const { builtIn: _builtIn, ...rest } = preset;
+  return rest;
+}
+
+/** The edits to the list run one after the other, so two at once cannot lose one. */
+let presetEdits: Promise<unknown> = Promise.resolve();
+
+function editPresetList<T>(task: () => Promise<T>): Promise<T> {
+  const run = presetEdits.then(task, task);
+  presetEdits = run.catch(() => undefined);
+  return run;
+}
+
+async function writePresetItems(dir: string, items: unknown[]): Promise<void> {
+  const file = path.join(dir, '_settings', 'presets.json');
+  const temp = `${file}.${randomUUID()}.tmp`;
+  await fs.writeFile(temp, `${JSON.stringify({ presets: items }, null, 2)}\n`);
+  // The ripper reads it as another user.
+  await fs.chmod(temp, 0o666);
+  await fs.rename(temp, file);
+}
+
+/** A readable id for a new preset, not used by any in the list. */
+function newPresetId(name: string, taken: Set<string>): string {
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30)
+      .replace(/-+$/g, '') || 'preset';
+  let id = `custom-${slug}`;
+  for (let n = 2; taken.has(id); n++) id = `custom-${slug}-${n}`;
+  return id;
+}
+
+function oneOf(value: unknown, allowed: string[], what: string): string {
+  if (typeof value === 'string' && allowed.includes(value)) return value;
+  throw new Error(`Pick a ${what} from the list.`);
+}
+
+/**
+ * Makes a preset of the person's own, or changes one they made (when the input has an id).
+ * What is wrong with the input comes back in plain words; values that cannot work together
+ * are corrected the way the ripper does.
+ */
+export async function savePreset(
+  dir: string,
+  input: Record<string, unknown>,
+): Promise<DiscPreset> {
+  const name = (typeof input.name === 'string' ? input.name : '')
+    .replace(/\p{C}/gu, ' ')
+    .trim();
+  if (!name) throw new Error('Give the preset a name.');
+  if (name.length > 60) throw new Error('Keep the name to 60 letters or less.');
+  const quality = input.quality;
+  if (
+    typeof quality !== 'number' ||
+    !Number.isInteger(quality) ||
+    quality < 0 ||
+    quality > 51
+  ) {
+    throw new Error('Quality is a whole number from 0 to 51.');
+  }
+  const fields = {
+    name,
+    container: oneOf(input.container, CONTAINERS, 'file type'),
+    video: oneOf(input.video, VIDEOS, 'video'),
+    quality,
+    speed: oneOf(input.speed, SPEEDS, 'speed'),
+    tenBit: input.tenBit === true,
+    audio: oneOf(input.audio, AUDIOS, 'sound'),
+    deinterlace: input.deinterlace === true,
+    subtitles: oneOf(input.subtitles, SUBTITLES, 'choice for subtitles'),
+  };
+  return editPresetList(async () => {
+    const items = await readPresetItems(dir);
+    if (!items) {
+      throw new Error(
+        'The list of choices is not there yet, so nothing can be added to it.',
+      );
+    }
+    const ids = new Set(items.map((item) => cleanPreset(item)?.id ?? ''));
+    let saved: DiscPreset | null;
+    if (typeof input.id === 'string') {
+      const id = input.id;
+      const at = items.findIndex((item) => cleanPreset(item)?.id === id);
+      if (at < 0) throw new Error('That preset is not there any more.');
+      if (BUILT_IN_PRESETS.includes(id)) {
+        throw new Error(
+          'The built-in presets cannot be changed. Make your own.',
+        );
+      }
+      saved = cleanPreset({ id, ...fields });
+      items[at] = saved && stored(saved);
+    } else {
+      if (ids.size >= MAX_PRESETS) {
+        throw new Error(
+          'That is plenty of presets. Delete one you do not use.',
+        );
+      }
+      saved = cleanPreset({ id: newPresetId(name, ids), ...fields });
+      if (saved) items.push(stored(saved));
+    }
+    if (!saved) throw new Error('That preset cannot be saved.');
+    await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
+    await writePresetItems(dir, items);
+    return saved;
+  });
+}
+
+/** Deletes a preset the person made. The built-in ones stay. */
+export async function deletePreset(dir: string, id: string): Promise<void> {
+  if (BUILT_IN_PRESETS.includes(id)) {
+    throw new Error('The built-in presets cannot be deleted.');
+  }
+  await editPresetList(async () => {
+    const items = await readPresetItems(dir);
+    const at = (items ?? []).findIndex((item) => cleanPreset(item)?.id === id);
+    if (!items || at < 0) throw new Error('That preset is not there any more.');
+    items.splice(at, 1);
+    await writePresetItems(dir, items);
+    // A pick that points at what was just deleted would choose a new preset made with the
+    // same name, so the pick goes too and the default is used.
+    const pick = path.join(dir, '_settings', 'preset');
+    if ((await readText(pick))?.trim() === id)
+      await fs.rm(pick, { force: true });
+  });
 }
 
 /** Turns ejecting on or off for the ripper. */

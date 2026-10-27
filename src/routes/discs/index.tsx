@@ -6,6 +6,7 @@ import {
   setAllSections,
   showSection,
 } from '@/components/collapsible-card';
+import { ConvertChoice } from '@/components/convert-choice';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import { copyProgress } from '@/lib/copy-progress';
@@ -34,7 +35,6 @@ import type {
   DiscCommand,
   DiscCommandResult,
   DiscConversion,
-  DiscConvert,
   DiscCopy,
   DiscNext,
   DiscParked,
@@ -303,57 +303,6 @@ function DetailsFields({
         </div>
       )}
     </div>
-  );
-}
-
-/** The choice of how discs are converted, from the list the ripper keeps in its settings file. */
-function ConvertChoice({
-  convert,
-  folder,
-  pending,
-  onChoose,
-}: {
-  convert: DiscConvert;
-  folder: string;
-  pending: boolean;
-  onChoose: (id: string) => void;
-}) {
-  return (
-    <fieldset className="mt-4">
-      <legend className="font-medium text-gray-900 dark:text-white">
-        What to turn discs into
-      </legend>
-      {convert.presets.length === 0 ? (
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          The choices show up here after the next disc is sent to Frame Shift.
-          Until then discs are made as small, sharp HEVC files in MKV.
-        </p>
-      ) : (
-        <div className="mt-2 space-y-1">
-          {convert.presets.map((choice) => (
-            <label
-              key={choice.id}
-              className="flex items-center gap-2 text-gray-900 dark:text-white"
-            >
-              <input
-                type="radio"
-                name="convert-preset"
-                checked={choice.id === convert.chosen}
-                disabled={pending}
-                onChange={() => onChoose(choice.id)}
-              />
-              {choice.name}
-            </label>
-          ))}
-        </div>
-      )}
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        This applies to discs sent to Frame Shift from now on. One that is
-        already waiting keeps what it was given. Finished discs are put in the{' '}
-        <strong>{folder}</strong> folder. Only MKV files get their subtitles
-        turned into text.
-      </p>
-    </fieldset>
   );
 }
 

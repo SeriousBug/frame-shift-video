@@ -17,6 +17,7 @@ import type {
   DiscCommandResult,
   DiscNext,
   DiscsState,
+  DiscPresetInput,
 } from '@/types/discs';
 
 // Base API URL
@@ -809,6 +810,36 @@ export async function setDiscPreset(id: string): Promise<void> {
 
   if (!response.ok) {
     throw await discError(response, 'Failed to change how discs are converted');
+  }
+}
+
+/**
+ * Make a conversion preset of your own, or change one you made
+ */
+export async function saveDiscPreset(preset: DiscPresetInput): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/presets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(preset),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to save the preset');
+  }
+}
+
+/**
+ * Delete a conversion preset you made
+ */
+export async function deleteDiscPreset(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/presets`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to delete the preset');
   }
 }
 
