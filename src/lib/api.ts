@@ -798,6 +798,21 @@ export async function setDiscMovieOnly(enabled: boolean): Promise<void> {
 }
 
 /**
+ * Choose how discs queued from now on are converted
+ */
+export async function setDiscPreset(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/discs/preset`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+
+  if (!response.ok) {
+    throw await discError(response, 'Failed to change how discs are converted');
+  }
+}
+
+/**
  * Turn scanning and ripping a disc as it goes in on or off
  */
 export async function setDiscAutoScan(enabled: boolean): Promise<void> {

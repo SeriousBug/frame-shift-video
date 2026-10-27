@@ -16,6 +16,7 @@ import {
   setNext,
   setAutoScan,
   setMovieOnly,
+  setPreset,
 } from '../../server/disc-state';
 
 let dir: string;
@@ -91,6 +92,8 @@ describe('readDiscsState', () => {
       needsYear: [],
       finishedCount: 0,
       recent: [],
+      convert: { presets: [], chosen: '' },
+      outputFolder: '_converted',
     });
   });
 
@@ -610,5 +613,117 @@ describe('the queue', () => {
       conversion: null,
     });
     expect(state.recent.map((done) => done.name)).toEqual(['Duma (2005)']);
+  });
+});
+
+describe('the folder for finished discs', () => {
+  test('finished discs are read from _converted, and old ones from the DVDs folder', async () => {
+    await write('_converted/Stellaluna/Stellaluna.mkv', '');
+    await write('_converted/Andre (2020)/Andre (2020).mkv', '');
+    await write('Old Movie (1999)/Old Movie (1999).mkv', '');
+    const state = await readDiscsState(dir);
+    expect(state.finishedCount).toBe(3);
+    expect(state.needsYear).toEqual(['Stellaluna']);
+    expect(state.recent.map((done) => done.name).sort()).toEqual([
+      'Andre (2020)',
+      'Old Movie (1999)',
+      'Stellaluna',
+    ]);
+    expect(state.outputFolder).toBe('_converted');
+  });
+
+  test('the folder named on the page is used, and a name that leaves the folder is not', async () => {
+    await write('_settings/output', 'Finished\n');
+    await write('Finished/Duma (2005)/Duma (2005).mkv', '');
+    await write('_converted/Other (2001)/Other (2001).mkv', '');
+    let state = await readDiscsState(dir);
+    expect(state.outputFolder).toBe('Finished');
+    expect(state.recent.map((done) => done.name)).toEqual(['Duma (2005)']);
+    await fs.rm(path.join(dir, 'Finished'), { recursive: true });
+    await write('_settings/output', '../escape\n');
+    state = await readDiscsState(dir);
+    expect(state.outputFolder).toBe('_converted');
+    expect(state.recent.map((done) => done.name)).toEqual(['Other (2001)']);
+  });
+});
+
+describe('how discs are converted', () => {
+  const presets = JSON.stringify({
+    presets: [
+      {
+        id: 'hevc-mkv',
+        name: 'Small and sharp',
+        container: 'mkv',
+        video: 'libx265',
+        audio: 'copy',
+      },
+      {
+        id: 'h264-mp4',
+        name: 'Plays on anything',
+        container: 'mp4',
+        video: 'libx264',
+        audio: 'aac',
+      },
+      { id: 'Bad Id', name: 'Not usable' },
+      { id: 'h264-mp4', name: 'A repeat' },
+      {
+        id: 'evil',
+        name: 'Evil',
+        container: 'avi; rm -rf /',
+        video: 'x',
+        audio: 'y',
+      },
+    ],
+  });
+
+  test('lists the usable presets and which is chosen', async () => {
+    await write('_settings/presets.json', presets);
+    await write('_settings/preset', 'h264-mp4\n');
+    const { convert } = await readDiscsState(dir);
+    expect(convert.chosen).toBe('h264-mp4');
+    expect(convert.presets.map((preset) => preset.id)).toEqual([
+      'hevc-mkv',
+      'h264-mp4',
+      'evil',
+    ]);
+    expect(convert.presets[1]).toMatchObject({
+      container: 'mp4',
+      video: 'libx264',
+      audio: 'aac',
+    });
+    // Anything that is not on the ripper's list of values is shown as its default.
+    expect(convert.presets[2]).toMatchObject({
+      container: 'mkv',
+      video: 'libx265',
+      audio: 'copy',
+    });
+  });
+
+  test('a missing pick means the default, and no file means no choices', async () => {
+    expect((await readDiscsState(dir)).convert).toEqual({
+      presets: [],
+      chosen: '',
+    });
+    await write('_settings/presets.json', presets);
+    await write('_settings/preset', 'gone\n');
+    expect((await readDiscsState(dir)).convert.chosen).toBe('hevc-mkv');
+    await write('_settings/presets.json', '{not json');
+    expect((await readDiscsState(dir)).convert).toEqual({
+      presets: [],
+      chosen: '',
+    });
+  });
+
+  test('choosing writes the pick for the ripper, and only a listed one is accepted', async () => {
+    await write('_settings/presets.json', presets);
+    await setPreset(dir, 'h264-mp4');
+    expect(
+      (await fs.readFile(path.join(dir, '_settings', 'preset'), 'utf8')).trim(),
+    ).toBe('h264-mp4');
+    await expect(setPreset(dir, '../../etc/passwd')).rejects.toThrow();
+    await expect(setPreset(dir, 'nope')).rejects.toThrow();
+    expect(
+      (await fs.readFile(path.join(dir, '_settings', 'preset'), 'utf8')).trim(),
+    ).toBe('h264-mp4');
   });
 });

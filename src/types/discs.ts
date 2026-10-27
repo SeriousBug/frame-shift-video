@@ -126,6 +126,25 @@ export interface DiscParked {
   suggestion: DiscSuggestion | null;
 }
 
+/** One way discs can be converted, as the ripper's settings file lists it. */
+export interface DiscPreset {
+  id: string;
+  /** What the person sees */
+  name: string;
+  /** mkv or mp4 */
+  container: string;
+  /** libx265, libx264, libsvtav1 or copy */
+  video: string;
+  /** copy, aac or ac3 */
+  audio: string;
+}
+
+export interface DiscConvert {
+  presets: DiscPreset[];
+  /** The id of the preset new discs are converted with */
+  chosen: string;
+}
+
 export interface DiscsState {
   /** Whether the DVDs folder exists on the server */
   available: boolean;
@@ -148,6 +167,10 @@ export interface DiscsState {
   finishedCount: number;
   /** The last few filed, newest first */
   recent: DiscDone[];
+  /** How discs are converted when they are sent to Frame Shift */
+  convert: DiscConvert;
+  /** The folder in the DVDs folder where finished discs are put */
+  outputFolder: string;
 }
 
 /** What the page can ask the host to do. */

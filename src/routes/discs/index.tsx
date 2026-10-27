@@ -25,6 +25,7 @@ import {
   useSetDiscEject,
   useSetDiscAutoScan,
   useSetDiscMovieOnly,
+  useSetDiscPreset,
   useSetDiscNext,
   useDismissDiscAttention,
   useDiscCommand,
@@ -33,6 +34,7 @@ import type {
   DiscCommand,
   DiscCommandResult,
   DiscConversion,
+  DiscConvert,
   DiscCopy,
   DiscNext,
   DiscParked,
@@ -304,10 +306,62 @@ function DetailsFields({
   );
 }
 
+/** The choice of how discs are converted, from the list the ripper keeps in its settings file. */
+function ConvertChoice({
+  convert,
+  folder,
+  pending,
+  onChoose,
+}: {
+  convert: DiscConvert;
+  folder: string;
+  pending: boolean;
+  onChoose: (id: string) => void;
+}) {
+  return (
+    <fieldset className="mt-4">
+      <legend className="font-medium text-gray-900 dark:text-white">
+        What to turn discs into
+      </legend>
+      {convert.presets.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          The choices show up here after the next disc is sent to Frame Shift.
+          Until then discs are made as small, sharp HEVC files in MKV.
+        </p>
+      ) : (
+        <div className="mt-2 space-y-1">
+          {convert.presets.map((choice) => (
+            <label
+              key={choice.id}
+              className="flex items-center gap-2 text-gray-900 dark:text-white"
+            >
+              <input
+                type="radio"
+                name="convert-preset"
+                checked={choice.id === convert.chosen}
+                disabled={pending}
+                onChange={() => onChoose(choice.id)}
+              />
+              {choice.name}
+            </label>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        This applies to discs sent to Frame Shift from now on. One that is
+        already waiting keeps what it was given. Finished discs are put in the{' '}
+        <strong>{folder}</strong> folder. Only MKV files get their subtitles
+        turned into text.
+      </p>
+    </fieldset>
+  );
+}
+
 function DriveSection({ state }: { state: DiscsState }) {
   const eject = useSetDiscEject();
   const autoScan = useSetDiscAutoScan();
   const movieOnly = useSetDiscMovieOnly();
+  const preset = useSetDiscPreset();
   const command = useDiscCommand();
   const { drive, run } = state;
 
@@ -375,6 +429,12 @@ function DriveSection({ state }: { state: DiscsState }) {
         Bonus features and trailers on the disc are skipped. TV discs are not
         affected.
       </p>
+      <ConvertChoice
+        convert={state.convert}
+        folder={state.outputFolder}
+        pending={preset.isPending}
+        onChoose={(id) => preset.mutate(id)}
+      />
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-gray-900 dark:text-white">
           <input
@@ -402,7 +462,11 @@ function DriveSection({ state }: { state: DiscsState }) {
       <Answer
         result={command.data}
         error={
-          command.error ?? eject.error ?? autoScan.error ?? movieOnly.error
+          command.error ??
+          eject.error ??
+          autoScan.error ??
+          movieOnly.error ??
+          preset.error
         }
       />
     </Section>

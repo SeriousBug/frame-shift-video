@@ -34,6 +34,7 @@ import {
   discsEjectHandler,
   discsAutoScanHandler,
   discsMovieOnlyHandler,
+  discsPresetHandler,
   discsNextHandler,
   discsAttentionHandler,
   discsCommandsHandler,
@@ -177,6 +178,10 @@ const wrappedDiscsAutoScanHandler = withErrorHandler(
 const wrappedDiscsMovieOnlyHandler = withErrorHandler(
   discsMovieOnlyHandler,
   'DiscsMovieOnlyHandler',
+);
+const wrappedDiscsPresetHandler = withErrorHandler(
+  discsPresetHandler,
+  'DiscsPresetHandler',
 );
 const wrappedHobworkStateHandler = withErrorHandler(
   hobworkStateHandler,
@@ -416,6 +421,9 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/discs/movie-only' && req.method === 'PUT') {
       return await wrappedDiscsMovieOnlyHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/preset' && req.method === 'PUT') {
+      return await wrappedDiscsPresetHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/auto-scan' && req.method === 'PUT') {
       return await wrappedDiscsAutoScanHandler(req, corsHeaders);
