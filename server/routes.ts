@@ -35,6 +35,7 @@ import {
   discsAutoScanHandler,
   discsMovieOnlyHandler,
   discsPresetHandler,
+  discsPresetsHandler,
   discsNextHandler,
   discsAttentionHandler,
   discsCommandsHandler,
@@ -182,6 +183,10 @@ const wrappedDiscsMovieOnlyHandler = withErrorHandler(
 const wrappedDiscsPresetHandler = withErrorHandler(
   discsPresetHandler,
   'DiscsPresetHandler',
+);
+const wrappedDiscsPresetsHandler = withErrorHandler(
+  discsPresetsHandler,
+  'DiscsPresetsHandler',
 );
 const wrappedHobworkStateHandler = withErrorHandler(
   hobworkStateHandler,
@@ -424,6 +429,12 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/discs/preset' && req.method === 'PUT') {
       return await wrappedDiscsPresetHandler(req, corsHeaders);
+    }
+    if (
+      pathname === '/api/discs/presets' &&
+      (req.method === 'POST' || req.method === 'DELETE')
+    ) {
+      return await wrappedDiscsPresetsHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/auto-scan' && req.method === 'PUT') {
       return await wrappedDiscsAutoScanHandler(req, corsHeaders);

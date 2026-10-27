@@ -10,19 +10,37 @@ import {
 
 type Fake = { fontSize: string };
 
+// These tests swap in fakes. Whatever was there before (the DOM the other tests render into)
+// is put back, not deleted, or every test file that runs after this one has no document.
+const original = {
+  localStorage: Object.getOwnPropertyDescriptor(globalThis, 'localStorage'),
+  document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
+};
+
 afterEach(() => {
-  delete (globalThis as { localStorage?: unknown }).localStorage;
-  delete (globalThis as { document?: unknown }).document;
+  for (const [name, descriptor] of Object.entries(original)) {
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+    else delete (globalThis as Record<string, unknown>)[name];
+  }
 });
+
+/** Installs a fake in place of the real one; afterEach puts the real one back. */
+function swapIn(name: 'localStorage' | 'document', value: unknown) {
+  Object.defineProperty(globalThis, name, {
+    value,
+    configurable: true,
+    writable: true,
+  });
+}
 
 function fakeStorage(initial: Record<string, string> = {}) {
   const data = { ...initial };
-  (globalThis as { localStorage?: unknown }).localStorage = {
+  swapIn('localStorage', {
     getItem: (key: string) => data[key] ?? null,
     setItem: (key: string, value: string) => {
       data[key] = value;
     },
-  };
+  });
   return data;
 }
 
@@ -52,23 +70,21 @@ describe('text size', () => {
   });
 
   test('still works when the browser will not let the page store anything', () => {
-    (globalThis as { localStorage?: unknown }).localStorage = {
+    swapIn('localStorage', {
       getItem: () => {
         throw new Error('blocked');
       },
       setItem: () => {
         throw new Error('blocked');
       },
-    };
+    });
     expect(readTextSize()).toBe(100);
     expect(() => saveTextSize(125)).not.toThrow();
   });
 
   test('sets and clears the size of the page text', () => {
     const style: Fake = { fontSize: '' };
-    (globalThis as { document?: unknown }).document = {
-      documentElement: { style },
-    };
+    swapIn('document', { documentElement: { style } });
     applyTextSize(125);
     expect(style.fontSize).toBe('125%');
     applyTextSize(100);

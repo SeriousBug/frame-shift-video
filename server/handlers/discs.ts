@@ -13,6 +13,8 @@ import {
   setAutoScan,
   setMovieOnly,
   setPreset,
+  savePreset,
+  deletePreset,
   setNext,
 } from '../disc-state';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
@@ -132,6 +134,40 @@ export async function discsPresetHandler(
   return asBadRequest(corsHeaders, async () => {
     await setPreset(discsDir(), id);
     return json({ chosen: id }, 200, corsHeaders);
+  });
+}
+
+/**
+ * POST /api/discs/presets, DELETE /api/discs/presets
+ * POST: a preset of the person's own (name, container, video, quality, speed, tenBit, audio,
+ * deinterlace, subtitles), changing the one with the same id when there is an id.
+ * DELETE: body { id }, a preset the person made.
+ */
+export async function discsPresetsHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body) {
+    return json({ error: 'Send the details of the preset' }, 400, corsHeaders);
+  }
+  if (req.method === 'DELETE') {
+    const id = body.id;
+    if (typeof id !== 'string') {
+      return json(
+        { error: 'id must be the name of a preset' },
+        400,
+        corsHeaders,
+      );
+    }
+    return asBadRequest(corsHeaders, async () => {
+      await deletePreset(discsDir(), id);
+      return json({ deleted: id }, 200, corsHeaders);
+    });
+  }
+  return asBadRequest(corsHeaders, async () => {
+    const preset = await savePreset(discsDir(), body);
+    return json({ preset }, 200, corsHeaders);
   });
 }
 
