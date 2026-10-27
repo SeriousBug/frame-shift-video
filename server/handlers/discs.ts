@@ -12,6 +12,7 @@ import {
   setEject,
   setAutoScan,
   setMovieOnly,
+  setPreset,
   setNext,
 } from '../disc-state';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
@@ -112,6 +113,26 @@ export async function discsMovieOnlyHandler(
   }
   await setMovieOnly(discsDir(), body.enabled);
   return json({ movieOnly: body.enabled }, 200, corsHeaders);
+}
+
+/**
+ * PUT /api/discs/preset
+ * Body: { id: string }. How discs queued from now on are converted: one of the presets the
+ * ripper lists in its settings file.
+ */
+export async function discsPresetHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body || typeof body.id !== 'string') {
+    return json({ error: 'id must be the name of a choice' }, 400, corsHeaders);
+  }
+  const id = body.id;
+  return asBadRequest(corsHeaders, async () => {
+    await setPreset(discsDir(), id);
+    return json({ chosen: id }, 200, corsHeaders);
+  });
 }
 
 /**

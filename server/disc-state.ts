@@ -29,7 +29,9 @@ import type {
   DiscCommandResult,
   DiscConversion,
   DiscCopy,
+  DiscConvert,
   DiscDone,
+  DiscPreset,
   DiscDrive,
   DiscNext,
   DiscParked,
@@ -358,12 +360,49 @@ async function readWorking(
   return working.slice(0, MAX_LIST);
 }
 
+/** A finished folder and the folder that holds it. */
+interface Finished {
+  name: string;
+  parent: string;
+}
+
+/**
+ * The folder inside the DVDs folder where finished discs go: _settings/output, which must be one
+ * plain folder name (the ripper applies the same rule), else _converted.
+ */
+export async function outputFolder(dir: string): Promise<string> {
+  const text = (await readText(path.join(dir, '_settings', 'output')))?.trim();
+  if (!text || !/^[A-Za-z0-9_][A-Za-z0-9._ -]*$/.test(text))
+    return '_converted';
+  return text;
+}
+
+/**
+ * Every finished folder: the ones in the output folder, and the ones filed in the DVDs folder
+ * itself before that folder existed.
+ */
+async function readFinished(dir: string): Promise<Finished[]> {
+  const output = await outputFolder(dir);
+  const inOutput = path.join(dir, output);
+  const finished: Finished[] = [];
+  for (const name of await listDirs(inOutput)) {
+    finished.push({ name, parent: inOutput });
+  }
+  for (const name of await listDirs(dir)) {
+    // The output folder is where they are kept, not a disc.
+    if (!name.startsWith('_') && name !== output) {
+      finished.push({ name, parent: dir });
+    }
+  }
+  return finished;
+}
+
 /** The last few folders filed, newest first. */
-async function readRecent(dir: string, folders: string[]): Promise<DiscDone[]> {
+async function readRecent(folders: Finished[]): Promise<DiscDone[]> {
   const stamped: DiscDone[] = [];
-  for (const name of folders) {
+  for (const { name, parent } of folders) {
     try {
-      const stat = await fs.stat(path.join(dir, name));
+      const stat = await fs.stat(path.join(parent, name));
       stamped.push({ name, at: Math.floor(stat.mtimeMs / 1000) });
     } catch {
       // Gone since it was listed.
@@ -395,6 +434,8 @@ export async function readDiscsState(
       needsYear: [],
       finishedCount: 0,
       recent: [],
+      convert: { presets: [], chosen: '' },
+      outputFolder: '_converted',
     };
   }
 
@@ -403,7 +444,7 @@ export async function readDiscsState(
   const movieOnlyText = await readText(
     path.join(dir, '_settings', 'movie-only'),
   );
-  const folders = (await listDirs(dir)).filter((name) => !name.startsWith('_'));
+  const folders = await readFinished(dir);
   return {
     available: true,
     // On unless it was switched off: the ripper ejects a disc once it is not needed.
@@ -419,11 +460,78 @@ export async function readDiscsState(
     working: await readWorking(dir, jobs, now),
     parked: await readParked(dir),
     needsYear: folders
+      .map((folder) => folder.name)
       .filter((name) => !/\(\d{4}\)/.test(name))
       .slice(0, MAX_LIST),
     finishedCount: folders.length,
-    recent: await readRecent(dir, folders),
+    recent: await readRecent(folders),
+    convert: await readConvert(dir),
+    outputFolder: await outputFolder(dir),
   };
+}
+
+const PRESET_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const CONTAINERS = ['mkv', 'mp4'];
+const VIDEOS = ['libx265', 'libx264', 'libsvtav1', 'copy'];
+const AUDIOS = ['copy', 'aac', 'ac3'];
+
+/**
+ * The conversion presets the ripper offers and the one chosen, from _settings/presets.json and
+ * _settings/preset. The ripper writes the file the first time it queues a disc, so before that
+ * there are none to show.
+ */
+async function readConvert(dir: string): Promise<DiscConvert> {
+  const text = await readText(path.join(dir, '_settings', 'presets.json'));
+  const presets: DiscPreset[] = [];
+  try {
+    const items: unknown = JSON.parse(text ?? '').presets;
+    for (const item of Array.isArray(items) ? items : []) {
+      const preset = item as Record<string, unknown>;
+      if (
+        typeof preset?.id === 'string' &&
+        PRESET_ID.test(preset.id) &&
+        typeof preset.name === 'string' &&
+        preset.name.trim() &&
+        !presets.some((existing) => existing.id === preset.id)
+      ) {
+        presets.push({
+          id: preset.id,
+          name: preset.name.trim().slice(0, 60),
+          container: CONTAINERS.includes(String(preset.container))
+            ? String(preset.container)
+            : 'mkv',
+          video: VIDEOS.includes(String(preset.video))
+            ? String(preset.video)
+            : 'libx265',
+          audio: AUDIOS.includes(String(preset.audio))
+            ? String(preset.audio)
+            : 'copy',
+        });
+      }
+    }
+  } catch {
+    // No file yet, or one that cannot be read: nothing to choose from.
+  }
+  const picked = (
+    await readText(path.join(dir, '_settings', 'preset'))
+  )?.trim();
+  // The ripper uses the first when the pick is gone, and says so here too.
+  const chosen =
+    presets.find((preset) => preset.id === picked)?.id ??
+    presets.find((preset) => preset.id === 'hevc-mkv')?.id ??
+    presets[0]?.id ??
+    '';
+  return { presets, chosen };
+}
+
+/** Picks the conversion preset for the discs queued from now on. */
+export async function setPreset(dir: string, id: string): Promise<void> {
+  const { presets } = await readConvert(dir);
+  if (!presets.some((preset) => preset.id === id)) {
+    throw new Error('That is not one of the choices.');
+  }
+  await fs.mkdir(path.join(dir, '_settings'), { recursive: true });
+  await fs.writeFile(path.join(dir, '_settings', 'preset'), `${id}\n`);
 }
 
 /** Turns ejecting on or off for the ripper. */

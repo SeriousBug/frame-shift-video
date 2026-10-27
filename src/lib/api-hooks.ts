@@ -44,6 +44,7 @@ import {
   cleanSubtitles,
   clearOldCopies,
   setDiscMovieOnly,
+  setDiscPreset,
   setDiscNext,
   dismissDiscAttention,
   sendDiscCommand,
@@ -545,6 +546,18 @@ export function useSetDiscMovieOnly() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: setDiscMovieOnly,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
+  });
+}
+
+/**
+ * Hook to choose how discs queued from now on are converted
+ */
+export function useSetDiscPreset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setDiscPreset,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.discs }),
   });
