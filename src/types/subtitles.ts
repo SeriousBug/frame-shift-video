@@ -61,6 +61,12 @@ export interface SubtitlesState {
     done: number | null;
     total: number | null;
   } | null;
+  /** The run of requests being worked through: how many there were and how many are finished */
+  batch: {
+    kind: 'convert' | 'recheck' | 'mixed';
+    total: number;
+    done: number;
+  } | null;
   /** What was converted last, newest first */
   recent: SubtitleResult[];
 }

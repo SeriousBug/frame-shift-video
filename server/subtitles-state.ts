@@ -102,6 +102,36 @@ async function readQueued(dir: string): Promise<string[]> {
   return queued;
 }
 
+/**
+ * How big the current run of requests is, kept in _subs/batch.json so the page can say "3 of 14"
+ * after a reload or on another device. A request that arrives while others are still waiting
+ * joins the run; one that arrives when nothing is waiting starts a new one.
+ */
+async function growBatch(dir: string, action: Action): Promise<void> {
+  const waiting = (await readQueued(dir)).length;
+  const before = await readBatch(dir);
+  const joins = before !== null && waiting > 1;
+  const total = joins ? before.total + 1 : Math.max(waiting, 1);
+  const kind = joins && before.kind !== action ? 'mixed' : action;
+  const file = path.join(dir, '_subs', 'batch.json');
+  await fs.writeFile(file, JSON.stringify({ total, kind }), { mode: 0o666 });
+  await fs.chmod(file, 0o666).catch(() => undefined);
+}
+
+async function readBatch(
+  dir: string,
+): Promise<{ total: number; kind: string } | null> {
+  const raw = await readJson(path.join(dir, '_subs', 'batch.json'));
+  if (
+    !isRecord(raw) ||
+    typeof raw.total !== 'number' ||
+    typeof raw.kind !== 'string'
+  ) {
+    return null;
+  }
+  return { total: raw.total, kind: raw.kind };
+}
+
 function readTrack(value: unknown): SubtitleTrack | null {
   if (!isRecord(value)) return null;
   return {
@@ -132,7 +162,20 @@ export async function readSubtitlesState(
         }
       : null;
 
-  const queued = new Set(await readQueued(dir));
+  const waiting = await readQueued(dir);
+  const queued = new Set(waiting);
+  const run = await readBatch(dir);
+  const batch =
+    run && waiting.length > 0
+      ? (() => {
+          const total = Math.max(run.total, waiting.length);
+          const kind: 'convert' | 'recheck' | 'mixed' =
+            run.kind === 'convert' || run.kind === 'recheck'
+              ? run.kind
+              : 'mixed';
+          return { kind, total, done: total - waiting.length };
+        })()
+      : null;
 
   const files: SubtitleFile[] = [];
   let updated: number | null = null;
@@ -204,6 +247,7 @@ export async function readSubtitlesState(
     files,
     held,
     current,
+    batch,
     recent: recent.slice(0, MAX_RECENT),
   };
 }
@@ -266,8 +310,11 @@ async function writeRequest(
     );
     await fs.chmod(file, 0o666).catch(() => undefined);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return;
+    throw error;
   }
+  if (action === 'convert' || action === 'recheck')
+    await growBatch(dir, action);
 }
 
 /** Asks for one file, or every file with picture subtitles, to be converted. Returns how many. */

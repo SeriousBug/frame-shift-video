@@ -157,6 +157,12 @@ function FileRow({
   );
 }
 
+function batchTitle(kind: 'convert' | 'recheck' | 'mixed'): string {
+  if (kind === 'recheck') return 'Fixing typing mistakes';
+  if (kind === 'convert') return 'Converting subtitles';
+  return 'Working on subtitles';
+}
+
 /**
  * A DVD's subtitles are pictures, which most Plex clients cannot show without burning them in.
  * This turns them into text, one movie at a time, on the host.
@@ -218,20 +224,47 @@ export function SubtitlesSection() {
             Convert the subtitles of new discs by itself
           </label>
 
-          {current && (
-            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3">
-              <div className="font-medium text-gray-900 dark:text-white break-words">
-                Converting {current.path.split('/').pop()}
-              </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                {current.step}
-              </div>
-              {percent !== null && (
-                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+          {(current || state.batch) && (
+            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-2">
+              {state.batch && (
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">
+                    {batchTitle(state.batch.kind)}: {state.batch.done} of{' '}
+                    {state.batch.total} movies done
+                  </div>
                   <div
-                    className="h-2 rounded-full bg-blue-600"
-                    style={{ width: `${percent}%` }}
-                  />
+                    role="progressbar"
+                    aria-label={batchTitle(state.batch.kind)}
+                    aria-valuemin={0}
+                    aria-valuemax={state.batch.total}
+                    aria-valuenow={state.batch.done}
+                    className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700"
+                  >
+                    <div
+                      className="h-2 rounded-full bg-blue-600 transition-all"
+                      style={{
+                        width: `${Math.round((state.batch.done / state.batch.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {current && (
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white break-words">
+                    Converting {current.path.split('/').pop()}
+                  </div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300">
+                    {current.step}
+                  </div>
+                  {percent !== null && (
+                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                      <div
+                        className="h-2 rounded-full bg-blue-600"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
