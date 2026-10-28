@@ -9,7 +9,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'crypto';
-import { discsDir } from './disc-state';
+import { discsDir, outputFolder } from './disc-state';
 import type {
   HeldFile,
   SubtitleFile,
@@ -208,8 +208,14 @@ export async function readSubtitlesState(
   };
 }
 
-/** A movie file the converter may be asked about: relative, inside the folder, an .mkv. */
-export function cleanSubtitlePath(value: unknown): string {
+/**
+ * A movie file the converter may be asked about: relative, inside the folder, an .mkv. Folders
+ * starting with _ are the ripper's own, except the one finished discs are put in.
+ */
+export function cleanSubtitlePath(
+  value: unknown,
+  output = '_converted',
+): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error('Say which file');
   }
@@ -225,7 +231,7 @@ export function cleanSubtitlePath(value: unknown): string {
   const parts = text.split('/');
   if (
     parts.some((p) => p === '' || p === '..' || p === '.') ||
-    parts[0].startsWith('_') ||
+    (parts[0].startsWith('_') && parts[0] !== output) ||
     !text.toLowerCase().endsWith('.mkv')
   ) {
     throw new Error('That is not a movie file in the DVDs folder');
@@ -269,16 +275,17 @@ export async function requestSubtitles(
   dir: string,
   request: SubtitleRequest,
 ): Promise<number> {
+  const output = await outputFolder(dir);
   if ('all' in request) {
     const state = await readSubtitlesState(dir);
     const wanted = state.files.filter(
       (f) => f.pictures > 0 && f.status === null,
     );
     for (const file of wanted)
-      await writeRequest(dir, cleanSubtitlePath(file.path));
+      await writeRequest(dir, cleanSubtitlePath(file.path, output));
     return wanted.length;
   }
-  const relative = cleanSubtitlePath(request.path);
+  const relative = cleanSubtitlePath(request.path, output);
   const state = await readSubtitlesState(dir);
   const known = state.files.find((f) => f.path === relative);
   if (!known) throw new Error('That file is not in the list of movies');
@@ -292,15 +299,16 @@ export async function requestClean(
   dir: string,
   request: { path: string } | { all: true },
 ): Promise<number> {
+  const output = await outputFolder(dir);
   const state = await readSubtitlesState(dir);
   if ('all' in request) {
     const wanted = state.files.filter((f) => f.needsClean && f.status === null);
     for (const file of wanted) {
-      await writeRequest(dir, cleanSubtitlePath(file.path), 'recheck');
+      await writeRequest(dir, cleanSubtitlePath(file.path, output), 'recheck');
     }
     return wanted.length;
   }
-  const relative = cleanSubtitlePath(request.path);
+  const relative = cleanSubtitlePath(request.path, output);
   const known = state.files.find((f) => f.path === relative);
   if (!known) throw new Error('That file is not in the list of movies');
   await writeRequest(dir, relative, 'recheck');
@@ -316,7 +324,8 @@ export async function requestDropTrack(
   value: unknown,
   track: unknown,
 ): Promise<string> {
-  const relative = cleanSubtitlePath(value);
+  const output = await outputFolder(dir);
+  const relative = cleanSubtitlePath(value, output);
   const state = await readSubtitlesState(dir);
   const known = state.files.find((f) => f.path === relative);
   if (!known) throw new Error('That file is not in the list of movies');
@@ -340,7 +349,8 @@ export async function requestRestore(
   dir: string,
   value: unknown,
 ): Promise<string> {
-  const relative = cleanSubtitlePath(value);
+  const output = await outputFolder(dir);
+  const relative = cleanSubtitlePath(value, output);
   const state = await readSubtitlesState(dir);
   if (!state.held.some((h) => h.path === relative)) {
     throw new Error('There is no old copy of that file');
@@ -365,10 +375,11 @@ export async function dismissSubtitles(
   dir: string,
   what: Record<string, unknown>,
 ): Promise<number> {
+  const output = await outputFolder(dir);
   const queueDir = path.join(dir, '_subs', 'queue');
   const doneDir = path.join(dir, '_subs', 'done');
   if (typeof what.queued === 'string') {
-    const relative = cleanSubtitlePath(what.queued);
+    const relative = cleanSubtitlePath(what.queued, output);
     const file = path.join(queueDir, `${requestName(relative)}.req`);
     const existed = await fs
       .rm(file)
