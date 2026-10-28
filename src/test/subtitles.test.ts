@@ -346,6 +346,62 @@ describe('cleaning converted text', () => {
   });
 });
 
+describe('movies in the folder for finished discs', () => {
+  const FINISHED = '_converted/Rebound (2005)/Rebound (2005).mkv';
+  const text = {
+    language: 'eng',
+    codec: 'S_TEXT/UTF8',
+    name: '',
+    default: true,
+    forced: false,
+  };
+  const picture = { ...text, codec: 'picture' };
+
+  async function writeFinished(output = '_converted') {
+    const path = FINISHED.replace('_converted', output);
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1000,
+        files: [
+          { path, size: 1, mtime: 1, tracks: [text], needs_clean: true },
+          { path: DUMA, size: 1, mtime: 1, tracks: [text], needs_clean: true },
+          {
+            path: path.replace('Rebound (2005).mkv', 'Pic.mkv'),
+            size: 1,
+            mtime: 1,
+            tracks: [picture],
+          },
+        ],
+      }),
+    );
+    return path;
+  }
+
+  test('the finished folder is allowed, other folders starting with _ are not', () => {
+    expect(cleanSubtitlePath(FINISHED)).toBe(FINISHED);
+    expect(cleanSubtitlePath('_mine/a/a.mkv', '_mine')).toBe('_mine/a/a.mkv');
+    expect(() => cleanSubtitlePath(FINISHED, '_mine')).toThrow();
+    expect(() => cleanSubtitlePath('_subs/a/a.mkv')).toThrow();
+  });
+
+  test('fixing every typo, and converting every picture, covers the finished folder too', async () => {
+    const finished = await writeFinished();
+    expect(await requestClean(dir, { all: true })).toBe(2);
+    expect(await requestSubtitles(dir, { all: true })).toBe(1);
+    const queue = await fs.readdir(path.join(dir, '_subs', 'queue'));
+    expect(queue).toHaveLength(3);
+    const state = await readSubtitlesState(dir);
+    expect(state.files.find((f) => f.path === finished)?.status).toBe('queued');
+  });
+
+  test('one file there can be asked for, and its output folder can be renamed', async () => {
+    await write('_settings/output', 'Done');
+    const finished = await writeFinished('Done');
+    expect(await requestClean(dir, { path: finished })).toBe(1);
+  });
+});
+
 describe('taking a subtitle track out', () => {
   test('writes a request the converter will recognise, named as it names it', async () => {
     await writeIndex();
