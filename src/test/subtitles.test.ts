@@ -402,6 +402,100 @@ describe('movies in the folder for finished discs', () => {
   });
 });
 
+describe('progress through a run of requests', () => {
+  const text = {
+    language: 'eng',
+    codec: 'S_TEXT/UTF8',
+    name: '',
+    default: true,
+    forced: false,
+  };
+  const names = ['A', 'B', 'C', 'D'].map((n) => `${n}/${n}.mkv`);
+
+  async function writeMany() {
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: names.map((path) => ({
+          path,
+          size: 1,
+          mtime: 1,
+          tracks: [text],
+          needs_clean: true,
+        })),
+      }),
+    );
+  }
+  test('nothing is shown when nothing was asked for', async () => {
+    await writeMany();
+    expect((await readSubtitlesState(dir)).batch).toBeNull();
+  });
+
+  test('asking for everything starts a run that counts down as files finish', async () => {
+    await writeMany();
+    await requestClean(dir, { all: true });
+    expect((await readSubtitlesState(dir)).batch).toEqual({
+      kind: 'recheck',
+      total: 4,
+      done: 0,
+    });
+    const queue = path.join(dir, '_subs', 'queue');
+    const first = (await fs.readdir(queue)).sort()[0] as string;
+    await fs.rm(path.join(queue, first));
+    expect((await readSubtitlesState(dir)).batch).toEqual({
+      kind: 'recheck',
+      total: 4,
+      done: 1,
+    });
+  });
+
+  test('a file asked for while others wait joins the run; after it ends a new run starts', async () => {
+    await writeMany();
+    await requestClean(dir, { path: names[0] as string });
+    await requestClean(dir, { path: names[1] as string });
+    expect((await readSubtitlesState(dir)).batch?.total).toBe(2);
+    await requestClean(dir, { path: names[1] as string });
+    expect((await readSubtitlesState(dir)).batch?.total).toBe(2);
+    const queue = path.join(dir, '_subs', 'queue');
+    for (const name of await fs.readdir(queue)) {
+      await fs.rm(path.join(queue, name));
+    }
+    expect((await readSubtitlesState(dir)).batch).toBeNull();
+    await requestClean(dir, { path: names[2] as string });
+    expect((await readSubtitlesState(dir)).batch).toEqual({
+      kind: 'recheck',
+      total: 1,
+      done: 0,
+    });
+  });
+
+  test('picture conversions and typo fixes together are called mixed', async () => {
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [
+          {
+            path: names[0],
+            size: 1,
+            mtime: 1,
+            tracks: [{ ...text, codec: 'picture' }],
+          },
+          { path: names[1], size: 1, mtime: 1, tracks: [text] },
+        ],
+      }),
+    );
+    await requestSubtitles(dir, { path: names[0] as string });
+    await requestClean(dir, { path: names[1] as string });
+    expect((await readSubtitlesState(dir)).batch).toEqual({
+      kind: 'mixed',
+      total: 2,
+      done: 0,
+    });
+  });
+});
+
 describe('taking a subtitle track out', () => {
   test('writes a request the converter will recognise, named as it names it', async () => {
     await writeIndex();

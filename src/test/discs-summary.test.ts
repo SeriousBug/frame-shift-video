@@ -90,6 +90,7 @@ describe('the hint about subtitles under the status sentence', () => {
       })),
       held: [],
       current,
+      batch: null,
       recent: [],
     } as SubtitlesState;
   }
