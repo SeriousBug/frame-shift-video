@@ -85,6 +85,7 @@ describe('the hint about subtitles under the status sentence', () => {
         tracks: [track],
         pictures: 1,
         needsClean: false,
+        unreadable: false,
         status: null,
         ...f,
       })),

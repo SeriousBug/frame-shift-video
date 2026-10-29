@@ -148,6 +148,10 @@ function FileRow({
             </button>
           )}
         </div>
+      ) : file.unreadable ? (
+        <span className="max-w-xs text-sm text-amber-700 dark:text-amber-400">
+          Some picture subtitles could not be read, so they stay as pictures
+        </span>
       ) : (
         <span className="text-sm text-green-700 dark:text-green-400">
           ✓ Text
@@ -193,6 +197,7 @@ export function SubtitlesSection() {
 
   const todo = state.files.filter((file) => file.pictures > 0);
   const free = todo.filter((file) => file.status === null);
+  const unreadable = state.files.filter((file) => file.unreadable);
   const listed = showAll ? state.files : todo;
   const current = state.current;
   const percent =
@@ -312,6 +317,16 @@ export function SubtitlesSection() {
               subtitles
             </span>
           </div>
+          {unreadable.length > 0 && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              {unreadable.length === 1
+                ? 'Some picture subtitles in this movie could not be read'
+                : `Some picture subtitles in these ${unreadable.length} movies could not be read`}
+              , so they stay as pictures:{' '}
+              {unreadable.map((f) => movieName(f.path)).join(', ')}. Press “Show
+              all” below to take them out.
+            </p>
+          )}
           {state.files.some((f) => f.needsClean) && (
             <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
               <div className="text-sm text-gray-900 dark:text-white">

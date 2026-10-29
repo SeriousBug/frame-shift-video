@@ -14,6 +14,8 @@ export interface SubtitleFile {
   tracks: SubtitleTrack[];
   /** How many of the tracks are picture subtitles that can be converted */
   pictures: number;
+  /** Picture subtitles the converter already tried and could not read, so they are not offered again */
+  unreadable: boolean;
   /** Has text subtitles that were not cleaned with the current rules */
   needsClean: boolean;
   /** Waiting its turn, or being converted now */

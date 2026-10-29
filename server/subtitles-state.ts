@@ -195,10 +195,15 @@ export async function readSubtitlesState(
           : queued.has(raw.path)
             ? 'queued'
             : null;
+      // Pictures the converter already tried and could not read are not offered again.
+      const unreadable = raw.unreadable === true;
       files.push({
         path: raw.path,
         tracks,
-        pictures: tracks.filter((t) => t.codec === 'picture').length,
+        pictures: unreadable
+          ? 0
+          : tracks.filter((t) => t.codec === 'picture').length,
+        unreadable,
         needsClean: raw.needs_clean === true,
         status,
       });
@@ -336,6 +341,11 @@ export async function requestSubtitles(
   const state = await readSubtitlesState(dir);
   const known = state.files.find((f) => f.path === relative);
   if (!known) throw new Error('That file is not in the list of movies');
+  if (known.unreadable) {
+    throw new Error(
+      'Its picture subtitles were tried and cannot be read. You can remove them under the file.',
+    );
+  }
   if (known.pictures === 0) throw new Error('It has no picture subtitles');
   await writeRequest(dir, relative);
   return 1;
