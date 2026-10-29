@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import type { SubtitlesState } from '@/types/subtitles';
 
@@ -43,6 +43,70 @@ function show() {
 }
 
 const bar = () => screen.findByRole('progressbar');
+
+describe('picture subtitles that could not be read', () => {
+  const picture = {
+    language: 'spa',
+    codec: 'picture',
+    name: '',
+    default: false,
+    forced: false,
+  };
+  const file = (path: string, unreadable: boolean) => ({
+    path,
+    tracks: [picture],
+    pictures: unreadable ? 0 : 1,
+    unreadable,
+    needsClean: false,
+    status: null,
+  });
+
+  test('the page says so, and there is nothing left to convert', async () => {
+    state = {
+      ...base,
+      files: [file('Rebound (2005)/Rebound (2005).mkv', true)],
+    };
+    show();
+    expect(
+      (await screen.findByText(/could not be read.*Rebound \(2005\)/))
+        .textContent,
+    ).toContain('stay as pictures');
+    expect(
+      screen.getByRole('button', { name: 'Nothing left to convert' }) !== null,
+    ).toBe(true);
+    expect(
+      screen.queryAllByRole('button', { name: /^Convert \d/ }),
+    ).toHaveLength(0);
+  });
+
+  test('the full list says it on the file, instead of a tick', async () => {
+    state = {
+      ...base,
+      files: [file('Rebound (2005)/Rebound (2005).mkv', true)],
+    };
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Show all/ }));
+    expect(
+      (await screen.findByText(/Some picture subtitles could not be read, so/))
+        .textContent,
+    ).toContain('stay as pictures');
+    expect(screen.queryAllByText('✓ Text')).toHaveLength(0);
+  });
+
+  test('a movie that can still be converted is offered, next to one that cannot', async () => {
+    state = {
+      ...base,
+      files: [
+        file('Rebound (2005)/Rebound (2005).mkv', true),
+        file('Duma (2005)/Duma (2005).mkv', false),
+      ],
+    };
+    show();
+    expect(
+      (await screen.findByRole('button', { name: 'Convert 1 movie' })) !== null,
+    ).toBe(true);
+  });
+});
 
 describe('the progress of a run of subtitle requests', () => {
   test('a run of typo fixes says how far along it is, and the bar matches', async () => {

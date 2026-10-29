@@ -496,6 +496,70 @@ describe('progress through a run of requests', () => {
   });
 });
 
+describe('picture subtitles that could not be read', () => {
+  const picture = {
+    language: 'spa',
+    codec: 'picture',
+    name: '',
+    default: false,
+    forced: false,
+  };
+  const REBOUND = 'Rebound (2005)/Rebound (2005).mkv';
+
+  async function writeStuck(unreadable: boolean | undefined) {
+    await write(
+      '_subs/index.json',
+      JSON.stringify({
+        updated: 1,
+        files: [
+          {
+            path: REBOUND,
+            size: 1,
+            mtime: 1,
+            tracks: [picture],
+            ...(unreadable === undefined ? {} : { unreadable }),
+          },
+          { path: DUMA, size: 1, mtime: 1, tracks: [picture] },
+        ],
+      }),
+    );
+  }
+
+  test('a file the converter already tried is not offered again', async () => {
+    await writeStuck(true);
+    const state = await readSubtitlesState(dir);
+    const rebound = state.files.find((f) => f.path === REBOUND);
+    expect(rebound?.unreadable).toBe(true);
+    expect(rebound?.pictures).toBe(0);
+    expect(rebound?.tracks).toHaveLength(1);
+    expect(await requestSubtitles(dir, { all: true })).toBe(1);
+    const queue = await fs.readdir(path.join(dir, '_subs', 'queue'));
+    expect(queue).toHaveLength(1);
+  });
+
+  test('asking for that one file says why it cannot be done', async () => {
+    await writeStuck(true);
+    await expect(requestSubtitles(dir, { path: REBOUND })).rejects.toThrow(
+      /cannot be read/,
+    );
+  });
+
+  test('a file not tried yet, or an index without the flag, is offered as before', async () => {
+    await writeStuck(false);
+    expect(
+      (await readSubtitlesState(dir)).files.map((f) => [
+        f.unreadable,
+        f.pictures,
+      ]),
+    ).toEqual([
+      [false, 1],
+      [false, 1],
+    ]);
+    await writeStuck(undefined);
+    expect((await readSubtitlesState(dir)).files[0]?.pictures).toBe(1);
+  });
+});
+
 describe('taking a subtitle track out', () => {
   test('writes a request the converter will recognise, named as it names it', async () => {
     await writeIndex();
