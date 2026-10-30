@@ -32,6 +32,8 @@ export function TmdbPicker({
   const [chosen, setChosen] = useState<TmdbResult | null>(null);
   const [looking, setLooking] = useState(false);
   const lastAuto = useRef<string | null>(null);
+  // What was last looked up, to look it up again when the kind is switched.
+  const lastSearch = useRef<{ title: string; year: string } | null>(null);
   // Only the newest search is shown: an older one that answers late is ignored.
   const latest = useRef(0);
 
@@ -40,6 +42,7 @@ export function TmdbPicker({
       const title = text.trim();
       if (!title) return;
       const mine = ++latest.current;
+      lastSearch.current = { title: text, year: forYear };
       setMessage(null);
       setLooking(true);
       runDiscCommand({
@@ -50,7 +53,9 @@ export function TmdbPicker({
       })
         .then((answer) => {
           if (mine !== latest.current) return;
-          const found = answer.ok ? parseTmdbResults(answer.message) : [];
+          const found = (
+            answer.ok ? parseTmdbResults(answer.message) : []
+          ).filter((result) => kind === 'any' || result.kind === kind);
           setResults(found);
           if (!answer.done) {
             setMessage(answer.message ?? 'The server did not answer.');
@@ -69,6 +74,18 @@ export function TmdbPicker({
     },
     [kind],
   );
+
+  // Switching between movie and TV show looks the same title up again for the other kind, so
+  // the list never has the other kind in it.
+  const lastKind = useRef(kind);
+  useEffect(() => {
+    if (lastKind.current === kind) return;
+    lastKind.current = kind;
+    setChosen(null);
+    setResults([]);
+    const again = lastSearch.current;
+    if (again) search(again.title, again.year);
+  }, [kind, search]);
 
   // A new title to start from (a different disc went in): fill the box and look it up. The
   // search starts from a timer, not straight from the effect: React's development double
