@@ -9,6 +9,7 @@ import {
 import { ConvertChoice } from '@/components/convert-choice';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
+import { ExtrasSection } from '@/components/extras-section';
 import { copyProgress } from '@/lib/copy-progress';
 import { parseLabel } from '@/lib/tmdb-results';
 import {
@@ -1209,6 +1210,7 @@ function DiscsContent() {
       <AttentionSection state={state} />
       <NextSection state={state} />
       <WorkingSection state={state} />
+      <ExtrasSection />
       <SubtitlesSection />
       <ParkedSection state={state} />
       <NeedsYearSection state={state} />

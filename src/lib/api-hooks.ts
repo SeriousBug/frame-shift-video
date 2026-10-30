@@ -31,6 +31,8 @@ import {
   fetchSystemStatus,
   fetchSettings,
   fetchDiscs,
+  fetchDiscExtras,
+  renameDiscExtra,
   setDiscEject,
   setDiscAutoScan,
   fetchHobwork,
@@ -71,6 +73,7 @@ export const queryKeys = {
   systemStatus: ['system-status'] as const,
   settings: ['settings'] as const,
   discs: ['discs'] as const,
+  discExtras: ['disc-extras'] as const,
   hobwork: ['hobwork'] as const,
   subtitles: ['subtitles'] as const,
 };
@@ -526,6 +529,29 @@ export function useDiscs() {
     queryKey: queryKeys.discs,
     queryFn: fetchDiscs,
     refetchInterval: 3000,
+  });
+}
+
+/**
+ * Hook to read the extras of ripped movies, for naming them
+ */
+export function useDiscExtras() {
+  return useQuery({
+    queryKey: queryKeys.discExtras,
+    queryFn: fetchDiscExtras,
+    refetchInterval: 15000,
+  });
+}
+
+/**
+ * Hook to give an extra its name
+ */
+export function useRenameDiscExtra() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: renameDiscExtra,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.discExtras }),
   });
 }
 

@@ -227,3 +227,20 @@ export interface DiscCommandResult {
   ok?: boolean;
   message?: string;
 }
+
+/** One extra (trailer, featurette...) of a ripped movie. */
+export interface ExtraItem {
+  /** Where it is, under the DVDs folder, as the page sends it back to rename it */
+  path: string;
+  /** The Plex extras folder it is in */
+  folder: string;
+  /** Its name, without the file ending */
+  name: string;
+  /** Still the ripper's own name, like "Trailer 01 (2 min)" */
+  unnamed: boolean;
+}
+
+export interface ExtraMovie {
+  movie: string;
+  items: ExtraItem[];
+}

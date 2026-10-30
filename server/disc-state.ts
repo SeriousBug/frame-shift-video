@@ -16,7 +16,8 @@
  *   _commands/done/<id>.result           written by the host: "ok" or "error", then a sentence
  *
  * Everything written here is made of a small set of checked values, and the host
- * checks it again, so the page can only ask for those five things.
+ * checks it again, so the page can only ask for those five things. The one exception is
+ * extras-state.ts, which renames an extra of a ripped movie in place.
  */
 
 import fs from 'fs/promises';
