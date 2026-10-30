@@ -8,7 +8,7 @@ import {
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TmdbPicker } from '@/components/tmdb-picker';
-import { NextSection } from '@/routes/discs';
+import { DriveSection, NextSection } from '@/routes/discs';
 import type { DiscsState } from '@/types/discs';
 
 // What the host answers to a search: both the movie and the show of the same name, as TMDB does.
@@ -180,5 +180,70 @@ describe('the "Tell it what the disc is" form', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Movie' }));
     await waitFor(() => expect(names()[0]).toContain('The movie'), slow);
     expect(names()).toHaveLength(1);
+  });
+});
+
+describe('the Drive card while a disc is copied', () => {
+  const now = Math.floor(Date.now() / 1000);
+  const base = {
+    available: true,
+    eject: true,
+    autoScan: true,
+    movieOnly: false,
+    drive: { media: true, label: 'TEACHERS_PET', updated: now, alive: true },
+    run: {
+      state: 'running',
+      name: 'Teachers Pet',
+      step: 'Copying the disc',
+      updated: now,
+    },
+    next: null,
+    attention: [],
+    working: [
+      {
+        name: 'Teachers_Pet',
+        title: 'Teachers Pet',
+        stage: 'copying',
+        lines: [],
+        queued: false,
+        conversion: null,
+        quietSeconds: 5,
+        copy: {
+          total: 4_000_000_000,
+          bytes: 1_000_000_000,
+          startedAt: now - 600,
+          updatedAt: now,
+        },
+      },
+    ],
+    parked: [],
+    needsYear: [],
+    finishedCount: 0,
+    recent: [],
+    convert: { presets: [], chosen: '' },
+    outputFolder: '_converted',
+  } as unknown as DiscsState;
+
+  function card(state: DiscsState) {
+    const client = new QueryClient();
+    return render(
+      <QueryClientProvider client={client}>
+        <DriveSection state={state} />
+      </QueryClientProvider>,
+    );
+  }
+
+  test('shows how far the copy is, next to the words "Working on"', () => {
+    card(base);
+    expect(screen.getByText(/Working/)).toBeTruthy();
+    const bar = screen.getByRole('progressbar', {
+      name: 'How much of the disc is copied',
+    });
+    expect(bar.getAttribute('aria-valuenow')).toBe('25');
+  });
+
+  test('no bar when nothing is being copied', () => {
+    card({ ...base, run: null, working: [] } as unknown as DiscsState);
+    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 });

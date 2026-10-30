@@ -390,6 +390,38 @@ describe('the disc ripper Live Activity', () => {
     });
   });
 
+  describe('while the disc is copied', () => {
+    const at = (bytes: number) => ({
+      total: 1000,
+      bytes,
+      startedAt: 1000,
+      updatedAt: 1100,
+    });
+    const send = (last: typeof IDLE, bytes: number) =>
+      nextActivity(last, run('Duma', 'Copying the disc'), [], at(bytes), 1100);
+
+    test('the card shows how far the copy is and the time left', () => {
+      const first = send(IDLE, 200);
+      expect(first.send).toMatchObject({
+        state: 'start',
+        progress: 0.2,
+        subtitle: 'Copying the disc: 20%, about 7 minutes',
+      });
+    });
+
+    test('it moves up in steps, not on every look', () => {
+      const first = send(IDLE, 200);
+      expect(send(first.last, 209).send).toBeNull();
+      const next = send(first.last, 221);
+      expect(next.send).toMatchObject({ state: 'update', progress: 0.22 });
+    });
+
+    test('with no copy numbers it is the plain step, without a bar', () => {
+      const plain = nextActivity(IDLE, run('Duma', 'Scanning'), []);
+      expect(plain.send).not.toHaveProperty('progress');
+    });
+  });
+
   test('no ripper run, nothing to say', () => {
     expect(nextActivity(IDLE, null, []).send).toBeNull();
   });

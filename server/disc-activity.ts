@@ -6,10 +6,13 @@
 import { readDiscsState } from './disc-state';
 import { hobworkActivity, liveActivitiesOn } from './hobwork-service';
 import { logger } from '../src/lib/sentry';
-import type { DiscAttention, DiscRun } from '../src/types/discs';
+import { copyProgress } from '../src/lib/copy-progress';
+import type { DiscAttention, DiscCopy, DiscRun } from '../src/types/discs';
 
 const ACTIVITY_ID = 'rip';
 const WATCH_INTERVAL_MS = 5000;
+/** The card moves up in steps this big while a disc is copied, so the phone is not flooded. */
+const COPY_STEP_PERCENT = 2;
 
 export interface Watched {
   /** Whether a disc was being ripped at the last look */
@@ -28,10 +31,14 @@ export function nextActivity(
   last: Watched,
   run: DiscRun | null,
   attention: DiscAttention[],
+  copy: DiscCopy | null = null,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
 ): { send: Activity | null; last: Watched } {
   if (run?.state === 'running') {
     const name = run.name || 'a disc';
-    const key = `${name}|${run.step}`;
+    const bar = copy ? copyProgress(copy, nowSeconds) : null;
+    const step = bar ? Math.floor(bar.percent / COPY_STEP_PERCENT) : null;
+    const key = `${name}|${run.step}|${step ?? ''}`;
     if (last.running && last.key === key) return { send: null, last };
     return {
       send: {
@@ -39,7 +46,10 @@ export function nextActivity(
         id: ACTIVITY_ID,
         state: last.running ? 'update' : 'start',
         title: name,
-        subtitle: run.step || 'Working',
+        subtitle: bar
+          ? `${run.step || 'Copying'}: ${bar.percent}%${bar.left ? `, ${bar.left}` : ''}`
+          : run.step || 'Working',
+        ...(bar ? { progress: bar.percent / 100 } : {}),
         icon: 'opticaldisc',
         path: '/discs',
       },
@@ -84,7 +94,8 @@ export function startDiscActivityWatcher(): void {
       }
       const state = await readDiscsState();
       if (!state.available) return;
-      const step = nextActivity(last, state.run, state.attention);
+      const copy = state.working.find((disc) => disc.copy)?.copy ?? null;
+      const step = nextActivity(last, state.run, state.attention, copy);
       last = step.last;
       if (step.send) await hobworkActivity(step.send);
     } catch (error) {
