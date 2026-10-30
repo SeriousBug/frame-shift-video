@@ -422,7 +422,7 @@ function DriveSection({ state }: { state: DiscsState }) {
   );
 }
 
-function NextSection({ state }: { state: DiscsState }) {
+export function NextSection({ state }: { state: DiscsState }) {
   const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
   const [replace, setReplace] = useState(false);
   const setNext = useSetDiscNext();
@@ -456,7 +456,7 @@ function NextSection({ state }: { state: DiscsState }) {
         </p>
       )}
       <TmdbPicker
-        kind="any"
+        kind={details.mode}
         initialQuery={labelInfo?.title ?? ''}
         autoSearch={!!labelInfo}
         onPick={(result) =>
