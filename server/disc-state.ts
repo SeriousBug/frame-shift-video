@@ -337,7 +337,9 @@ async function readWorking(
     const manifest = await readText(path.join(folder, 'manifest.tsv'));
     const stage =
       (await readText(path.join(folder, 'stage.txt')))?.trim() ?? null;
-    const conversion = conversionOf(name, jobs);
+    // Only once the disc has been given to Frame Shift: a disc ripped again under the same folder
+    // name would otherwise show the finished conversions of the earlier rip as its own.
+    const conversion = queued ? conversionOf(name, jobs) : null;
     let quietSeconds: number | null = null;
     try {
       const stat = await fs.stat(path.join(folder, 'STATUS.txt'));

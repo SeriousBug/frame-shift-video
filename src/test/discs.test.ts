@@ -164,6 +164,24 @@ describe('readDiscsState', () => {
     expect(byName.Nothing).toBeNull();
   });
 
+  test("a disc ripped again under the same folder name does not show the old rip's conversions", async () => {
+    const old = [
+      {
+        input_file: '/videos/DVDs/_converting/Again/Again.mkv',
+        status: 'completed',
+        progress: 100,
+      },
+    ];
+    await write('_converting/Again/STATUS.txt', 'Copying the disc\n');
+    await write('_converting/Again/stage.txt', 'copying\n');
+    const copying = await readDiscsState(dir, undefined, old);
+    expect(copying.working[0]?.conversion).toBeNull();
+    // Once it has been given to Frame Shift, its own jobs count.
+    await write('_converting/Again/submitted', '');
+    const queued = await readDiscsState(dir, undefined, old);
+    expect(queued.working[0]?.conversion).toMatchObject({ total: 1, done: 1 });
+  });
+
   test('reads the notes, the logs and the parked discs', async () => {
     await write('ATTENTION - Andre.txt', 'one\ntwo\n');
     await write('ATTENTION - Other.txt', 'three\n');

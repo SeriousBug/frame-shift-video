@@ -306,13 +306,15 @@ function DetailsFields({
   );
 }
 
-function DriveSection({ state }: { state: DiscsState }) {
+export function DriveSection({ state }: { state: DiscsState }) {
   const eject = useSetDiscEject();
   const autoScan = useSetDiscAutoScan();
   const movieOnly = useSetDiscMovieOnly();
   const preset = useSetDiscPreset();
   const command = useDiscCommand();
   const { drive, run } = state;
+  // The same bar the queue shows, here too, so the card that says "working" also shows how far.
+  const copying = state.working.find((disc) => disc.copy)?.copy ?? null;
 
   return (
     <Section title="Drive">
@@ -347,6 +349,7 @@ function DriveSection({ state }: { state: DiscsState }) {
           'Nothing is being copied right now.'
         )}
       </p>
+      {run?.state === 'running' && copying && <CopyBar copy={copying} />}
 
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-gray-900 dark:text-white">
