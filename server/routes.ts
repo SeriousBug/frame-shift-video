@@ -38,6 +38,8 @@ import {
   discsPresetsHandler,
   discsNextHandler,
   discsAttentionHandler,
+  discsExtrasHandler,
+  discsExtrasRenameHandler,
   discsCommandsHandler,
   discsCommandResultHandler,
 } from './handlers/discs';
@@ -239,6 +241,14 @@ const wrappedSubtitlesAutoHandler = withErrorHandler(
 const wrappedDiscsNextHandler = withErrorHandler(
   discsNextHandler,
   'DiscsNextHandler',
+);
+const wrappedDiscsExtrasHandler = withErrorHandler(
+  discsExtrasHandler,
+  'DiscsExtrasHandler',
+);
+const wrappedDiscsExtrasRenameHandler = withErrorHandler(
+  discsExtrasRenameHandler,
+  'DiscsExtrasRenameHandler',
 );
 const wrappedDiscsAttentionHandler = withErrorHandler(
   discsAttentionHandler,
@@ -444,6 +454,12 @@ export async function setupRoutes(req: Request): Promise<Response> {
       (req.method === 'PUT' || req.method === 'DELETE')
     ) {
       return await wrappedDiscsNextHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras' && req.method === 'GET') {
+      return await wrappedDiscsExtrasHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/rename' && req.method === 'POST') {
+      return await wrappedDiscsExtrasRenameHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/attention' && req.method === 'DELETE') {
       return await wrappedDiscsAttentionHandler(req, corsHeaders);

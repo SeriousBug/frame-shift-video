@@ -17,6 +17,7 @@ import {
   deletePreset,
   setNext,
 } from '../disc-state';
+import { readExtras, renameExtra } from '../extras-state';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
 
 function json(
@@ -238,4 +239,35 @@ export async function discsCommandResultHandler(
   return asBadRequest(corsHeaders, async () =>
     json(await commandResult(discsDir(), id), 200, corsHeaders),
   );
+}
+
+/**
+ * GET /api/discs/extras
+ * The extras of ripped movies, for naming them.
+ */
+export async function discsExtrasHandler(
+  _req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  return json({ movies: await readExtras(discsDir()) }, 200, corsHeaders);
+}
+
+/**
+ * POST /api/discs/extras/rename
+ * Body: { path: string, name: string, folder?: string }. Names an extra, and moves it to another
+ * extras folder if asked.
+ */
+export async function discsExtrasRenameHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body || typeof body.path !== 'string') {
+    return json({ error: 'path is needed' }, 400, corsHeaders);
+  }
+  const { path, name, folder } = body;
+  return asBadRequest(corsHeaders, async () => {
+    const now = await renameExtra(discsDir(), path, name, folder);
+    return json({ path: now }, 200, corsHeaders);
+  });
 }

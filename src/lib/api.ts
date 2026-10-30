@@ -18,6 +18,7 @@ import type {
   DiscNext,
   DiscsState,
   DiscPresetInput,
+  ExtraMovie,
 } from '@/types/discs';
 
 // Base API URL
@@ -871,6 +872,37 @@ export async function setDiscNext(note: DiscNext | null): Promise<void> {
   if (!response.ok) {
     throw await discError(response, 'Failed to save the note');
   }
+}
+
+/**
+ * The extras of ripped movies, for naming them
+ */
+export async function fetchDiscExtras(): Promise<ExtraMovie[]> {
+  const response = await fetch(`${API_BASE}/discs/extras`);
+  if (!response.ok) {
+    throw await discError(response, 'Failed to load the extras');
+  }
+  const body = (await response.json()) as { movies: ExtraMovie[] };
+  return body.movies;
+}
+
+/**
+ * Give an extra its name, and optionally move it to another extras folder
+ */
+export async function renameDiscExtra(change: {
+  path: string;
+  name: string;
+  folder?: string;
+}): Promise<{ path: string }> {
+  const response = await fetch(`${API_BASE}/discs/extras/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(change),
+  });
+  if (!response.ok) {
+    throw await discError(response, 'Failed to rename the extra');
+  }
+  return (await response.json()) as { path: string };
 }
 
 /**
