@@ -17,7 +17,13 @@ import {
   deletePreset,
   setNext,
 } from '../disc-state';
-import { extraFilePath, readExtras, renameExtra } from '../extras-state';
+import {
+  extraFilePath,
+  readExtras,
+  removeExtras,
+  renameExtra,
+} from '../extras-state';
+import { findDuplicates } from '../extras-duplicates';
 import { frameJpeg, previewTimes, videoSeconds } from '../extras-preview';
 import { fandomHint } from '../fandom-hints';
 import { matchState, startMatch } from '../extras-match-job';
@@ -430,6 +436,39 @@ export async function discsExtrasSourcesHandler(
     return json({ error: 'movie is needed' }, 400, corsHeaders);
   }
   return json({ sources: await nameSources(movie) }, 200, corsHeaders);
+}
+
+/**
+ * GET /api/discs/extras/duplicates?movie=Name (Year)
+ * Groups of that movie's extras that are the same video (same length and same pictures).
+ */
+export async function discsExtrasDuplicatesHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const movie = new URL(req.url).searchParams.get('movie');
+  if (!movie || movie.length > 150) {
+    return json({ error: 'movie is needed' }, 400, corsHeaders);
+  }
+  return asBadRequest(corsHeaders, async () =>
+    json({ groups: await findDuplicates(discsDir(), movie) }, 200, corsHeaders),
+  );
+}
+
+/**
+ * POST /api/discs/extras/remove
+ * Body: { paths: string[] }. Moves extras out of the movie into the _removed folder (nothing is
+ * deleted). Answers which were moved and which could not be, and why.
+ */
+export async function discsExtrasRemoveHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body) return json({ error: 'paths are needed' }, 400, corsHeaders);
+  return asBadRequest(corsHeaders, async () =>
+    json(await removeExtras(discsDir(), body.paths), 200, corsHeaders),
+  );
 }
 
 /**

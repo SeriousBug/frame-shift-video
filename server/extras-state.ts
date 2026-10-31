@@ -90,7 +90,7 @@ export function cleanExtraName(value: unknown): string {
  * Where the file is: its movie's folder, the extras folder and its name, and which of the two roots
  * (the finished-discs folder, or the DVDs folder itself) holds the movie.
  */
-function locate(
+export function locate(
   file: string,
   output: string,
 ): { parent: string; movie: string; folder: string; base: string } {
@@ -191,4 +191,73 @@ export async function renameExtra(
   await fs.mkdir(path.join(root, folder), { recursive: true });
   await fs.rename(from, to);
   return [here.parent, here.movie, folder, base].filter(Boolean).join('/');
+}
+
+const REMOVED = '_removed';
+const MAX_REMOVE = 200;
+
+/** A name in `dir` that is free: "Name.mkv", then "Name (2).mkv", "Name (3).mkv". */
+async function freeName(dir: string, base: string): Promise<string> {
+  const ext = path.extname(base);
+  const stem = base.slice(0, base.length - ext.length);
+  for (let n = 1; n < 1000; n++) {
+    const name = n === 1 ? base : `${stem} (${n})${ext}`;
+    try {
+      await fs.access(path.join(dir, name));
+    } catch {
+      return name;
+    }
+  }
+  throw new Error('Too many files with that name');
+}
+
+/**
+ * Takes extras out of the movie: each is moved to `_removed/<movie>/<extras folder>/` in the DVDs
+ * folder, where Plex and this page do not look. Nothing is deleted, so a mistake is undone by moving
+ * the file back. Only files that can be renamed here (a video in an extras folder of a movie) can be
+ * removed. One that cannot be is reported and the rest are still moved.
+ */
+export async function removeExtras(
+  dir: string,
+  files: unknown,
+): Promise<{
+  removed: string[];
+  failed: { path: string; error: string }[];
+}> {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('Pick the extras to remove');
+  }
+  if (files.length > MAX_REMOVE) throw new Error('That is too many at once');
+  const output = await outputFolder(dir);
+  const removed: string[] = [];
+  const failed: { path: string; error: string }[] = [];
+  for (const file of new Set(files)) {
+    try {
+      if (typeof file !== 'string')
+        throw new Error('That is not an extra of a movie');
+      await extraFilePath(dir, file);
+      const here = locate(file, output);
+      const from = path.join(
+        dir,
+        here.parent,
+        here.movie,
+        here.folder,
+        here.base,
+      );
+      const toDir = path.join(dir, REMOVED, here.movie, here.folder);
+      await fs.mkdir(toDir, { recursive: true });
+      await fs.rename(from, path.join(toDir, await freeName(toDir, here.base)));
+      // A folder with nothing left in it is tidied away; one with something is left alone.
+      await fs
+        .rmdir(path.join(dir, here.parent, here.movie, here.folder))
+        .catch(() => {});
+      removed.push(file);
+    } catch (error) {
+      failed.push({
+        path: String(file),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return { removed, failed };
 }

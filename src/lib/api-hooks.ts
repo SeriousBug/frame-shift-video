@@ -32,10 +32,12 @@ import {
   fetchSettings,
   fetchDiscs,
   fetchDiscExtras,
+  fetchExtraDuplicates,
   fetchExtraMatch,
   fetchExtraSources,
   fetchExtraPreview,
   fetchFandomHint,
+  removeDiscExtras,
   startExtraMatch,
   renameDiscExtra,
   setDiscEject,
@@ -573,6 +575,35 @@ export function useExtraSources(movie: string, enabled: boolean) {
     enabled,
     retry: false,
     staleTime: 60 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to find the extras of a movie that are the same video twice. Asked once for the session
+ * (it looks at the pictures), and again after extras are removed.
+ */
+export function useExtraDuplicates(movie: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['extra-duplicates', movie] as const,
+    queryFn: () => fetchExtraDuplicates(movie),
+    enabled,
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to take extras out of their movie
+ */
+export function useRemoveExtras() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: removeDiscExtras,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.discExtras });
+      queryClient.invalidateQueries({ queryKey: ['extra-duplicates'] });
+      queryClient.invalidateQueries({ queryKey: ['extra-match'] });
+    },
   });
 }
 
