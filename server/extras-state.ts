@@ -13,23 +13,12 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { outputFolder } from './disc-state';
+import { EXTRA_FOLDERS, VIDEO } from './disc-contents';
 import type { ExtraItem, ExtraMovie } from '../src/types/discs';
 
-/** The folders Plex looks in for a movie's extras. */
-export const EXTRA_FOLDERS = [
-  'Trailers',
-  'Featurettes',
-  'Behind The Scenes',
-  'Deleted Scenes',
-  'Interviews',
-  'Scenes',
-  'Shorts',
-  'Other',
-] as const;
-
-const VIDEO = /\.(mkv|mp4|m4v|avi|mov)$/i;
 /** The names the ripper gives: "Trailer 01 (2 min).mkv". */
-const GENERIC = /^(Trailer|Featurette|Extra) \d+ \(\d+ min\)$/;
+const GENERIC =
+  /^(Trailer|Featurette|Extra|Alternate Version) \d+ \(\d+ min\)$/;
 const MAX_MOVIES = 200;
 const MAX_NAME = 150;
 

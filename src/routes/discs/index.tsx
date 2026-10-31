@@ -10,6 +10,7 @@ import { ConvertChoice } from '@/components/convert-choice';
 import { TmdbPicker } from '@/components/tmdb-picker';
 import { SubtitlesSection } from '@/components/subtitles-section';
 import { ExtrasSection } from '@/components/extras-section';
+import { describeContents } from '@/lib/disc-contents';
 import { copyProgress } from '@/lib/copy-progress';
 import { parseLabel } from '@/lib/tmdb-results';
 import {
@@ -810,6 +811,11 @@ function WorkingSection({ state }: { state: DiscsState }) {
                 <span className="text-sm text-gray-600 dark:text-gray-400">
                   {secondsAgo(done.at)}
                 </span>
+                {done.contents && describeContents(done.contents) && (
+                  <span className="block pl-5 text-gray-600 dark:text-gray-400">
+                    {describeContents(done.contents)}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
