@@ -2,13 +2,16 @@
  * Compares what the listener (eyes.py) read and heard in an extra with the bonus-feature names DVD
  * Fandom lists for its movie, and says whether one of them is clearly it.
  *
+ * Two kinds of evidence: how long the extra is against the length a database gives the feature (the
+ * only evidence there is when nothing is written or said), and what the listener read and heard.
  * Like Shelver's auto-match it is careful: a name is suggested only when the evidence is clear (the
- * title card reads it, or it is said and also written, and nothing else fits nearly as well), and
- * every answer says why. Everything else is left for the person, with what was seen and heard, so
+ * only listed feature of that length, or the title card reads it, or it is said and also written,
+ * and nothing else fits nearly as well), and every answer says why. Extras of one length cannot be
+ * told apart by length, so those are decided by what was read and heard, or left for a person. Everything else is left for the person, with what was seen and heard, so
  * they still have something to go on. Nothing is renamed by this; a person presses a button.
  */
 
-import type { FandomHint } from '../src/types/discs';
+import type { FandomHint, NameEntry, NameSource } from '../src/types/discs';
 
 export interface Look {
   seconds: number;
@@ -23,10 +26,18 @@ export interface Candidate {
   kind: string | null;
   /** The name's words that have to turn up */
   words: string[];
+  /** The length a database gives it, if it gives one */
+  seconds: number | null;
+  /** Listed as the other extras played one after another, not an extra of its own */
+  playAll: boolean;
+  /** Which databases list it */
+  sources: string[];
 }
 
 export interface Suggestion {
   state: 'matched' | 'unsure' | 'none';
+  /** How long the extra is, when that was found out */
+  seconds?: number | null;
   /** One sentence saying why */
   note: string;
   name?: string;
@@ -102,32 +113,66 @@ export function fileName(text: string): string {
 }
 
 /**
- * The names a movie's wiki list offers: its items that have nothing under them (a heading such as
- * "Deleted Scenes" is a kind, not a name; what is under it is the names), with the kind they sit under.
+ * The names a list offers: its items that have nothing under them (a heading such as "Deleted
+ * Scenes" is a kind, not a name; what is under it is the names), with the kind they sit under.
  */
-export function candidates(hint: FandomHint): Candidate[] {
-  const lines = hint.features ?? [];
+function fromEntries(entries: NameEntry[], source: string): Candidate[] {
   const out: Candidate[] = [];
   const parents: (string | null)[] = [];
-  lines.forEach((line, index) => {
+  entries.forEach((line, index) => {
     if (line.depth === 0) {
       parents.length = 0;
       return;
     }
     parents.length = line.depth - 1;
     parents[line.depth - 1] = line.text;
-    const next = lines[index + 1];
+    const next = entries[index + 1];
     if (next && next.depth > line.depth) return;
     const name = fileName(line.text);
     const significant = words(name).filter((w) => !STOP.has(w));
     if (!name || significant.length === 0) return;
     out.push({
       name,
-      kind: kindOf(...parents.slice(0, -1).reverse(), line.text),
+      kind: line.kind ?? kindOf(...parents.slice(0, -1).reverse(), line.text),
       words: significant,
+      seconds: line.seconds,
+      playAll: Boolean(line.playAll) || /^play all$/i.test(name),
+      sources: [source],
     });
   });
   return out;
+}
+
+/** The names a DVD Fandom list offers (it gives no lengths). */
+export function candidates(hint: FandomHint): Candidate[] {
+  return fromEntries(
+    (hint.features ?? []).map((f) => ({ ...f, seconds: null })),
+    'DVD Fandom',
+  );
+}
+
+/**
+ * The names of all the databases together: a feature several list is one name, with the length any of
+ * them gives (the first that gives one), and every database that lists it.
+ */
+export function candidatesFrom(sources: NameSource[]): Candidate[] {
+  const merged = new Map<string, Candidate>();
+  for (const source of sources) {
+    for (const found of fromEntries(source.features, source.source)) {
+      const key = found.words.join(' ');
+      const have = merged.get(key);
+      if (!have) {
+        merged.set(key, found);
+        continue;
+      }
+      have.seconds ??= found.seconds;
+      have.kind ??= found.kind;
+      have.playAll ||= found.playAll;
+      if (!have.sources.includes(source.source))
+        have.sources.push(source.source);
+    }
+  }
+  return [...merged.values()];
 }
 
 /** The edit distance between two short words, capped: only "off by one letter" matters here. */
@@ -182,32 +227,24 @@ function inOrder(name: string[], heard: string[]): boolean {
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
-/** Compares one extra's look with the names. */
-export function matchExtra(look: Look, names: Candidate[]): Suggestion {
-  const written = look.ocr.flatMap((m) => m.lines);
-  const spoken = look.speech.map((s) => s.text);
-  const saw = written.join(' / ');
-  const heard = spoken.join(' ');
-  if (names.length === 0) {
-    return {
-      state: 'none',
-      note: 'DVD Fandom lists no bonus-feature names for this movie, so there is nothing to compare with.',
-      saw,
-      heard,
-    };
-  }
-  if (written.length === 0 && spoken.length === 0) {
-    return {
-      state: 'none',
-      note: 'Nothing is written on it or said in it that could be read, so it has to be named by watching it.',
-      saw,
-      heard,
-    };
-  }
-  const writtenWords = words(written.join(' '));
-  const spokenWords = words(heard);
+/** How far a length may be from a listed one and still be it, and how far and still be close. */
+export const CLEAR_SECONDS = 6;
+export const NEAR_SECONDS = 15;
 
-  const scored = names
+type Scored = {
+  candidate: Candidate;
+  onScreen: number;
+  saidOut: number;
+  strong: boolean;
+  score: number;
+};
+
+/** What was read and heard against each name, best first. */
+function scoreText(look: Look | null, names: Candidate[]): Scored[] {
+  if (!look) return [];
+  const writtenWords = words(look.ocr.flatMap((m) => m.lines).join(' '));
+  const spokenWords = words(look.speech.map((s) => s.text).join(' '));
+  return names
     .map((candidate) => {
       const onScreen = coverage(candidate.words, writtenWords);
       const saidOut = coverage(candidate.words, spokenWords);
@@ -227,70 +264,214 @@ export function matchExtra(look: Look, names: Candidate[]): Suggestion {
       return { candidate, onScreen, saidOut, strong, score };
     })
     .sort((a, b) => b.score - a.score);
+}
 
-  const best = scored[0]!;
-  const rivals = scored.filter(
-    (s) => s !== best && s.score >= 0.6 && s.score >= best.score - 0.25,
+/** Why a name fits what was read and heard. */
+function because(look: Look, s: Scored): string {
+  const parts: string[] = [];
+  const card = look.ocr.find(
+    (m) => coverage(s.candidate.words, words(m.lines.join(' '))) >= 0.6,
   );
-  const because = (s: (typeof scored)[number]) => {
-    const parts: string[] = [];
-    const card = look.ocr.find(
-      (m) => coverage(s.candidate.words, words(m.lines.join(' '))) >= 0.6,
-    );
-    if (s.onScreen >= 0.6 && card)
-      parts.push(`the writing at ${clock(card.t)} reads it`);
-    if (s.saidOut >= 0.6)
-      parts.push('it is said in the first minute and a half');
-    return parts.join(' and ');
-  };
+  if (s.onScreen >= 0.6 && card)
+    parts.push(`the writing at ${clock(card.t)} reads it`);
+  if (s.saidOut >= 0.6) parts.push('it is said in the first minute and a half');
+  return parts.join(' and ');
+}
 
-  if (best.strong && rivals.length === 0) {
-    return {
-      state: 'matched',
-      name: best.candidate.name,
-      kind: best.candidate.kind,
-      note: `Looks like “${best.candidate.name}”: ${because(best)}.`,
-      saw,
-      heard,
-    };
-  }
-  if (best.score >= 0.6) {
-    const others = [best, ...rivals].map((s) => `“${s.candidate.name}”`);
-    return {
-      state: 'unsure',
-      name: best.candidate.name,
-      kind: best.candidate.kind,
-      note:
-        rivals.length > 0
-          ? `Could be ${others.join(' or ')}; it is not clear which.`
-          : `Might be “${best.candidate.name}”, but only part of it was found.`,
-      saw,
-      heard,
-    };
-  }
+const where = (c: Candidate) => c.sources.join(' and ');
+
+/** What one extra is: how long it is, and what was read and heard in it (either may be missing). */
+export interface Evidence {
+  seconds: number | null;
+  look: Look | null;
+}
+
+function sayings(look: Look | null) {
   return {
-    state: 'none',
-    note: 'What was written or said does not look like any of the names DVD Fandom lists.',
-    saw,
-    heard,
+    saw: look ? look.ocr.flatMap((m) => m.lines).join(' / ') : '',
+    heard: look ? look.speech.map((s) => s.text).join(' ') : '',
   };
 }
 
 /**
- * Matches all of a movie's looks, and takes back a name that two extras both matched (one of them
+ * Compares one extra with the names. `sameLength` is how many other extras are as long as it, which
+ * decides whether its length alone can name it.
+ */
+export function matchExtra(
+  evidence: Evidence,
+  names: Candidate[],
+  sameLength: (candidate: Candidate) => number = () => 0,
+): Suggestion {
+  const { look, seconds } = evidence;
+  const { saw, heard } = sayings(look);
+  const base = { seconds, saw, heard };
+  if (names.length === 0) {
+    return {
+      ...base,
+      state: 'none',
+      note: 'No database lists bonus-feature names for this movie, so there is nothing to compare with.',
+    };
+  }
+  const scored = scoreText(look, names);
+  const text = scored[0];
+
+  // By length: the listed features this one is as long as.
+  const fits =
+    seconds === null
+      ? []
+      : names
+          .filter(
+            (n) =>
+              n.seconds !== null &&
+              Math.abs(seconds - n.seconds) <= CLEAR_SECONDS,
+          )
+          .sort(
+            (a, b) =>
+              Math.abs(seconds - a.seconds!) - Math.abs(seconds - b.seconds!),
+          );
+  const real = fits.filter((n) => !n.playAll);
+  if (fits.length > 0 && real.length === 0) {
+    const all = fits[0]!;
+    return {
+      ...base,
+      state: 'none',
+      note: `It is ${clock(seconds!)} long, the length of the “Play All” (${clock(all.seconds!)}) that ${where(all)} lists: probably the extras above it played one after another, not an extra of its own.`,
+    };
+  }
+  if (real.length > 0) {
+    const long = `${clock(seconds!)}`;
+    const textName = text?.strong ? text.candidate : null;
+    if (textName && real.includes(textName)) {
+      return {
+        ...base,
+        state: 'matched',
+        name: textName.name,
+        kind: textName.kind,
+        note: `Looks like “${textName.name}”: it is ${long} long, the length ${where(textName)} lists, and ${because(look!, text!)}.`,
+      };
+    }
+    if (textName && !real.includes(textName)) {
+      return {
+        ...base,
+        state: 'unsure',
+        name: real[0]!.name,
+        kind: real[0]!.kind,
+        note: `Its length fits “${real[0]!.name}”, but what was read or heard looks like “${textName.name}”.`,
+      };
+    }
+    if (real.length === 1) {
+      const only = real[0]!;
+      const others = sameLength(only);
+      if (others === 0) {
+        return {
+          ...base,
+          state: 'matched',
+          name: only.name,
+          kind: only.kind,
+          note: `Looks like “${only.name}”: it is ${long} long, the only feature of that length ${where(only)} lists (${clock(only.seconds!)}).`,
+        };
+      }
+      return {
+        ...base,
+        state: 'unsure',
+        name: only.name,
+        kind: only.kind,
+        note: `It is ${long} long, the length of “${only.name}”, but ${others === 1 ? 'another extra is' : `${others} other extras are`} that length too, so length alone cannot tell which is which.`,
+      };
+    }
+    return {
+      ...base,
+      state: 'unsure',
+      name: real[0]!.name,
+      kind: real[0]!.kind,
+      note: `It is ${long} long, and ${real.map((n) => `“${n.name}”`).join(', ')} are all about that length, so length alone cannot tell which it is.`,
+    };
+  }
+
+  // No listed length fits: what was read and heard, as before.
+  const rivals = scored.filter(
+    (s) => text && s !== text && s.score >= 0.6 && s.score >= text.score - 0.25,
+  );
+  if (text && text.strong && rivals.length === 0) {
+    return {
+      ...base,
+      state: 'matched',
+      name: text.candidate.name,
+      kind: text.candidate.kind,
+      note: `Looks like “${text.candidate.name}”: ${because(look!, text)}.`,
+    };
+  }
+  if (text && text.score >= 0.6) {
+    const others = [text, ...rivals].map((s) => `“${s.candidate.name}”`);
+    return {
+      ...base,
+      state: 'unsure',
+      name: text.candidate.name,
+      kind: text.candidate.kind,
+      note:
+        rivals.length > 0
+          ? `Could be ${others.join(' or ')}; it is not clear which.`
+          : `Might be “${text.candidate.name}”, but only part of it was found.`,
+    };
+  }
+  const closest =
+    seconds === null
+      ? null
+      : names
+          .filter(
+            (n) =>
+              n.seconds !== null &&
+              !n.playAll &&
+              Math.abs(seconds - n.seconds) <= NEAR_SECONDS,
+          )
+          .sort(
+            (a, b) =>
+              Math.abs(seconds - a.seconds!) - Math.abs(seconds - b.seconds!),
+          )[0];
+  if (closest) {
+    return {
+      ...base,
+      state: 'unsure',
+      name: closest.name,
+      kind: closest.kind,
+      note: `Close in length to “${closest.name}” (${clock(closest.seconds!)} listed, ${clock(seconds!)} here), but not close enough to be sure.`,
+    };
+  }
+  const nothing = !look || (look.ocr.length === 0 && look.speech.length === 0);
+  return {
+    ...base,
+    state: 'none',
+    note: nothing
+      ? 'No listed feature is its length, and nothing is written on it or said in it that could be read, so it has to be named by watching it.'
+      : 'No listed feature is its length, and what was written or said does not look like any of the listed names.',
+  };
+}
+
+/**
+ * Matches all of a movie's extras, and takes back a name that two extras both matched (one of them
  * is wrong, and which is not clear), saying so.
  */
 export function matchMovie(
-  looks: Record<string, Look>,
+  items: ({ path: string } & Evidence)[],
   names: Candidate[],
 ): Record<string, Suggestion> {
+  const sameLength = (self: string) => (candidate: Candidate) =>
+    candidate.seconds === null
+      ? 0
+      : items.filter(
+          (o) =>
+            o.path !== self &&
+            o.seconds !== null &&
+            Math.abs(o.seconds - candidate.seconds!) <= CLEAR_SECONDS,
+        ).length;
   const out: Record<string, Suggestion> = {};
-  for (const [path, look] of Object.entries(looks))
-    out[path] = matchExtra(look, names);
+  for (const item of items)
+    out[item.path] = matchExtra(item, names, sameLength(item.path));
   const claimed = new Map<string, string[]>();
   for (const [path, s] of Object.entries(out)) {
-    if (s.state === 'matched' && s.name)
+    if (s.state === 'matched' && s.name) {
       claimed.set(s.name, [...(claimed.get(s.name) ?? []), path]);
+    }
   }
   for (const paths of claimed.values()) {
     if (paths.length < 2) continue;

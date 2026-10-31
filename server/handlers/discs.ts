@@ -21,6 +21,7 @@ import { extraFilePath, readExtras, renameExtra } from '../extras-state';
 import { frameJpeg, previewTimes, videoSeconds } from '../extras-preview';
 import { fandomHint } from '../fandom-hints';
 import { matchState, startMatch } from '../extras-match-job';
+import { nameSources } from '../extras-sources';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
 
 function json(
@@ -413,6 +414,22 @@ export async function discsExtrasFrameHandler(
       corsHeaders,
     );
   }
+}
+
+/**
+ * GET /api/discs/extras/sources?movie=Name (Year)
+ * What every database lists as the bonus features of that movie's disc, with the lengths they give:
+ * DVD Compare and TheDiscDB (Region 1) and DVD Fandom.
+ */
+export async function discsExtrasSourcesHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const movie = new URL(req.url).searchParams.get('movie');
+  if (!movie || movie.length > 150) {
+    return json({ error: 'movie is needed' }, 400, corsHeaders);
+  }
+  return json({ sources: await nameSources(movie) }, 200, corsHeaders);
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   useExtraMatch,
   useExtraPreview,
   useStartExtraMatch,
-  useFandomHint,
+  useExtraSources,
   useRenameDiscExtra,
 } from '@/lib/api-hooks';
 import { discExtraFileUrl, discExtraFrameUrl } from '@/lib/api';
@@ -173,6 +173,16 @@ function MatchBar({ movie, enabled }: { movie: string; enabled: boolean }) {
           Done: {matched} of {data.total} matched clearly.
         </span>
       )}
+      {data?.warning && (
+        <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+          {data.warning}
+        </p>
+      )}
+      {data?.sources && data.sources.length > 0 && data.status === 'done' && (
+        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+          Compared with the names and lengths from {data.sources.join(', ')}.
+        </p>
+      )}
       {(data?.status === 'failed' || start.error) && (
         <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">
           {data?.error ?? start.error?.message}
@@ -294,61 +304,78 @@ function ExtraRow({
 }
 
 /**
- * What DVD Fandom lists as the bonus features of this movie's disc. It gives names only, no lengths,
- * so it is something to read while typing, not something that fills the boxes in.
+ * What the databases list as the bonus features of this movie's disc, with the lengths they give.
+ * Lengths are what an extra can be matched by; names alone are something to read while typing.
  */
-function FandomHint({ movie, enabled }: { movie: string; enabled: boolean }) {
-  const { data, isLoading } = useFandomHint(movie, enabled);
+function Sources({ movie, enabled }: { movie: string; enabled: boolean }) {
+  const { data, isLoading } = useExtraSources(movie, enabled);
   if (!enabled) return null;
   if (isLoading) {
     return (
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Looking up {movie} on DVD Fandom...
+        Looking up {movie} on DVD Compare, TheDiscDB and DVD Fandom...
       </p>
     );
   }
-  if (!data || !data.found) {
+  if (!data || data.length === 0) {
     return (
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        DVD Fandom has no list for this movie.
+        DVD Compare, TheDiscDB and DVD Fandom have no list for this movie.
       </p>
     );
   }
-  const features = data.features ?? [];
   return (
     <details className="mt-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-3">
       <summary className="cursor-pointer text-sm font-medium text-blue-900 dark:text-blue-100">
-        What DVD Fandom lists on this disc
-        {data.runtime ? ` (the movie: ${data.runtime})` : ''}
+        What the databases list on this disc (
+        {data.map((s) => s.source).join(', ')})
       </summary>
-      {features.length === 0 ? (
-        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-          The page has no bonus features listed.
-        </p>
-      ) : (
-        <ul className="mt-2 text-sm text-gray-800 dark:text-gray-200">
-          {features.map((line, index) => (
-            <li
-              key={`${index}-${line.text}`}
-              style={{ paddingLeft: `${Math.max(line.depth - 1, 0) * 16}px` }}
-              className={line.depth === 0 ? 'mt-2 font-semibold' : undefined}
-            >
-              {line.text}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-        From{' '}
-        <a
-          className="underline"
-          href={data.url}
-          target="_blank"
-          rel="noreferrer"
+      {data.map((source) => (
+        <div
+          key={`${source.source}-${source.release ?? ''}-${source.url}`}
+          className="mt-3"
         >
-          {data.page} on DVD Fandom
-        </a>
-        . Names only, with no lengths, so match them by what each one is.
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+            <a
+              className="underline"
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {source.source}
+            </a>
+            {source.release ? `: ${source.release}` : ''}
+            {source.runtime ? ` (the movie: ${source.runtime})` : ''}
+          </p>
+          {source.features.length === 0 ? (
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+              No bonus features are listed.
+            </p>
+          ) : (
+            <ul className="mt-1 text-sm text-gray-800 dark:text-gray-200">
+              {source.features.map((line, index) => (
+                <li
+                  key={`${index}-${line.text}`}
+                  style={{
+                    paddingLeft: `${Math.max(line.depth - 1, 0) * 16}px`,
+                  }}
+                  className={
+                    line.depth === 0 ? 'mt-2 font-semibold' : undefined
+                  }
+                >
+                  {line.text}
+                  {line.seconds ? ` (${clock(line.seconds)})` : ''}
+                  {line.playAll ? ' (plays the others in a row)' : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+      <p className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+        DVD Compare and TheDiscDB are for Region 1 discs. A length is what the
+        database gives; many give names only, so match those by what each one
+        is.
       </p>
     </details>
   );
@@ -400,7 +427,7 @@ export function ExtrasSection() {
             <h3 className="font-semibold text-gray-900 dark:text-white">
               {movie.movie}
             </h3>
-            <FandomHint
+            <Sources
               movie={movie.movie}
               enabled={movie.items.some((i) => i.unnamed)}
             />
