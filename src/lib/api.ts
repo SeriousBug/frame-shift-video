@@ -18,6 +18,7 @@ import type {
   DiscNext,
   DiscsState,
   DiscPresetInput,
+  ExtraMatch,
   ExtraMovie,
   FandomHint,
 } from '@/types/discs';
@@ -885,6 +886,36 @@ export async function fetchDiscExtras(): Promise<ExtraMovie[]> {
   }
   const body = (await response.json()) as { movies: ExtraMovie[] };
   return body.movies;
+}
+
+/**
+ * How the matching of a movie's extras is going, with the suggestions so far (null: not started)
+ */
+export async function fetchExtraMatch(
+  movie: string,
+): Promise<ExtraMatch | null> {
+  const response = await fetch(
+    `${API_BASE}/discs/extras/match?${new URLSearchParams({ movie })}`,
+  );
+  if (!response.ok) {
+    throw await discError(response, 'Failed to read how the matching is going');
+  }
+  return ((await response.json()) as { match: ExtraMatch | null }).match;
+}
+
+/**
+ * Start listening to a movie's unnamed extras and matching them with DVD Fandom's names
+ */
+export async function startExtraMatch(movie: string): Promise<ExtraMatch> {
+  const response = await fetch(`${API_BASE}/discs/extras/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movie }),
+  });
+  if (!response.ok) {
+    throw await discError(response, 'Failed to start matching');
+  }
+  return ((await response.json()) as { match: ExtraMatch }).match;
 }
 
 /**

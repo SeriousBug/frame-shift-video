@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { CollapsibleCard } from '@/components/collapsible-card';
 import {
   useDiscExtras,
+  useExtraMatch,
   useExtraPreview,
+  useStartExtraMatch,
   useFandomHint,
   useRenameDiscExtra,
 } from '@/lib/api-hooks';
 import { discExtraFileUrl, discExtraFrameUrl } from '@/lib/api';
-import type { ExtraItem } from '@/types/discs';
+import type { ExtraItem, ExtraMovie, ExtraSuggestion } from '@/types/discs';
 
 const FOLDERS = [
   'Trailers',
@@ -89,7 +91,106 @@ function Preview({ item, movie }: { item: ExtraItem; movie: string }) {
   );
 }
 
-function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
+/**
+ * What matching said about this extra: a name to use when it is clear, a maybe, or why there is none,
+ * with what was written on the video and said in it for a person to judge by.
+ */
+function Suggestion({
+  suggestion,
+  onUse,
+}: {
+  suggestion: ExtraSuggestion;
+  onUse: () => void;
+}) {
+  const tone =
+    suggestion.state === 'matched'
+      ? 'text-green-700 dark:text-green-400'
+      : suggestion.state === 'unsure'
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-gray-600 dark:text-gray-400';
+  return (
+    <div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-600 p-2">
+      <p className={`text-sm ${tone}`}>{suggestion.note}</p>
+      {suggestion.name && (
+        <button
+          type="button"
+          className="mt-1 min-h-[44px] px-3 py-2 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
+          onClick={onUse}
+        >
+          {suggestion.state === 'matched' ? 'Use this name' : 'Use it anyway'}
+        </button>
+      )}
+      {(suggestion.saw || suggestion.heard) && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-xs text-gray-600 dark:text-gray-400">
+            What it saw and heard
+          </summary>
+          {suggestion.saw && (
+            <p className="mt-1 text-xs text-gray-700 dark:text-gray-300">
+              Written on it: {suggestion.saw}
+            </p>
+          )}
+          {suggestion.heard && (
+            <p className="mt-1 text-xs text-gray-700 dark:text-gray-300">
+              Said in it: {suggestion.heard}
+            </p>
+          )}
+        </details>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The button that listens to a movie's unnamed extras and compares them with DVD Fandom's names, and
+ * how far it has got. It only suggests; each suggestion has its own button.
+ */
+function MatchBar({ movie, enabled }: { movie: string; enabled: boolean }) {
+  const { data } = useExtraMatch(movie);
+  const start = useStartExtraMatch(movie);
+  if (!enabled) return null;
+  const running = data?.status === 'running';
+  const matched = Object.values(data?.suggestions ?? {}).filter(
+    (s) => s.state === 'matched',
+  ).length;
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        className="min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700"
+        disabled={running || start.isPending}
+        onClick={() => start.mutate()}
+      >
+        {running ? 'Listening...' : 'Try to match the names'}
+      </button>
+      {running && data && (
+        <span className="ml-3 text-sm text-gray-600 dark:text-gray-400">
+          {data.done} of {data.total} looked at
+        </span>
+      )}
+      {data?.status === 'done' && (
+        <span className="ml-3 text-sm text-gray-600 dark:text-gray-400">
+          Done: {matched} of {data.total} matched clearly.
+        </span>
+      )}
+      {(data?.status === 'failed' || start.error) && (
+        <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">
+          {data?.error ?? start.error?.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ExtraRow({
+  item,
+  movie,
+  suggestion,
+}: {
+  item: ExtraItem;
+  movie: string;
+  suggestion?: ExtraSuggestion;
+}) {
   const rename = useRenameDiscExtra();
   // The ripper's own name ("Trailer 01 (2 min)") is not something to edit into a real one, so a
   // box for an extra with no name yet starts empty; what it is called now is shown above it.
@@ -130,6 +231,15 @@ function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
         </a>
       </p>
       <Preview item={item} movie={movie} />
+      {suggestion && (
+        <Suggestion
+          suggestion={suggestion}
+          onUse={() => {
+            if (suggestion.name) setName(suggestion.name);
+            if (suggestion.kind) setFolder(suggestion.kind);
+          }}
+        />
+      )}
       <input
         id={`name-${id}`}
         className={`${INPUT} mt-1`}
@@ -244,6 +354,27 @@ function FandomHint({ movie, enabled }: { movie: string; enabled: boolean }) {
   );
 }
 
+/** The extras of one movie, with what matching suggested for each. */
+function MovieExtras({ movie }: { movie: ExtraMovie }) {
+  const { data } = useExtraMatch(movie.movie);
+  const anyUnnamed = movie.items.some((i) => i.unnamed);
+  return (
+    <>
+      <MatchBar movie={movie.movie} enabled={anyUnnamed} />
+      <ul className="mt-2 space-y-3">
+        {movie.items.map((item) => (
+          <ExtraRow
+            key={item.path}
+            item={item}
+            movie={movie.movie}
+            suggestion={item.unnamed ? data?.suggestions[item.path] : undefined}
+          />
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /**
  * Names the extras of ripped movies. A disc stores no names for them, so the ripper only sorts them
  * by length; Plex shows what is typed here.
@@ -259,7 +390,7 @@ export function ExtrasSection() {
   return (
     <CollapsibleCard
       title="Name the extras"
-      help="A DVD does not store names for its bonus features, so they are sorted by length and called Trailer 01, Featurette 01 and so on. Press Watch it to see what one is (Safari cannot play .mkv files: use Download and open it in VLC or Infuse), then type the real name and press Save. Plex shows that name, and sorts each into the kind you pick."
+      help="A DVD does not store names for its bonus features, so they are sorted by length and called Trailer 01, Featurette 01 and so on. Try to match the names listens to each one and compares it with the names DVD Fandom lists, and suggests a name when it is clear. Or press Preview or Watch it to see what one is (Safari cannot play .mkv files: use Download and open it in VLC or Infuse), then type the real name and press Save. Plex shows that name, and sorts each into the kind you pick."
       hint="Bonus features of movies that are ready to watch."
       badge={unnamed > 0 ? `${unnamed} not named` : undefined}
     >
@@ -273,11 +404,7 @@ export function ExtrasSection() {
               movie={movie.movie}
               enabled={movie.items.some((i) => i.unnamed)}
             />
-            <ul className="mt-2 space-y-3">
-              {movie.items.map((item) => (
-                <ExtraRow key={item.path} item={item} movie={movie.movie} />
-              ))}
-            </ul>
+            <MovieExtras movie={movie} />
           </section>
         ))}
       </div>

@@ -20,6 +20,7 @@ import {
 import { extraFilePath, readExtras, renameExtra } from '../extras-state';
 import { frameJpeg, previewTimes, videoSeconds } from '../extras-preview';
 import { fandomHint } from '../fandom-hints';
+import { matchState, startMatch } from '../extras-match-job';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
 
 function json(
@@ -412,6 +413,39 @@ export async function discsExtrasFrameHandler(
       corsHeaders,
     );
   }
+}
+
+/**
+ * POST /api/discs/extras/match
+ * Body: { movie: string }. Starts listening to the movie's unnamed extras and matching what is
+ * heard with DVD Fandom's names (slow: the page polls GET for the answers as they come).
+ */
+export async function discsExtrasMatchStartHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = await readBody(req);
+  if (!body || typeof body.movie !== 'string' || !body.movie) {
+    return json({ error: 'movie is needed' }, 400, corsHeaders);
+  }
+  const movie = body.movie;
+  return asBadRequest(corsHeaders, async () => {
+    const { state } = await startMatch(discsDir(), movie);
+    return json({ match: state }, 200, corsHeaders);
+  });
+}
+
+/**
+ * GET /api/discs/extras/match?movie=Name (Year)
+ * How the matching of that movie's extras is going, with the answers so far; null if not started.
+ */
+export async function discsExtrasMatchHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const movie = new URL(req.url).searchParams.get('movie');
+  if (!movie) return json({ error: 'movie is needed' }, 400, corsHeaders);
+  return json({ match: matchState(movie) }, 200, corsHeaders);
 }
 
 /**

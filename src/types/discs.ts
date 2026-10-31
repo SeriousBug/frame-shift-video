@@ -272,6 +272,30 @@ export interface FandomHint {
   features?: { text: string; depth: number }[];
 }
 
+/** What "Try to match the names" made of one extra. */
+export interface ExtraSuggestion {
+  /** matched: clear; unsure: might be; none: nothing like a listed name */
+  state: 'matched' | 'unsure' | 'none';
+  /** One sentence saying why */
+  note: string;
+  name?: string;
+  /** The extras folder its place on the wiki's list suggests */
+  kind?: string | null;
+  /** What was written on the video and what was said in it */
+  saw: string;
+  heard: string;
+}
+
+/** A movie's matching of its unnamed extras, as far as it has got. */
+export interface ExtraMatch {
+  status: 'running' | 'done' | 'failed';
+  total: number;
+  done: number;
+  /** By the extra's path */
+  suggestions: Record<string, ExtraSuggestion>;
+  error?: string;
+}
+
 export interface ExtraMovie {
   movie: string;
   items: ExtraItem[];
