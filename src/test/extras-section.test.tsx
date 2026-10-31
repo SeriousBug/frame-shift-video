@@ -32,12 +32,22 @@ const MOVIES = [
 type Rename = { path: string; name: string; folder?: string };
 let renames: Rename[];
 let failWith: string | null;
+let hint: unknown;
+let hintAsked: string[];
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   renames = [];
   failWith = null;
+  hintAsked = [];
+  hint = { found: false };
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/discs/extras/hint')) {
+      hintAsked.push(
+        new URL(String(url), 'http://x').searchParams.get('movie')!,
+      );
+      return new Response(JSON.stringify({ hint }));
+    }
     if (String(url).endsWith('/discs/extras/rename')) {
       renames.push(JSON.parse(String(init?.body)));
       return failWith
@@ -125,5 +135,69 @@ describe('the "Name the extras" section', () => {
     const { container } = page();
     await new Promise((r) => setTimeout(r, 100));
     expect(container.textContent).toBe('');
+  });
+
+  test('shows what DVD Fandom lists for a movie that has unnamed extras', async () => {
+    hint = {
+      found: true,
+      page: 'Duma',
+      url: 'https://dvd.fandom.com/wiki/Duma',
+      runtime: 'Approx. 100 minutes',
+      features: [
+        { text: 'Disc 2', depth: 0 },
+        { text: 'Deleted Scenes', depth: 1 },
+        { text: 'Zebra Cut', depth: 2 },
+      ],
+    };
+    page();
+    expect(
+      await screen.findByText(
+        'What DVD Fandom lists on this disc (the movie: Approx. 100 minutes)',
+      ),
+    ).toBeTruthy();
+    expect(hintAsked).toEqual(['Duma (2005)']);
+    expect(screen.getByText('Zebra Cut')).toBeTruthy();
+    const link = screen.getByRole('link', {
+      name: 'Duma on DVD Fandom',
+    }) as HTMLAnchorElement;
+    expect(link.href).toBe('https://dvd.fandom.com/wiki/Duma');
+  });
+
+  test('says so when DVD Fandom has no list, and still lets the extras be named', async () => {
+    page();
+    expect(
+      await screen.findByText('DVD Fandom has no list for this movie.'),
+    ).toBeTruthy();
+    expect(
+      await nameBox('Name of the extra Trailer 01 (2 min) in Duma (2005)'),
+    ).toBeTruthy();
+  });
+
+  test('a movie whose extras are all named is not looked up', async () => {
+    globalThis.fetch = (async (url: string) => {
+      if (String(url).includes('/discs/extras/hint')) hintAsked.push('asked');
+      return new Response(
+        JSON.stringify({
+          movies: [
+            {
+              movie: 'Done (2001)',
+              items: [
+                {
+                  path: 'a',
+                  folder: 'Featurettes',
+                  name: 'Making Of',
+                  unnamed: false,
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    }) as unknown as typeof fetch;
+    page();
+    expect(await screen.findByText('Done (2001)')).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(hintAsked).toEqual([]);
+    expect(screen.queryByText(/DVD Fandom/)).toBeNull();
   });
 });

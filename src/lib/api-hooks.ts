@@ -32,6 +32,7 @@ import {
   fetchSettings,
   fetchDiscs,
   fetchDiscExtras,
+  fetchFandomHint,
   renameDiscExtra,
   setDiscEject,
   setDiscAutoScan,
@@ -540,6 +541,20 @@ export function useDiscExtras() {
     queryKey: queryKeys.discExtras,
     queryFn: fetchDiscExtras,
     refetchInterval: 15000,
+  });
+}
+
+/**
+ * Hook to read what DVD Fandom lists for a movie's disc. One try, kept for the session: the wiki is
+ * slow and rarely changes.
+ */
+export function useFandomHint(movie: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['fandom-hint', movie] as const,
+    queryFn: () => fetchFandomHint(movie),
+    enabled,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
   });
 }
 
