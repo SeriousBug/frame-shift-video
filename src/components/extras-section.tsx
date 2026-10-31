@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { CollapsibleCard } from '@/components/collapsible-card';
 import {
   useDiscExtras,
+  useExtraDuplicates,
   useExtraMatch,
+  useRemoveExtras,
   useExtraPreview,
   useStartExtraMatch,
   useExtraSources,
@@ -196,10 +198,17 @@ function ExtraRow({
   item,
   movie,
   suggestion,
+  selected,
+  onToggle,
+  copyOf,
 }: {
   item: ExtraItem;
   movie: string;
   suggestion?: ExtraSuggestion;
+  selected: boolean;
+  onToggle: () => void;
+  /** The other extras this one is the same video as (same length, same pictures) */
+  copyOf: string[];
 }) {
   const rename = useRenameDiscExtra();
   // The ripper's own name ("Trailer 01 (2 min)") is not something to edit into a real one, so a
@@ -212,15 +221,36 @@ function ExtraRow({
   const id = `${item.path}`;
 
   return (
-    <li className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
-      <label
-        htmlFor={`name-${id}`}
-        className="block text-sm text-gray-700 dark:text-gray-300"
-      >
-        {item.unnamed
-          ? `Not named yet (${item.name}). What is this one?`
-          : 'Name of this extra'}
-      </label>
+    <li
+      className={`rounded-lg border p-3 ${
+        selected
+          ? 'border-blue-500 dark:border-blue-400'
+          : 'border-gray-200 dark:border-gray-600'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1 h-5 w-5 shrink-0"
+          checked={selected}
+          onChange={onToggle}
+          aria-label={`Select the extra ${item.name} in ${movie}`}
+        />
+        <label
+          htmlFor={`name-${id}`}
+          className="block text-sm text-gray-700 dark:text-gray-300"
+        >
+          {item.unnamed
+            ? `Not named yet (${item.name}). What is this one?`
+            : 'Name of this extra'}
+        </label>
+      </div>
+      {copyOf.length > 0 && (
+        <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+          The same video as {copyOf.map((n) => `“${n}”`).join(' and ')}: the
+          same length and the same pictures.
+        </p>
+      )}
       <p className="mt-1 text-sm">
         <a
           className="underline text-blue-700 dark:text-blue-300"
@@ -381,13 +411,133 @@ function Sources({ movie, enabled }: { movie: string; enabled: boolean }) {
   );
 }
 
-/** The extras of one movie, with what matching suggested for each. */
+/** The extras of one movie, with what matching suggested for each, and ways to pick and remove them. */
 function MovieExtras({ movie }: { movie: ExtraMovie }) {
   const { data } = useExtraMatch(movie.movie);
+  const duplicates = useExtraDuplicates(movie.movie, movie.items.length > 1);
+  const remove = useRemoveExtras();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [asking, setAsking] = useState(false);
   const anyUnnamed = movie.items.some((i) => i.unnamed);
+  const paths = movie.items.map((i) => i.path);
+  const groups = duplicates.data ?? [];
+  const nameOf = (path: string) =>
+    movie.items.find((i) => i.path === path)?.name ?? path;
+  // Of each group of copies, the one to keep: a named one if there is one, else the first.
+  const copies = groups.flatMap((group) => {
+    const keep =
+      group.find(
+        (p) => movie.items.find((i) => i.path === p)?.unnamed === false,
+      ) ?? group[0]!;
+    return group.filter((p) => p !== keep);
+  });
+  const count = paths.filter((p) => selected.has(p)).length;
+  const toggle = (path: string) =>
+    setSelected((now) => {
+      const next = new Set(now);
+      if (!next.delete(path)) next.add(path);
+      return next;
+    });
+  const button =
+    'min-h-[44px] px-3 py-2 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed';
+  const names = (list: string[]) => list.map(nameOf).join(', ');
   return (
     <>
       <MatchBar movie={movie.movie} enabled={anyUnnamed} />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={button}
+          onClick={() => setSelected(new Set(paths))}
+        >
+          Select all
+        </button>
+        <button
+          type="button"
+          className={button}
+          onClick={() => setSelected(new Set())}
+        >
+          Select none
+        </button>
+        <button
+          type="button"
+          className={button}
+          onClick={() =>
+            setSelected(new Set(paths.filter((p) => !selected.has(p))))
+          }
+        >
+          Invert selection
+        </button>
+        <button
+          type="button"
+          className={button}
+          disabled={copies.length === 0}
+          onClick={() => setSelected(new Set(copies))}
+        >
+          Select copies{copies.length > 0 ? ` (${copies.length})` : ''}
+        </button>
+        <button
+          type="button"
+          className={button}
+          disabled={count === 0 || remove.isPending}
+          onClick={() => setAsking(true)}
+        >
+          Remove selected{count > 0 ? ` (${count})` : ''}
+        </button>
+      </div>
+      {asking && count > 0 && (
+        <div
+          role="alertdialog"
+          aria-label="Remove the selected extras"
+          className="mt-2 rounded-lg border border-amber-500 p-3"
+        >
+          <p className="text-sm text-gray-900 dark:text-white">
+            Take {count === 1 ? 'this extra' : `these ${count} extras`} out of{' '}
+            {movie.movie}? {names(paths.filter((p) => selected.has(p)))}. They
+            are moved to the _removed folder, not deleted: move a file back to
+            undo.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              className={button}
+              onClick={() =>
+                remove.mutate(
+                  paths.filter((p) => selected.has(p)),
+                  {
+                    onSuccess: () => {
+                      setSelected(new Set());
+                      setAsking(false);
+                    },
+                  },
+                )
+              }
+            >
+              Move them out
+            </button>
+            <button
+              type="button"
+              className={button}
+              onClick={() => setAsking(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {remove.error && (
+        <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">
+          {remove.error.message}
+        </p>
+      )}
+      {remove.data && remove.data.failed.length > 0 && (
+        <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">
+          Could not remove {remove.data.failed.length}:{' '}
+          {remove.data.failed
+            .map((f) => `${nameOf(f.path)} (${f.error})`)
+            .join(', ')}
+        </p>
+      )}
       <ul className="mt-2 space-y-3">
         {movie.items.map((item) => (
           <ExtraRow
@@ -395,6 +545,14 @@ function MovieExtras({ movie }: { movie: ExtraMovie }) {
             item={item}
             movie={movie.movie}
             suggestion={item.unnamed ? data?.suggestions[item.path] : undefined}
+            selected={selected.has(item.path)}
+            onToggle={() => toggle(item.path)}
+            copyOf={
+              groups
+                .find((g) => g.includes(item.path))
+                ?.filter((p) => p !== item.path)
+                .map(nameOf) ?? []
+            }
           />
         ))}
       </ul>

@@ -38,6 +38,9 @@ let previewAsked: string[];
 let previewFails: boolean;
 let matchState: unknown;
 let matchStarted: string[];
+let dupGroups: string[][];
+let removed: string[][];
+let removeFails: { path: string; error: string }[];
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
@@ -48,8 +51,24 @@ beforeEach(() => {
   previewFails = false;
   matchState = null;
   matchStarted = [];
+  dupGroups = [];
+  removed = [];
+  removeFails = [];
   sources = [];
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/discs/extras/duplicates')) {
+      return new Response(JSON.stringify({ groups: dupGroups }));
+    }
+    if (String(url).includes('/discs/extras/remove')) {
+      const paths = JSON.parse(String(init?.body)).paths as string[];
+      removed.push(paths);
+      return new Response(
+        JSON.stringify({
+          removed: paths.filter((p) => !removeFails.some((f) => f.path === p)),
+          failed: removeFails,
+        }),
+      );
+    }
     if (String(url).includes('/discs/extras/match')) {
       if (init?.method === 'POST') {
         matchStarted.push(JSON.parse(String(init.body)).movie);
@@ -509,5 +528,102 @@ describe('the "Name the extras" section', () => {
     expect(
       screen.queryByRole('button', { name: 'Try to match the names' }),
     ).toBeNull();
+  });
+
+  const TRAILER = '_converted/Duma (2005)/Trailers/Trailer 01 (2 min).mkv';
+  const MAKING = '_converted/Duma (2005)/Featurettes/Making Of.mkv';
+  const pick = (name: string) =>
+    screen.findByRole('checkbox', {
+      name: `Select the extra ${name} in Duma (2005)`,
+    }) as Promise<HTMLInputElement>;
+  const checked = async () => [
+    (await pick('Trailer 01 (2 min)')).checked,
+    (await pick('Making Of')).checked,
+  ];
+  const click = (name: string) =>
+    fireEvent.click(screen.getByRole('button', { name }));
+
+  test('Select all, Select none and Invert selection', async () => {
+    page();
+    expect(await checked()).toEqual([false, false]);
+    click('Select all');
+    expect(await checked()).toEqual([true, true]);
+    click('Select none');
+    expect(await checked()).toEqual([false, false]);
+    fireEvent.click(await pick('Making Of'));
+    expect(await checked()).toEqual([false, true]);
+    click('Invert selection');
+    expect(await checked()).toEqual([true, false]);
+  });
+
+  test('Remove selected needs a selection, asks first, and then moves just those', async () => {
+    page();
+    await pick('Making Of');
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Remove selected',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.click(await pick('Trailer 01 (2 min)'));
+    click('Remove selected (1)');
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain('Trailer 01 (2 min)');
+    expect(dialog.textContent).toContain('not deleted');
+    expect(removed).toEqual([]);
+    click('Move them out');
+    await waitFor(() => expect(removed).toEqual([[TRAILER]]));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect((await pick('Trailer 01 (2 min)')).checked).toBe(false);
+  });
+
+  test('Cancel removes nothing', async () => {
+    page();
+    fireEvent.click(await pick('Making Of'));
+    click('Remove selected (1)');
+    click('Cancel');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(removed).toEqual([]);
+    expect((await pick('Making Of')).checked).toBe(true);
+  });
+
+  test('copies are pointed out, and Select copies keeps the named one', async () => {
+    dupGroups = [[TRAILER, MAKING]];
+    page();
+    expect(
+      await screen.findByText(/The same video as “Making Of”: the same length/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /The same video as “Trailer 01 \(2 min\)”: the same length/,
+      ),
+    ).toBeTruthy();
+    click('Select copies (1)');
+    expect(await checked()).toEqual([true, false]);
+  });
+
+  test('with no copies, Select copies is not offered', async () => {
+    page();
+    await pick('Making Of');
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Select copies',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  test('one that could not be removed is said, with why', async () => {
+    removeFails = [{ path: MAKING, error: 'That extra is not there any more' }];
+    page();
+    await pick('Making Of');
+    click('Select all');
+    click('Remove selected (2)');
+    click('Move them out');
+    expect(
+      (await screen.findAllByRole('alert')).map((a) => a.textContent).join(' '),
+    ).toContain('Making Of (That extra is not there any more)');
   });
 });

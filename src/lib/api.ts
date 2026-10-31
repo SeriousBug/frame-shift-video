@@ -903,6 +903,40 @@ export async function fetchExtraSources(movie: string): Promise<NameSource[]> {
 }
 
 /**
+ * Groups of a movie's extras that are the same video (same length and same pictures)
+ */
+export async function fetchExtraDuplicates(movie: string): Promise<string[][]> {
+  const response = await fetch(
+    `${API_BASE}/discs/extras/duplicates?${new URLSearchParams({ movie })}`,
+  );
+  if (!response.ok) {
+    throw await discError(response, 'Failed to look for copies');
+  }
+  return ((await response.json()) as { groups: string[][] }).groups;
+}
+
+/**
+ * Take extras out of their movie (they are moved to the _removed folder, not deleted)
+ */
+export async function removeDiscExtras(paths: string[]): Promise<{
+  removed: string[];
+  failed: { path: string; error: string }[];
+}> {
+  const response = await fetch(`${API_BASE}/discs/extras/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  });
+  if (!response.ok) {
+    throw await discError(response, 'Failed to remove the extras');
+  }
+  return (await response.json()) as {
+    removed: string[];
+    failed: { path: string; error: string }[];
+  };
+}
+
+/**
  * How the matching of a movie's extras is going, with the suggestions so far (null: not started)
  */
 export async function fetchExtraMatch(

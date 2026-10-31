@@ -78,3 +78,29 @@ export async function frameJpeg(file: string, at: number): Promise<Buffer> {
   if (picture.length === 0) throw new Error('There is no picture there');
   return picture;
 }
+
+/** A checksum of the picture at `at` seconds: the same picture gives the same sum. */
+export async function frameSum(file: string, at: number): Promise<string> {
+  const out = (await run(
+    'ffmpeg',
+    [
+      '-v',
+      'error',
+      '-ss',
+      String(at),
+      '-i',
+      file,
+      '-frames:v',
+      '1',
+      '-an',
+      '-sn',
+      '-f',
+      'md5',
+      '-',
+    ],
+    'utf8',
+  ).catch(() => '')) as string;
+  const sum = out.match(/^MD5=([0-9a-f]+)/m)?.[1];
+  if (!sum) throw new Error('There is no picture there');
+  return sum;
+}
