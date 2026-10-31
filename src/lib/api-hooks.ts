@@ -32,6 +32,7 @@ import {
   fetchSettings,
   fetchDiscs,
   fetchDiscExtras,
+  fetchExtraPreview,
   fetchFandomHint,
   renameDiscExtra,
   setDiscEject,
@@ -555,6 +556,19 @@ export function useFandomHint(movie: string, enabled: boolean) {
     enabled,
     retry: false,
     staleTime: 60 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to read an extra's length and the moments to preview, once it is asked for
+ */
+export function useExtraPreview(path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['extra-preview', path] as const,
+    queryFn: () => fetchExtraPreview(path),
+    enabled,
+    retry: false,
+    staleTime: Infinity,
   });
 }
 

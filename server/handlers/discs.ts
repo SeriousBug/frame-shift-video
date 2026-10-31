@@ -18,6 +18,7 @@ import {
   setNext,
 } from '../disc-state';
 import { extraFilePath, readExtras, renameExtra } from '../extras-state';
+import { frameJpeg, previewTimes, videoSeconds } from '../extras-preview';
 import { fandomHint } from '../fandom-hints';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
 
@@ -353,6 +354,64 @@ export async function discsExtrasFileHandler(
   return new Response(video.stream(), {
     headers: { ...headers, 'Content-Length': String(size) },
   });
+}
+
+/**
+ * GET /api/discs/extras/preview?path=...
+ * An extra's length and the moments a strip of pictures should show, to tell what it is without
+ * playing it. Each picture is fetched from /api/discs/extras/frame.
+ */
+export async function discsExtrasPreviewHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const file = new URL(req.url).searchParams.get('path');
+  if (!file) return json({ error: 'path is needed' }, 400, corsHeaders);
+  try {
+    const real = await extraFilePath(discsDir(), file);
+    const seconds = await videoSeconds(real);
+    return json({ seconds, times: previewTimes(seconds) }, 200, corsHeaders);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : String(error) },
+      404,
+      corsHeaders,
+    );
+  }
+}
+
+/**
+ * GET /api/discs/extras/frame?path=...&t=SECONDS
+ * One picture from an extra, as a small JPEG.
+ */
+export async function discsExtrasFrameHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const params = new URL(req.url).searchParams;
+  const file = params.get('path');
+  const at = Number(params.get('t'));
+  if (!file || params.get('t') === null || !Number.isFinite(at) || at < 0) {
+    return json({ error: 'path and t are needed' }, 400, corsHeaders);
+  }
+  try {
+    const real = await extraFilePath(discsDir(), file);
+    const picture = await frameJpeg(real, at);
+    if (picture.length === 0) throw new Error('There is no picture there');
+    return new Response(new Uint8Array(picture), {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'private, max-age=86400',
+      },
+    });
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : String(error) },
+      404,
+      corsHeaders,
+    );
+  }
 }
 
 /**

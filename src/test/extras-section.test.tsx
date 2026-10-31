@@ -34,14 +34,28 @@ let renames: Rename[];
 let failWith: string | null;
 let hint: unknown;
 let hintAsked: string[];
+let previewAsked: string[];
+let previewFails: boolean;
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   renames = [];
   failWith = null;
   hintAsked = [];
+  previewAsked = [];
+  previewFails = false;
   hint = { found: false };
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/discs/extras/preview')) {
+      previewAsked.push(
+        new URL(String(url), 'http://x').searchParams.get('path')!,
+      );
+      return previewFails
+        ? new Response(JSON.stringify({ error: 'That video has no length' }), {
+            status: 404,
+          })
+        : new Response(JSON.stringify({ seconds: 80, times: [5, 15, 25] }));
+    }
     if (String(url).includes('/discs/extras/hint')) {
       hintAsked.push(
         new URL(String(url), 'http://x').searchParams.get('movie')!,
@@ -236,5 +250,44 @@ describe('the "Name the extras" section', () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(hintAsked).toEqual([]);
     expect(screen.queryByText(/DVD Fandom/)).toBeNull();
+  });
+
+  const openPreview = async (name: string) => {
+    const summary = await screen.findByLabelText(
+      `Preview the extra ${name} in Duma (2005)`,
+    );
+    const details = summary.closest('details') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+  };
+
+  test('a preview is not made until it is opened, then shows pictures from the video', async () => {
+    page();
+    await nameBox('Name of the extra Trailer 01 (2 min) in Duma (2005)');
+    expect(previewAsked).toEqual([]);
+    await openPreview('Trailer 01 (2 min)');
+    await screen.findByText('1:20 long. Press a picture to watch from there.');
+    expect(previewAsked).toEqual([
+      '_converted/Duma (2005)/Trailers/Trailer 01 (2 min).mkv',
+    ]);
+    const path = '_converted/Duma (2005)/Trailers/Trailer 01 (2 min).mkv';
+    const link = screen.getByRole('link', {
+      name: 'Watch from 0:15',
+    }) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe(
+      `/api/discs/extras/file?${new URLSearchParams({ path })}#t=15`,
+    );
+    expect(link.querySelector('img')?.getAttribute('src')).toBe(
+      `/api/discs/extras/frame?${new URLSearchParams({ path, t: '15' })}`,
+    );
+  });
+
+  test('a video that cannot be looked into says so', async () => {
+    previewFails = true;
+    page();
+    await openPreview('Trailer 01 (2 min)');
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'no length',
+    );
   });
 });
