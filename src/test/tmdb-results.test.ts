@@ -3,6 +3,7 @@ import {
   parseLabel,
   parseTmdbResults,
   posterUrl,
+  sourceName,
   tmdbPage,
 } from '../lib/tmdb-results';
 
@@ -20,6 +21,7 @@ describe('parseTmdbResults', () => {
         size: '94 min',
         overview: 'A seal befriends a girl.',
         poster: '/p.jpg',
+        source: 'tmdb',
       },
       {
         kind: 'tv',
@@ -28,6 +30,7 @@ describe('parseTmdbResults', () => {
         size: '1 season',
         overview: 'x',
         poster: '',
+        source: 'tmdb',
       },
     ]);
   });
@@ -50,6 +53,7 @@ describe('parseTmdbResults', () => {
         size: '',
         overview: '',
         poster: '',
+        source: 'tmdb',
       },
     ]);
   });
@@ -70,8 +74,51 @@ describe('addresses', () => {
         size: '',
         overview: '',
         poster: '',
+        source: 'tmdb',
       }),
     ).toBe('https://www.themoviedb.org/movie/21352');
+  });
+});
+
+describe('results from TheTVDB', () => {
+  const row =
+    'movie\t52065\tSanta vs. the Snowman (2002)\t21 min\tOnce upon a time.\thttps://artworks.thetvdb.com/banners/movies/52065/posters/52065.jpg\ttvdb';
+
+  test('the seventh column says the result is from TheTVDB', () => {
+    const [result] = parseTmdbResults(row);
+    expect(result).toMatchObject({
+      id: 52065,
+      source: 'tvdb',
+      size: '21 min',
+    });
+    expect(sourceName(result!)).toBe('TVDB');
+  });
+
+  test('a row with no source, or one the page does not know, is TMDB', () => {
+    expect(parseTmdbResults('movie\t1\tName\t\t\t\t')[0]?.source).toBe('tmdb');
+    expect(parseTmdbResults('movie\t1\tName\t\t\t\tother')[0]?.source).toBe(
+      'tmdb',
+    );
+    expect(sourceName(parseTmdbResults('movie\t1\tName')[0]!)).toBe('TMDB');
+  });
+
+  test('a TVDB poster is used only from its artwork server', () => {
+    expect(
+      posterUrl('https://artworks.thetvdb.com/banners/movies/1/posters/1.jpg'),
+    ).toBe('https://artworks.thetvdb.com/banners/movies/1/posters/1.jpg');
+    expect(
+      posterUrl('https://evil.example/artworks.thetvdb.com/x.jpg'),
+    ).toBeNull();
+    expect(posterUrl('http://artworks.thetvdb.com/x.jpg')).toBeNull();
+  });
+
+  test('a result links to its TheTVDB page, a show as a series', () => {
+    const [movie] = parseTmdbResults(row);
+    expect(tmdbPage(movie!)).toBe('https://thetvdb.com/dereferrer/movie/52065');
+    const [show] = parseTmdbResults(
+      "tv\t73733\tTeacher's Pet (2000)\t1 season\tx\t\ttvdb",
+    );
+    expect(tmdbPage(show!)).toBe('https://thetvdb.com/dereferrer/series/73733');
   });
 });
 

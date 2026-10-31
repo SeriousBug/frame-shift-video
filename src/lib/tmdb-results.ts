@@ -8,7 +8,7 @@ import type { TmdbResult } from '@/types/discs';
 export function parseTmdbResults(message: string | undefined): TmdbResult[] {
   const results: TmdbResult[] = [];
   for (const line of (message ?? '').split('\n')) {
-    const [kind, id, name, size, overview, poster] = line.split('\t');
+    const [kind, id, name, size, overview, poster, source] = line.split('\t');
     if (
       (kind !== 'movie' && kind !== 'tv') ||
       !name ||
@@ -23,19 +23,31 @@ export function parseTmdbResults(message: string | undefined): TmdbResult[] {
       size: size ?? '',
       overview: overview ?? '',
       poster: poster ?? '',
+      source: source === 'tvdb' ? 'tvdb' : 'tmdb',
     });
   }
   return results;
 }
 
-/** A poster's address on TMDB's image server, or null when there is no poster. */
+/**
+ * A poster's address: TMDB's image server for its path, TheTVDB's own address as it gave it
+ * (only on its artwork server), or null when there is no poster.
+ */
 export function posterUrl(path: string): string | null {
-  return path.startsWith('/') ? `https://image.tmdb.org/t/p/w154${path}` : null;
+  if (path.startsWith('/')) return `https://image.tmdb.org/t/p/w154${path}`;
+  return /^https:\/\/artworks\.thetvdb\.com\//.test(path) ? path : null;
 }
 
-/** A TMDB page for a result, to check it is the one. */
+/** The name of the database a result is from. */
+export function sourceName(result: TmdbResult): string {
+  return result.source === 'tvdb' ? 'TVDB' : 'TMDB';
+}
+
+/** The page of a result on its database, to check it is the one. */
 export function tmdbPage(result: TmdbResult): string {
-  return `https://www.themoviedb.org/${result.kind}/${result.id}`;
+  return result.source === 'tvdb'
+    ? `https://thetvdb.com/dereferrer/${result.kind === 'tv' ? 'series' : 'movie'}/${result.id}`
+    : `https://www.themoviedb.org/${result.kind}/${result.id}`;
 }
 
 /**
