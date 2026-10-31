@@ -21,17 +21,19 @@ const BOTH = [
 
 type Sent = { kind: string; query: string };
 let sent: Sent[];
+let answer: string;
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   sent = [];
+  answer = BOTH;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     if (String(url).endsWith('/discs/commands') && init?.method === 'POST') {
       sent.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ id: `r${sent.length}` }));
     }
     return new Response(
-      JSON.stringify({ done: true, ok: true, message: BOTH }),
+      JSON.stringify({ done: true, ok: true, message: answer }),
     );
   }) as unknown as typeof fetch;
 });
@@ -133,6 +135,62 @@ describe('the search follows the kind that is chosen', () => {
     await waitFor(() => expect(names()).toHaveLength(1), slow);
     fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
     expect(picked).toEqual(['movie24034']);
+  });
+});
+
+describe('results from TheTVDB', () => {
+  const TVDB = [
+    'movie',
+    52065,
+    'Santa vs. the Snowman (2002)',
+    '21 min',
+    'Once upon a time.',
+    'https://artworks.thetvdb.com/banners/movies/52065/posters/52065.jpg',
+    'tvdb',
+  ].join('\t');
+
+  test('a result only TheTVDB has shows its poster, and says where it is from once used', async () => {
+    answer = TVDB;
+    const { container } = render(
+      <TmdbPicker
+        kind="movie"
+        initialQuery="Santa vs the Snowman"
+        autoSearch
+        onPick={() => {}}
+      />,
+    );
+    await waitFor(() => expect(names()).toHaveLength(1), slow);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'https://artworks.thetvdb.com/banners/movies/52065/posters/52065.jpg',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
+    expect(
+      await screen.findByText(
+        /Using “Santa vs. the Snowman \(2002\)” from TVDB/,
+      ),
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole('link', { name: 'movie 52065' }) as HTMLAnchorElement)
+        .href,
+    ).toBe('https://thetvdb.com/dereferrer/movie/52065');
+  });
+
+  test('a TMDB result still says TMDB and links to TMDB', async () => {
+    render(
+      <TmdbPicker
+        kind="movie"
+        initialQuery="Teachers Pet"
+        autoSearch
+        onPick={() => {}}
+      />,
+    );
+    await waitFor(() => expect(names()).toHaveLength(1), slow);
+    fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
+    expect(await screen.findByText(/from TMDB/)).toBeTruthy();
+    expect(
+      (screen.getByRole('link', { name: 'movie 24034' }) as HTMLAnchorElement)
+        .href,
+    ).toBe('https://www.themoviedb.org/movie/24034');
   });
 });
 

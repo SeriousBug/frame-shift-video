@@ -133,8 +133,10 @@ export interface TmdbResult {
   /** A movie's length, or how many seasons a show has */
   size: string;
   overview: string;
-  /** TMDB's poster path, or empty */
+  /** TMDB's poster path or TheTVDB's poster address, or empty */
   poster: string;
+  /** The database it is from: TMDB is asked first, TheTVDB has what TMDB does not */
+  source: 'tmdb' | 'tvdb';
 }
 
 /** A disc that was copied and is waiting to be told what it is. */

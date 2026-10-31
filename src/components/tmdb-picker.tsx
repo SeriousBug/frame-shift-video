@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { runDiscCommand } from '@/lib/api-hooks';
-import { parseTmdbResults, posterUrl, tmdbPage } from '@/lib/tmdb-results';
+import {
+  parseTmdbResults,
+  posterUrl,
+  sourceName,
+  tmdbPage,
+} from '@/lib/tmdb-results';
 import type { TmdbResult } from '@/types/discs';
 
 const INPUT =
@@ -12,7 +17,8 @@ const INPUT =
  * into the title goes straight to that title. When `autoSearch` is on it looks the title up by
  * itself whenever `initialQuery` changes, which is how a disc's label finds its movie.
  *
- * The search is done by the ripper's helper on the server, which holds the TMDB token.
+ * The search is done by the ripper's helper on the server, which holds the TMDB token and the
+ * TheTVDB key: results are TMDB's first, then those only TheTVDB has, each marked with its source.
  */
 export function TmdbPicker({
   kind,
@@ -152,7 +158,7 @@ export function TmdbPicker({
       )}
       {chosen && (
         <p className="text-sm text-green-700 dark:text-green-400">
-          Using “{chosen.name}” from TMDB (
+          Using “{chosen.name}” from {sourceName(chosen)} (
           <a
             className="underline"
             href={tmdbPage(chosen)}
