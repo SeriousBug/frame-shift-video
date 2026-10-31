@@ -97,6 +97,24 @@ export interface DiscDone {
   name: string;
   /** Unix seconds */
   at: number;
+  /** What was made from the disc, or null when it could not be read */
+  contents: DiscContents | null;
+}
+
+/** What a filed disc holds. */
+export interface DiscContents {
+  /** The movie itself */
+  movie: boolean;
+  /** Episodes of a show */
+  episodes: number;
+  trailers: number;
+  featurettes: number;
+  /** Other extras: behind the scenes, deleted scenes, anything not sorted */
+  extras: number;
+  /** Other versions of the movie: a different cut, an extended ending */
+  alternates: number;
+  /** Titles that were copies of the movie (another angle or playlist) and were left out */
+  copies: number;
 }
 
 /** What TMDB made of a parked disc's label, left beside it by the ripper. */

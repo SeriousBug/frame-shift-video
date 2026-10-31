@@ -24,6 +24,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { JobService } from './db-service';
+import { readContents } from './disc-contents';
 import type {
   DiscAttention,
   DiscCommand,
@@ -405,13 +406,28 @@ async function readRecent(folders: Finished[]): Promise<DiscDone[]> {
   const stamped: DiscDone[] = [];
   for (const { name, parent } of folders) {
     try {
-      const stat = await fs.stat(path.join(parent, name));
-      stamped.push({ name, at: Math.floor(stat.mtimeMs / 1000) });
+      const folder = path.join(parent, name);
+      const stat = await fs.stat(folder);
+      stamped.push({
+        name,
+        at: Math.floor(stat.mtimeMs / 1000),
+        contents: null,
+      });
     } catch {
       // Gone since it was listed.
     }
   }
-  return stamped.sort((a, b) => b.at - a.at).slice(0, RECENT_COUNT);
+  const newest = stamped.sort((a, b) => b.at - a.at).slice(0, RECENT_COUNT);
+  for (const done of newest) {
+    const parent = folders.find((f) => f.name === done.name)?.parent;
+    if (!parent) continue;
+    try {
+      done.contents = await readContents(path.join(parent, done.name));
+    } catch {
+      done.contents = null;
+    }
+  }
+  return newest;
 }
 
 /** Everything the Discs page shows, from the files in the DVDs folder. */
