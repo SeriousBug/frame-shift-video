@@ -5,6 +5,7 @@ import {
   useFandomHint,
   useRenameDiscExtra,
 } from '@/lib/api-hooks';
+import { discExtraFileUrl } from '@/lib/api';
 import type { ExtraItem } from '@/types/discs';
 
 const FOLDERS = [
@@ -25,9 +26,13 @@ const SMALL =
 
 function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
   const rename = useRenameDiscExtra();
-  const [name, setName] = useState(item.name);
+  // The ripper's own name ("Trailer 01 (2 min)") is not something to edit into a real one, so a
+  // box for an extra with no name yet starts empty; what it is called now is shown above it.
+  const [name, setName] = useState(item.unnamed ? '' : item.name);
   const [folder, setFolder] = useState(item.folder);
-  const changed = name.trim() !== item.name || folder !== item.folder;
+  const typed = name.trim();
+  const changed =
+    (typed !== '' && typed !== item.name) || folder !== item.folder;
   const id = `${item.path}`;
 
   return (
@@ -37,14 +42,34 @@ function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
         className="block text-sm text-gray-700 dark:text-gray-300"
       >
         {item.unnamed
-          ? 'Not named yet. What is this one?'
+          ? `Not named yet (${item.name}). What is this one?`
           : 'Name of this extra'}
       </label>
+      <p className="mt-1 text-sm">
+        <a
+          className="underline text-blue-700 dark:text-blue-300"
+          href={discExtraFileUrl(item.path)}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Watch the extra ${item.name} in ${movie}`}
+        >
+          Watch it
+        </a>
+        {' · '}
+        <a
+          className="underline text-blue-700 dark:text-blue-300"
+          href={discExtraFileUrl(item.path, true)}
+          aria-label={`Download the extra ${item.name} in ${movie}`}
+        >
+          Download
+        </a>
+      </p>
       <input
         id={`name-${id}`}
         className={`${INPUT} mt-1`}
         aria-label={`Name of the extra ${item.name} in ${movie}`}
         value={name}
+        placeholder={item.unnamed ? 'Type its name' : undefined}
         onChange={(event) => setName(event.target.value)}
       />
       <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -70,7 +95,7 @@ function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
           onClick={() =>
             rename.mutate({
               path: item.path,
-              name,
+              name: typed || item.name,
               ...(folder !== item.folder ? { folder } : {}),
             })
           }
@@ -168,7 +193,7 @@ export function ExtrasSection() {
   return (
     <CollapsibleCard
       title="Name the extras"
-      help="A DVD does not store names for its bonus features, so they are sorted by length and called Trailer 01, Featurette 01 and so on. Type the real name and press Save. Plex shows that name, and sorts each into the kind you pick."
+      help="A DVD does not store names for its bonus features, so they are sorted by length and called Trailer 01, Featurette 01 and so on. Press Watch it to see what one is (Safari cannot play .mkv files: use Download and open it in VLC or Infuse), then type the real name and press Save. Plex shows that name, and sorts each into the kind you pick."
       hint="Bonus features of movies that are ready to watch."
       badge={unnamed > 0 ? `${unnamed} not named` : undefined}
     >

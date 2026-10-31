@@ -79,10 +79,47 @@ describe('the "Name the extras" section', () => {
     page();
     expect(await screen.findByText('Duma (2005)')).toBeTruthy();
     expect(screen.getByText('1 not named')).toBeTruthy();
-    expect(screen.getByText('Not named yet. What is this one?')).toBeTruthy();
+    expect(
+      screen.getByText('Not named yet (Trailer 01 (2 min)). What is this one?'),
+    ).toBeTruthy();
     expect(
       (await nameBox('Name of the extra Making Of in Duma (2005)')).value,
     ).toBe('Making Of');
+  });
+
+  test('a box for an extra with no name yet starts empty, and the length is not in it', async () => {
+    page();
+    const box = await nameBox(
+      'Name of the extra Trailer 01 (2 min) in Duma (2005)',
+    );
+    expect(box.value).toBe('');
+    expect(box.placeholder).toBe('Type its name');
+    expect(box.value).not.toContain('min');
+  });
+
+  test('each extra has a link to watch it and one to save it', async () => {
+    page();
+    const path = '_converted/Duma (2005)/Trailers/Trailer 01 (2 min).mkv';
+    const watch = (await screen.findByRole('link', {
+      name: 'Watch the extra Trailer 01 (2 min) in Duma (2005)',
+    })) as HTMLAnchorElement;
+    expect(watch.getAttribute('href')).toBe(
+      `/api/discs/extras/file?${new URLSearchParams({ path })}`,
+    );
+    expect(watch.target).toBe('_blank');
+    const save = screen.getByRole('link', {
+      name: 'Download the extra Trailer 01 (2 min) in Duma (2005)',
+    }) as HTMLAnchorElement;
+    expect(save.getAttribute('href')).toBe(
+      `/api/discs/extras/file?${new URLSearchParams({ path, download: '1' })}`,
+    );
+  });
+
+  test('an empty box with nothing else changed saves nothing', async () => {
+    page();
+    await nameBox('Name of the extra Trailer 01 (2 min) in Duma (2005)');
+    const [save] = screen.getAllByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
   });
 
   test('Save waits until something is changed, then sends the new name', async () => {
