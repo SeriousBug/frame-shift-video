@@ -18,6 +18,7 @@ import {
   setNext,
 } from '../disc-state';
 import { readExtras, renameExtra } from '../extras-state';
+import { fandomHint } from '../fandom-hints';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
 
 function json(
@@ -250,6 +251,19 @@ export async function discsExtrasHandler(
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   return json({ movies: await readExtras(discsDir()) }, 200, corsHeaders);
+}
+
+/**
+ * GET /api/discs/extras/hint?movie=Name (Year)
+ * What DVD Fandom lists as the bonus features of that movie's disc, to read while naming its extras.
+ */
+export async function discsExtrasHintHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const movie = new URL(req.url).searchParams.get('movie');
+  if (!movie) return json({ error: 'movie is needed' }, 400, corsHeaders);
+  return json({ hint: await fandomHint(movie) }, 200, corsHeaders);
 }
 
 /**

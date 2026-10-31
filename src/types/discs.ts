@@ -258,6 +258,18 @@ export interface ExtraItem {
   unnamed: boolean;
 }
 
+/** What DVD Fandom lists for a movie's disc. */
+export interface FandomHint {
+  found: boolean;
+  /** The wiki page's title, and its address */
+  page?: string;
+  url?: string;
+  /** The movie's running time as the wiki words it, like "Approx. 77 minutes" */
+  runtime?: string | null;
+  /** The bonus features, each with how deep it is nested under the one above */
+  features?: { text: string; depth: number }[];
+}
+
 export interface ExtraMovie {
   movie: string;
   items: ExtraItem[];

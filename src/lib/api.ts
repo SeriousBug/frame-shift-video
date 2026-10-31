@@ -19,6 +19,7 @@ import type {
   DiscsState,
   DiscPresetInput,
   ExtraMovie,
+  FandomHint,
 } from '@/types/discs';
 
 // Base API URL
@@ -884,6 +885,19 @@ export async function fetchDiscExtras(): Promise<ExtraMovie[]> {
   }
   const body = (await response.json()) as { movies: ExtraMovie[] };
   return body.movies;
+}
+
+/**
+ * What DVD Fandom lists as the bonus features of a movie's disc
+ */
+export async function fetchFandomHint(movie: string): Promise<FandomHint> {
+  const response = await fetch(
+    `${API_BASE}/discs/extras/hint?${new URLSearchParams({ movie })}`,
+  );
+  if (!response.ok) {
+    throw await discError(response, 'Failed to look the movie up');
+  }
+  return ((await response.json()) as { hint: FandomHint }).hint;
 }
 
 /**
