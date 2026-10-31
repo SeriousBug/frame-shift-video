@@ -490,3 +490,70 @@ describe('the names of several databases together', () => {
     expect(list[0]!.seconds).toBe(120);
   });
 });
+
+// What the listener really read on Dance Flick's two extras and on Charlotte's Web 2's.
+const DANCE_FLICK: Look = {
+  seconds: 556,
+  ocr: [
+    {
+      t: 1.5,
+      lines: [
+        'THE FOLLOWING PREVIEW HAS BEEN APPROVED FOR',
+        'ALL AUDIENCES',
+        'BY THE MOTION PICTURE ASSOCIATION OF AMERICA, INC.',
+        'www. filmratings.com',
+      ],
+    },
+  ],
+  speech: [
+    {
+      start: 3,
+      end: 8,
+      text: 'We have never faced a threat like this. A team is being assembled.',
+    },
+  ],
+};
+
+describe('a reel of previews', () => {
+  test('the ratings card shown before previews makes it "Previews", a trailer, with the reason', () => {
+    const answer = matchExtra(ev(DANCE_FLICK, 556), []);
+    expect(answer).toMatchObject({
+      state: 'unsure',
+      name: 'Previews',
+      kind: 'Trailers',
+    });
+    expect(answer.note).toContain('ratings card');
+    expect(answer.saw).toContain('FOLLOWING PREVIEW');
+  });
+
+  test('it is the answer when the databases list names but none fits', () => {
+    const answer = matchExtra(ev(DANCE_FLICK, 556), candidates(LION_KING));
+    expect(answer.name).toBe('Previews');
+    expect(answer.kind).toBe('Trailers');
+  });
+
+  test('a listed name or a length that fits still wins over it', () => {
+    const list = candidatesFrom([
+      {
+        source: 'DVD Compare',
+        page: 'x',
+        url: 'x',
+        features: [{ text: 'Behind the Wayans', depth: 1, seconds: 556 }],
+      },
+    ]);
+    expect(matchExtra(ev(DANCE_FLICK, 556), list)).toMatchObject({
+      state: 'matched',
+      name: 'Behind the Wayans',
+    });
+  });
+
+  test('other writing is not taken for it, and neither is nothing', () => {
+    const card: Look = {
+      seconds: 60,
+      ocr: [{ t: 1, lines: ['DISNEY ENTERPRISES 2004'] }],
+      speech: [],
+    };
+    expect(matchExtra(ev(card, 60), candidates(STELLALUNA)).state).toBe('none');
+    expect(matchExtra(ev(null, 60), []).state).toBe('none');
+  });
+});
