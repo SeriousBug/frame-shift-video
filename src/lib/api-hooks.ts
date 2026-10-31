@@ -32,8 +32,10 @@ import {
   fetchSettings,
   fetchDiscs,
   fetchDiscExtras,
+  fetchExtraMatch,
   fetchExtraPreview,
   fetchFandomHint,
+  startExtraMatch,
   renameDiscExtra,
   setDiscEject,
   setDiscAutoScan,
@@ -556,6 +558,31 @@ export function useFandomHint(movie: string, enabled: boolean) {
     enabled,
     retry: false,
     staleTime: 60 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to read how the matching of a movie's extras is going: asked again every couple of seconds
+ * while it runs (listening is slow), and left alone otherwise.
+ */
+export function useExtraMatch(movie: string) {
+  return useQuery({
+    queryKey: ['extra-match', movie] as const,
+    queryFn: () => fetchExtraMatch(movie),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'running' ? 2000 : false,
+  });
+}
+
+/**
+ * Hook to start matching a movie's unnamed extras
+ */
+export function useStartExtraMatch(movie: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => startExtraMatch(movie),
+    onSuccess: (match) =>
+      queryClient.setQueryData(['extra-match', movie], match),
   });
 }
 

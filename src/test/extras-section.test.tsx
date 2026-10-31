@@ -36,6 +36,8 @@ let hint: unknown;
 let hintAsked: string[];
 let previewAsked: string[];
 let previewFails: boolean;
+let matchState: unknown;
+let matchStarted: string[];
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
@@ -44,8 +46,17 @@ beforeEach(() => {
   hintAsked = [];
   previewAsked = [];
   previewFails = false;
+  matchState = null;
+  matchStarted = [];
   hint = { found: false };
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/discs/extras/match')) {
+      if (init?.method === 'POST') {
+        matchStarted.push(JSON.parse(String(init.body)).movie);
+        matchState = { status: 'running', total: 2, done: 0, suggestions: {} };
+      }
+      return new Response(JSON.stringify({ match: matchState }));
+    }
     if (String(url).includes('/discs/extras/preview')) {
       previewAsked.push(
         new URL(String(url), 'http://x').searchParams.get('path')!,
@@ -289,5 +300,175 @@ describe('the "Name the extras" section', () => {
     expect((await screen.findByRole('alert')).textContent).toContain(
       'no length',
     );
+  });
+
+  const PATH = '_converted/Duma (2005)/Trailers/Trailer 01 (2 min).mkv';
+
+  test('Try to match the names starts the listening and shows how far it has got', async () => {
+    page();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Try to match the names' }),
+    );
+    await waitFor(() => expect(matchStarted).toEqual(['Duma (2005)']));
+    expect(await screen.findByText('0 of 2 looked at')).toBeTruthy();
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Listening...',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  test('a clear suggestion says why, and Use this name fills the box and the kind but does not save', async () => {
+    matchState = {
+      status: 'done',
+      total: 1,
+      done: 1,
+      suggestions: {
+        [PATH]: {
+          state: 'matched',
+          note: 'Looks like “Theatrical Trailer”: the writing at 0:01 reads it.',
+          name: 'Theatrical Trailer',
+          kind: 'Deleted Scenes',
+          saw: 'THEATRICAL TRAILER',
+          heard: 'coming soon',
+        },
+      },
+    };
+    page();
+    expect(
+      await screen.findByText(/Looks like “Theatrical Trailer”/),
+    ).toBeTruthy();
+    expect(screen.getByText('Done: 1 of 1 matched clearly.')).toBeTruthy();
+    expect(screen.getByText('Written on it: THEATRICAL TRAILER')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Use this name' }));
+    const box = await nameBox(
+      'Name of the extra Trailer 01 (2 min) in Duma (2005)',
+    );
+    expect(box.value).toBe('Theatrical Trailer');
+    expect(
+      (
+        screen.getByRole('combobox', {
+          name: 'Kind of the extra Trailer 01 (2 min) in Duma (2005)',
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe('Deleted Scenes');
+    expect(renames).toEqual([]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]!);
+    await waitFor(() => expect(renames).toHaveLength(1));
+    expect(renames[0]).toEqual({
+      path: PATH,
+      name: 'Theatrical Trailer',
+      folder: 'Deleted Scenes',
+    });
+  });
+
+  test('a maybe offers the name only as "Use it anyway", and no match offers none', async () => {
+    matchState = {
+      status: 'done',
+      total: 1,
+      done: 1,
+      suggestions: {
+        [PATH]: {
+          state: 'unsure',
+          note: 'Could be “A” or “B”; it is not clear which.',
+          name: 'A',
+          saw: '',
+          heard: '',
+        },
+      },
+    };
+    const first = page();
+    expect(await screen.findByText(/not clear which/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Use it anyway' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Use this name' })).toBeNull();
+    first.unmount();
+
+    matchState = {
+      status: 'done',
+      total: 1,
+      done: 1,
+      suggestions: {
+        [PATH]: {
+          state: 'none',
+          note: 'Nothing is written on it or said in it that could be read.',
+          saw: '',
+          heard: '',
+        },
+      },
+    };
+    page();
+    expect(await screen.findByText(/Nothing is written on it/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Use/ })).toBeNull();
+  });
+
+  test('an extra that is already named gets no suggestion', async () => {
+    matchState = {
+      status: 'done',
+      total: 1,
+      done: 1,
+      suggestions: {
+        '_converted/Duma (2005)/Trailers/Trailer 01 (2 min).mkv': {
+          state: 'none',
+          note: 'The answer for the one with no name.',
+          saw: '',
+          heard: '',
+        },
+        '_converted/Duma (2005)/Featurettes/Making Of.mkv': {
+          state: 'matched',
+          note: 'Looks like “Something Else”.',
+          name: 'Something Else',
+          saw: '',
+          heard: '',
+        },
+      },
+    };
+    page();
+    // Once the answer for the unnamed one is on the page, the named one's would be too.
+    expect(
+      await screen.findByText('The answer for the one with no name.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Something Else/)).toBeNull();
+  });
+
+  test('the listener being down is shown', async () => {
+    matchState = {
+      status: 'failed',
+      total: 2,
+      done: 0,
+      suggestions: {},
+      error: 'The listener could not be reached',
+    };
+    page();
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'could not be reached',
+    );
+  });
+
+  test('a movie whose extras are all named has no match button', async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          movies: [
+            {
+              movie: 'Done (2001)',
+              items: [
+                {
+                  path: 'a',
+                  folder: 'Featurettes',
+                  name: 'Making Of',
+                  unnamed: false,
+                },
+              ],
+            },
+          ],
+        }),
+      )) as unknown as typeof fetch;
+    page();
+    expect(await screen.findByText('Done (2001)')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Try to match the names' }),
+    ).toBeNull();
   });
 });

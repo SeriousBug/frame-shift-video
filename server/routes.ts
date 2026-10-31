@@ -41,6 +41,8 @@ import {
   discsExtrasHandler,
   discsExtrasHintHandler,
   discsExtrasFileHandler,
+  discsExtrasMatchHandler,
+  discsExtrasMatchStartHandler,
   discsExtrasPreviewHandler,
   discsExtrasFrameHandler,
   discsExtrasRenameHandler,
@@ -253,6 +255,14 @@ const wrappedDiscsExtrasPreviewHandler = withErrorHandler(
 const wrappedDiscsExtrasFrameHandler = withErrorHandler(
   discsExtrasFrameHandler,
   'DiscsExtrasFrameHandler',
+);
+const wrappedDiscsExtrasMatchHandler = withErrorHandler(
+  discsExtrasMatchHandler,
+  'DiscsExtrasMatchHandler',
+);
+const wrappedDiscsExtrasMatchStartHandler = withErrorHandler(
+  discsExtrasMatchStartHandler,
+  'DiscsExtrasMatchStartHandler',
 );
 const wrappedDiscsExtrasFileHandler = withErrorHandler(
   discsExtrasFileHandler,
@@ -483,6 +493,12 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/discs/extras/frame' && req.method === 'GET') {
       return await wrappedDiscsExtrasFrameHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/match' && req.method === 'GET') {
+      return await wrappedDiscsExtrasMatchHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/match' && req.method === 'POST') {
+      return await wrappedDiscsExtrasMatchStartHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/extras/file' && req.method === 'GET') {
       return await wrappedDiscsExtrasFileHandler(req, corsHeaders);
