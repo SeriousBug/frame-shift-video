@@ -888,6 +888,15 @@ export async function fetchDiscExtras(): Promise<ExtraMovie[]> {
 }
 
 /**
+ * Where to watch (or, with `download`, save) an extra, to tell what it is
+ */
+export function discExtraFileUrl(path: string, download = false): string {
+  const query = new URLSearchParams({ path });
+  if (download) query.set('download', '1');
+  return `${API_BASE}/discs/extras/file?${query}`;
+}
+
+/**
  * What DVD Fandom lists as the bonus features of a movie's disc
  */
 export async function fetchFandomHint(movie: string): Promise<FandomHint> {

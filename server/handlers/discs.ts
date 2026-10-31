@@ -17,7 +17,7 @@ import {
   deletePreset,
   setNext,
 } from '../disc-state';
-import { readExtras, renameExtra } from '../extras-state';
+import { extraFilePath, readExtras, renameExtra } from '../extras-state';
 import { fandomHint } from '../fandom-hints';
 import type { DiscCommand, DiscNext } from '../../src/types/discs';
 
@@ -264,6 +264,95 @@ export async function discsExtrasHintHandler(
   const movie = new URL(req.url).searchParams.get('movie');
   if (!movie) return json({ error: 'movie is needed' }, 400, corsHeaders);
   return json({ hint: await fandomHint(movie) }, 200, corsHeaders);
+}
+
+const VIDEO_TYPES: Record<string, string> = {
+  '.mkv': 'video/x-matroska',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+};
+
+/** The byte range a Range header asks for, or null for the whole file; 'bad' if it cannot be met. */
+export function byteRange(
+  header: string | null,
+  size: number,
+): { start: number; end: number } | null | 'bad' {
+  if (!header) return null;
+  const match = header.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match || (match[1] === '' && match[2] === '')) return 'bad';
+  let start: number;
+  let end: number;
+  if (match[1] === '') {
+    // The last N bytes.
+    const last = Number(match[2]);
+    if (last === 0) return 'bad';
+    start = Math.max(size - last, 0);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === '' ? size - 1 : Math.min(Number(match[2]), size - 1);
+  }
+  if (start >= size || start > end) return 'bad';
+  return { start, end };
+}
+
+/**
+ * GET /api/discs/extras/file?path=...[&download=1]
+ * The video of an extra, so a person can watch it to tell what it is. It can be played from any
+ * point (a Range request). Only the files "Name the extras" lists can be asked for.
+ */
+export async function discsExtrasFileHandler(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const url = new URL(req.url);
+  const file = url.searchParams.get('path');
+  if (!file) return json({ error: 'path is needed' }, 400, corsHeaders);
+  let real: string;
+  try {
+    real = await extraFilePath(discsDir(), file);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : String(error) },
+      404,
+      corsHeaders,
+    );
+  }
+  const video = Bun.file(real);
+  const size = video.size;
+  const name = real.split('/').pop() ?? 'extra';
+  const headers: Record<string, string> = {
+    ...corsHeaders,
+    'Content-Type':
+      VIDEO_TYPES[name.slice(name.lastIndexOf('.')).toLowerCase()] ??
+      'application/octet-stream',
+    'Accept-Ranges': 'bytes',
+    'Content-Disposition': `${
+      url.searchParams.get('download') ? 'attachment' : 'inline'
+    }; filename*=UTF-8''${encodeURIComponent(name)}`,
+  };
+  const range = byteRange(req.headers.get('range'), size);
+  if (range === 'bad') {
+    return new Response(null, {
+      status: 416,
+      headers: { ...headers, 'Content-Range': `bytes */${size}` },
+    });
+  }
+  if (range) {
+    return new Response(video.slice(range.start, range.end + 1).stream(), {
+      status: 206,
+      headers: {
+        ...headers,
+        'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
+        'Content-Length': String(range.end - range.start + 1),
+      },
+    });
+  }
+  return new Response(video.stream(), {
+    headers: { ...headers, 'Content-Length': String(size) },
+  });
 }
 
 /**

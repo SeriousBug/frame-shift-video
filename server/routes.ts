@@ -40,6 +40,7 @@ import {
   discsAttentionHandler,
   discsExtrasHandler,
   discsExtrasHintHandler,
+  discsExtrasFileHandler,
   discsExtrasRenameHandler,
   discsCommandsHandler,
   discsCommandResultHandler,
@@ -242,6 +243,10 @@ const wrappedSubtitlesAutoHandler = withErrorHandler(
 const wrappedDiscsNextHandler = withErrorHandler(
   discsNextHandler,
   'DiscsNextHandler',
+);
+const wrappedDiscsExtrasFileHandler = withErrorHandler(
+  discsExtrasFileHandler,
+  'DiscsExtrasFileHandler',
 );
 const wrappedDiscsExtrasHintHandler = withErrorHandler(
   discsExtrasHintHandler,
@@ -462,6 +467,9 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/discs/extras' && req.method === 'GET') {
       return await wrappedDiscsExtrasHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/file' && req.method === 'GET') {
+      return await wrappedDiscsExtrasFileHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/extras/hint' && req.method === 'GET') {
       return await wrappedDiscsExtrasHintHandler(req, corsHeaders);

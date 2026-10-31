@@ -115,6 +115,37 @@ function locate(
 }
 
 /**
+ * The file of an extra, to watch it: the same paths as renaming (a video inside an extras folder
+ * of a movie, nothing else), and it has to be a real file that really sits under the DVDs folder.
+ */
+export async function extraFilePath(
+  dir: string,
+  file: string,
+): Promise<string> {
+  const output = await outputFolder(dir);
+  const here = locate(file, output);
+  const absolute = path.join(
+    dir,
+    here.parent,
+    here.movie,
+    here.folder,
+    here.base,
+  );
+  let real: string;
+  try {
+    real = await fs.realpath(absolute);
+    if (!(await fs.stat(real)).isFile()) throw new Error('not a file');
+  } catch {
+    throw new Error('That extra is not there any more');
+  }
+  const root = await fs.realpath(dir);
+  if (!real.startsWith(root + path.sep)) {
+    throw new Error('That is not an extra of a movie');
+  }
+  return real;
+}
+
+/**
  * Gives an extra its name, and moves it to another extras folder if asked. Returns where it is now.
  * Nothing is overwritten: a name that is taken is refused.
  */
