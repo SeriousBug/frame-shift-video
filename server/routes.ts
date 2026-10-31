@@ -41,6 +41,8 @@ import {
   discsExtrasHandler,
   discsExtrasHintHandler,
   discsExtrasFileHandler,
+  discsExtrasPreviewHandler,
+  discsExtrasFrameHandler,
   discsExtrasRenameHandler,
   discsCommandsHandler,
   discsCommandResultHandler,
@@ -243,6 +245,14 @@ const wrappedSubtitlesAutoHandler = withErrorHandler(
 const wrappedDiscsNextHandler = withErrorHandler(
   discsNextHandler,
   'DiscsNextHandler',
+);
+const wrappedDiscsExtrasPreviewHandler = withErrorHandler(
+  discsExtrasPreviewHandler,
+  'DiscsExtrasPreviewHandler',
+);
+const wrappedDiscsExtrasFrameHandler = withErrorHandler(
+  discsExtrasFrameHandler,
+  'DiscsExtrasFrameHandler',
 );
 const wrappedDiscsExtrasFileHandler = withErrorHandler(
   discsExtrasFileHandler,
@@ -467,6 +477,12 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/discs/extras' && req.method === 'GET') {
       return await wrappedDiscsExtrasHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/preview' && req.method === 'GET') {
+      return await wrappedDiscsExtrasPreviewHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/frame' && req.method === 'GET') {
+      return await wrappedDiscsExtrasFrameHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/extras/file' && req.method === 'GET') {
       return await wrappedDiscsExtrasFileHandler(req, corsHeaders);

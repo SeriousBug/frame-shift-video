@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { CollapsibleCard } from '@/components/collapsible-card';
 import {
   useDiscExtras,
+  useExtraPreview,
   useFandomHint,
   useRenameDiscExtra,
 } from '@/lib/api-hooks';
-import { discExtraFileUrl } from '@/lib/api';
+import { discExtraFileUrl, discExtraFrameUrl } from '@/lib/api';
 import type { ExtraItem } from '@/types/discs';
 
 const FOLDERS = [
@@ -23,6 +24,70 @@ const INPUT =
   'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white';
 const SMALL =
   'min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 bg-blue-600 text-white hover:bg-blue-700';
+
+const clock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+
+/**
+ * A strip of pictures spread through an extra, to tell what it is without playing it. Each opens the
+ * video at that moment. Nothing is made until it is opened.
+ */
+function Preview({ item, movie }: { item: ExtraItem; movie: string }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, error } = useExtraPreview(item.path, open);
+  return (
+    <details
+      className="mt-2"
+      onToggle={(event) => setOpen((event.target as HTMLDetailsElement).open)}
+    >
+      <summary
+        className="cursor-pointer text-sm text-blue-700 dark:text-blue-300"
+        aria-label={`Preview the extra ${item.name} in ${movie}`}
+      >
+        Preview
+      </summary>
+      {isLoading && (
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Looking inside...
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">
+          {error.message}
+        </p>
+      )}
+      {data && (
+        <div>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {clock(data.seconds)} long. Press a picture to watch from there.
+          </p>
+          <ul className="mt-1 flex gap-2 overflow-x-auto pb-1">
+            {data.times.map((at) => (
+              <li key={at} className="shrink-0">
+                <a
+                  href={discExtraFileUrl(item.path, false, at)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Watch from ${clock(at)}`}
+                >
+                  <img
+                    src={discExtraFrameUrl(item.path, at)}
+                    alt=""
+                    loading="lazy"
+                    className="h-20 w-auto rounded bg-gray-200 dark:bg-gray-700"
+                  />
+                  <span className="block text-center text-xs text-gray-600 dark:text-gray-400">
+                    {clock(at)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </details>
+  );
+}
 
 function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
   const rename = useRenameDiscExtra();
@@ -64,6 +129,7 @@ function ExtraRow({ item, movie }: { item: ExtraItem; movie: string }) {
           Download
         </a>
       </p>
+      <Preview item={item} movie={movie} />
       <input
         id={`name-${id}`}
         className={`${INPUT} mt-1`}

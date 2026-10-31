@@ -890,10 +890,37 @@ export async function fetchDiscExtras(): Promise<ExtraMovie[]> {
 /**
  * Where to watch (or, with `download`, save) an extra, to tell what it is
  */
-export function discExtraFileUrl(path: string, download = false): string {
+export function discExtraFileUrl(
+  path: string,
+  download = false,
+  at?: number,
+): string {
   const query = new URLSearchParams({ path });
   if (download) query.set('download', '1');
-  return `${API_BASE}/discs/extras/file?${query}`;
+  // A media fragment: the player starts at that moment.
+  return `${API_BASE}/discs/extras/file?${query}${at !== undefined ? `#t=${Math.floor(at)}` : ''}`;
+}
+
+/**
+ * Where a still picture from an extra is, at a moment in it
+ */
+export function discExtraFrameUrl(path: string, at: number): string {
+  return `${API_BASE}/discs/extras/frame?${new URLSearchParams({ path, t: String(at) })}`;
+}
+
+/**
+ * An extra's length and the moments to show pictures of
+ */
+export async function fetchExtraPreview(
+  path: string,
+): Promise<{ seconds: number; times: number[] }> {
+  const response = await fetch(
+    `${API_BASE}/discs/extras/preview?${new URLSearchParams({ path })}`,
+  );
+  if (!response.ok) {
+    throw await discError(response, 'Failed to look inside the video');
+  }
+  return (await response.json()) as { seconds: number; times: number[] };
 }
 
 /**
