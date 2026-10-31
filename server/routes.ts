@@ -42,6 +42,7 @@ import {
   discsExtrasHintHandler,
   discsExtrasFileHandler,
   discsExtrasMatchHandler,
+  discsExtrasSourcesHandler,
   discsExtrasMatchStartHandler,
   discsExtrasPreviewHandler,
   discsExtrasFrameHandler,
@@ -255,6 +256,10 @@ const wrappedDiscsExtrasPreviewHandler = withErrorHandler(
 const wrappedDiscsExtrasFrameHandler = withErrorHandler(
   discsExtrasFrameHandler,
   'DiscsExtrasFrameHandler',
+);
+const wrappedDiscsExtrasSourcesHandler = withErrorHandler(
+  discsExtrasSourcesHandler,
+  'DiscsExtrasSourcesHandler',
 );
 const wrappedDiscsExtrasMatchHandler = withErrorHandler(
   discsExtrasMatchHandler,
@@ -493,6 +498,9 @@ export async function setupRoutes(req: Request): Promise<Response> {
     }
     if (pathname === '/api/discs/extras/frame' && req.method === 'GET') {
       return await wrappedDiscsExtrasFrameHandler(req, corsHeaders);
+    }
+    if (pathname === '/api/discs/extras/sources' && req.method === 'GET') {
+      return await wrappedDiscsExtrasSourcesHandler(req, corsHeaders);
     }
     if (pathname === '/api/discs/extras/match' && req.method === 'GET') {
       return await wrappedDiscsExtrasMatchHandler(req, corsHeaders);

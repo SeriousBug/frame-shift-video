@@ -272,12 +272,39 @@ export interface FandomHint {
   features?: { text: string; depth: number }[];
 }
 
+/** One bonus feature a database lists, with the length it gives (if it gives one). */
+export interface NameEntry {
+  text: string;
+  /** How deep it is under the entry above it (0 is a heading such as "Disc 1") */
+  depth: number;
+  seconds: number | null;
+  /** Marked as the others played one after another */
+  playAll?: boolean;
+  /** The extras folder the database's own type of it points to */
+  kind?: string | null;
+}
+
+/** What one database lists as the bonus features of a movie's disc. */
+export interface NameSource {
+  source: 'DVD Compare' | 'TheDiscDB' | 'DVD Fandom';
+  /** The page the list is from, and its address */
+  page: string;
+  url: string;
+  /** Which release of the movie (Region 1 only for DVD Compare and TheDiscDB) */
+  release?: string;
+  /** The movie's running time as the database words it, if it gives one */
+  runtime?: string | null;
+  features: NameEntry[];
+}
+
 /** What "Try to match the names" made of one extra. */
 export interface ExtraSuggestion {
   /** matched: clear; unsure: might be; none: nothing like a listed name */
   state: 'matched' | 'unsure' | 'none';
   /** One sentence saying why */
   note: string;
+  /** How long the extra is, in seconds, when that was found out */
+  seconds?: number | null;
   name?: string;
   /** The extras folder its place on the wiki's list suggests */
   kind?: string | null;
@@ -293,6 +320,10 @@ export interface ExtraMatch {
   done: number;
   /** By the extra's path */
   suggestions: Record<string, ExtraSuggestion>;
+  /** The databases whose names were compared with */
+  sources?: string[];
+  /** Something that did not work but did not stop it (the listener being down) */
+  warning?: string;
   error?: string;
 }
 

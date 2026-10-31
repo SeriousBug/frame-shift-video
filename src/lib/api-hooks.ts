@@ -33,6 +33,7 @@ import {
   fetchDiscs,
   fetchDiscExtras,
   fetchExtraMatch,
+  fetchExtraSources,
   fetchExtraPreview,
   fetchFandomHint,
   startExtraMatch,
@@ -555,6 +556,20 @@ export function useFandomHint(movie: string, enabled: boolean) {
   return useQuery({
     queryKey: ['fandom-hint', movie] as const,
     queryFn: () => fetchFandomHint(movie),
+    enabled,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to read what every database lists for a movie's disc. Asked once for the session: the
+ * databases are slow and rarely change.
+ */
+export function useExtraSources(movie: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['extra-sources', movie] as const,
+    queryFn: () => fetchExtraSources(movie),
     enabled,
     retry: false,
     staleTime: 60 * 60 * 1000,

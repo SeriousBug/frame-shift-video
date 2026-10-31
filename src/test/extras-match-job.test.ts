@@ -10,6 +10,7 @@ import {
 } from '../../server/extras-match-job';
 import { ListenerUnavailable, lookAt } from '../../server/extras-eyes';
 import type { Look } from '../../server/extras-match';
+import type { NameSource } from '../types/discs';
 
 let dir: string;
 const MOVIE = 'Stellaluna (2004)';
@@ -28,14 +29,28 @@ const LOOKS: Record<string, Look> = {
   [BLANK]: { seconds: 60, ocr: [], speech: [] },
 };
 
-const HINT = {
-  found: true,
+const FANDOM: NameSource = {
+  source: 'DVD Fandom',
+  page: 'Stellaluna',
+  url: 'https://dvd.fandom.com/wiki/Stellaluna',
   features: [
-    { text: 'Featurettes', depth: 1 },
-    { text: 'The Not-So-Scary World of Bats', depth: 2 },
-    { text: 'Create Your Own Stellaluna', depth: 2 },
+    { text: 'Featurettes', depth: 1, seconds: null },
+    { text: 'The Not-So-Scary World of Bats', depth: 2, seconds: null },
+    { text: 'Create Your Own Stellaluna', depth: 2, seconds: null },
   ],
 };
+// A database that gives lengths: the trailer is 2 minutes, which is what BLANK measures.
+const COMPARE: NameSource = {
+  source: 'DVD Compare',
+  page: 'Stellaluna',
+  url: 'https://www.dvdcompare.net/comparisons/film.php?fid=1',
+  release: 'R1 America',
+  features: [
+    { text: 'Theatrical Trailer', depth: 1, seconds: 120 },
+    { text: 'Bat Facts', depth: 1, seconds: 90 },
+  ],
+};
+const LENGTHS: Record<string, number> = { [CARD]: 1200, [BLANK]: 121 };
 
 let asked: string[];
 const deps = (over: Partial<Deps> = {}): Deps => ({
@@ -43,7 +58,8 @@ const deps = (over: Partial<Deps> = {}): Deps => ({
     asked.push(relative);
     return LOOKS[relative]!;
   },
-  hint: async () => HINT,
+  sources: async () => [FANDOM],
+  seconds: async (_dir, relative) => LENGTHS[relative] ?? null,
   ...over,
 });
 
@@ -135,7 +151,7 @@ describe('matching a movie', () => {
   });
 
   test('with no wiki list, the evidence is still kept and nothing is suggested', async () => {
-    const none = deps({ hint: async () => ({ found: false }) });
+    const none = deps({ sources: async () => [] });
     const { state, finished } = await startMatch(dir, MOVIE, none);
     await finished;
     expect(state.suggestions[CARD]?.state).toBe('none');
@@ -160,20 +176,9 @@ describe('matching a movie', () => {
     const { state, finished } = await startMatch(dir, MOVIE, flaky);
     await finished;
     expect(state.status).toBe('done');
-    expect(state.suggestions[BLANK]?.note).toContain('could not look');
+    expect(state.warning).toContain('could not look at one extra');
+    expect(state.suggestions[BLANK]?.state).toBe('none');
     expect(state.suggestions[CARD]?.state).toBe('matched');
-  });
-
-  test('the listener being down stops it, and says so', async () => {
-    const down = deps({
-      look: async () => {
-        throw new ListenerUnavailable('The listener could not be reached');
-      },
-    });
-    const { state, finished } = await startMatch(dir, MOVIE, down);
-    await finished;
-    expect(state.status).toBe('failed');
-    expect(state.error).toContain('could not be reached');
   });
 
   test('a movie with no extras, or all named, is refused', async () => {
@@ -183,6 +188,56 @@ describe('matching a movie', () => {
     await fs.rm(path.join(dir, CARD));
     await fs.rm(path.join(dir, BLANK));
     await expect(startMatch(dir, MOVIE, deps())).rejects.toThrow('named');
+  });
+
+  test('lengths name an extra at once, before any listening', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = deps({
+      sources: async () => [COMPARE, FANDOM],
+      look: async (relative) => {
+        await gate;
+        return LOOKS[relative]!;
+      },
+    });
+    const { state, finished } = await startMatch(dir, MOVIE, slow);
+    // The page can already be told what the length says, while the listener is still working.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(state.status).toBe('running');
+    expect(state.done).toBe(0);
+    expect(state.suggestions[BLANK]).toMatchObject({
+      state: 'matched',
+      name: 'Theatrical Trailer',
+      seconds: 121,
+    });
+    expect(state.sources).toEqual(['DVD Compare', 'DVD Fandom']);
+    release();
+    await finished;
+    expect(state.suggestions[CARD]?.name).toBe(
+      'The Not-So-Scary World of Bats',
+    );
+  });
+
+  test('the listener being down leaves the suggestions by length, with a warning', async () => {
+    const down = deps({
+      sources: async () => [COMPARE],
+      look: async () => {
+        throw new ListenerUnavailable('The listener could not be reached');
+      },
+    });
+    const { state, finished } = await startMatch(dir, MOVIE, down);
+    await finished;
+    expect(state.status).toBe('done');
+    expect(state.warning).toContain('by length only');
+    expect(state.suggestions[BLANK]?.name).toBe('Theatrical Trailer');
+  });
+
+  test('an extra whose length cannot be measured is still looked at', async () => {
+    const noLengths = deps({ seconds: async () => null });
+    const { state, finished } = await startMatch(dir, MOVIE, noLengths);
+    await finished;
+    expect(state.suggestions[CARD]?.state).toBe('matched');
+    expect(state.suggestions[CARD]?.seconds).toBeNull();
   });
 
   test('after a failure it can be started again', async () => {

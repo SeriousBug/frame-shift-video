@@ -1,7 +1,8 @@
 /**
- * "Try to match the names": runs a movie's unnamed extras through the listener one at a time (it is
- * slow, and the machine is shared), compares each with the names DVD Fandom lists, and keeps the
- * answers for the page to read as they arrive.
+ * "Try to match the names": measures a movie's unnamed extras and compares their lengths with the
+ * lengths the databases list (answers at once), then runs each through the listener one at a time (it
+ * is slow, and the machine is shared) to add what is written on it and said in it. The answers are
+ * kept for the page to read as they arrive.
  *
  * Nothing is renamed here. The answers are suggestions a person presses a button to use.
  */
@@ -9,20 +10,28 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { readExtras } from './extras-state';
-import { fandomHint } from './fandom-hints';
 import { ListenerUnavailable, lookAt } from './extras-eyes';
-import { candidates, matchMovie, type Look } from './extras-match';
-import type { ExtraMatch, FandomHint } from '../src/types/discs';
+import { extraFilePath } from './extras-state';
+import { videoSeconds } from './extras-preview';
+import { nameSources } from './extras-sources';
+import { candidatesFrom, matchMovie, type Look } from './extras-match';
+import type { ExtraMatch, NameSource } from '../src/types/discs';
 
 const MAX_MOVIES = 50;
 const MAX_LOOKS = 500;
 
 export interface Deps {
   look: (relative: string) => Promise<Look>;
-  hint: (movie: string) => Promise<FandomHint>;
+  sources: (movie: string) => Promise<NameSource[]>;
+  seconds: (dir: string, relative: string) => Promise<number | null>;
 }
 
-const realDeps: Deps = { look: (p) => lookAt(p), hint: (m) => fandomHint(m) };
+const realDeps: Deps = {
+  look: (p) => lookAt(p),
+  sources: (m) => nameSources(m),
+  seconds: async (dir, relative) =>
+    videoSeconds(await extraFilePath(dir, relative)).catch(() => null),
+};
 
 const jobs = new Map<string, ExtraMatch>();
 /** What the listener said about a file, kept while the file is unchanged (listening is slow). */
@@ -84,22 +93,41 @@ export async function startMatch(
   jobs.set(movie, state);
 
   const finished = (async () => {
-    const heard: Record<string, Look> = {};
+    const looks: Record<string, Look | null> = {};
+    let unlooked = 0;
     try {
-      const names = candidates(await deps.hint(movie));
+      const lengths: Record<string, number | null> = {};
+      for (const item of items) {
+        lengths[item.path] = await deps.seconds(dir, item.path);
+        looks[item.path] = null;
+      }
+      const sources = await deps.sources(movie);
+      const names = candidatesFrom(sources);
+      state.sources = [...new Set(sources.map((s) => s.source))];
+      const decide = () => {
+        state.suggestions = matchMovie(
+          items.map((i) => ({
+            path: i.path,
+            seconds: lengths[i.path] ?? null,
+            look: looks[i.path] ?? null,
+          })),
+          names,
+        );
+      };
+      // By length first: it needs no listening, so the page has answers straight away.
+      decide();
       for (const item of items) {
         try {
-          heard[item.path] = await looked(dir, item.path, deps);
+          looks[item.path] = await looked(dir, item.path, deps);
         } catch (error) {
-          if (error instanceof ListenerUnavailable) throw error;
-          state.suggestions[item.path] = {
-            state: 'none',
-            note: 'The listener could not look at this one.',
-            saw: '',
-            heard: '',
-          };
+          if (error instanceof ListenerUnavailable) {
+            state.warning = `${error.message}, so these suggestions are by length only.`;
+            break;
+          }
+          unlooked += 1;
+          state.warning = `The listener could not look at ${unlooked === 1 ? 'one extra' : `${unlooked} extras`}.`;
         }
-        Object.assign(state.suggestions, matchMovie(heard, names));
+        decide();
         state.done += 1;
       }
       state.status = 'done';

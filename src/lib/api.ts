@@ -19,6 +19,7 @@ import type {
   DiscsState,
   DiscPresetInput,
   ExtraMatch,
+  NameSource,
   ExtraMovie,
   FandomHint,
 } from '@/types/discs';
@@ -886,6 +887,19 @@ export async function fetchDiscExtras(): Promise<ExtraMovie[]> {
   }
   const body = (await response.json()) as { movies: ExtraMovie[] };
   return body.movies;
+}
+
+/**
+ * What every database lists as the bonus features of a movie's disc, with the lengths they give
+ */
+export async function fetchExtraSources(movie: string): Promise<NameSource[]> {
+  const response = await fetch(
+    `${API_BASE}/discs/extras/sources?${new URLSearchParams({ movie })}`,
+  );
+  if (!response.ok) {
+    throw await discError(response, 'Failed to look the movie up');
+  }
+  return ((await response.json()) as { sources: NameSource[] }).sources;
 }
 
 /**

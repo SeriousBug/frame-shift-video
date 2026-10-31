@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import {
   candidates,
+  candidatesFrom,
   fileName,
   kindOf,
   matchExtra,
   matchMovie,
   words,
+  type Candidate,
+  type Evidence,
   type Look,
 } from '../../server/extras-match';
-import type { FandomHint } from '../types/discs';
+import type { FandomHint, NameSource } from '../types/discs';
 
 // From the live DVD Fandom pages (trimmed).
 const STELLALUNA: FandomHint = {
@@ -53,6 +56,11 @@ const BATS_CARD: Look = {
     },
   ],
 };
+
+const ev = (look: Look | null, seconds: number | null = null): Evidence => ({
+  seconds,
+  look,
+});
 
 const nothing = (): Look => ({ seconds: 60, ocr: [], speech: [] });
 
@@ -115,7 +123,7 @@ describe('matching one extra', () => {
   const names = candidates(STELLALUNA);
 
   test('a title card that reads the whole name is a match, with its kind and the reason', () => {
-    const answer = matchExtra(BATS_CARD, names);
+    const answer = matchExtra(ev(BATS_CARD), names);
     expect(answer.state).toBe('matched');
     expect(answer.name).toBe('The Not-So-Scary World of Bats');
     expect(answer.kind).toBe('Featurettes');
@@ -131,7 +139,7 @@ describe('matching one extra', () => {
       ocr: [{ t: 1, lines: ['THE NOT-SO-SCARV', 'WORLO OF BATS'] }],
       speech: [],
     };
-    expect(matchExtra(look, names).state).toBe('matched');
+    expect(matchExtra(ev(look), names).state).toBe('matched');
   });
 
   test('a longer name said in order is a match even with no title card', () => {
@@ -146,8 +154,8 @@ describe('matching one extra', () => {
         },
       ],
     };
-    expect(matchExtra(look, names).name).toBe('Create Your Own Stellaluna');
-    expect(matchExtra(look, names).state).toBe('matched');
+    expect(matchExtra(ev(look), names).name).toBe('Create Your Own Stellaluna');
+    expect(matchExtra(ev(look), names).state).toBe('matched');
   });
 
   test('a short name only said in passing is not a match', () => {
@@ -158,7 +166,7 @@ describe('matching one extra', () => {
         { start: 1, end: 5, text: 'We will see the previews of other movies.' },
       ],
     };
-    expect(matchExtra(look, names).state).not.toBe('matched');
+    expect(matchExtra(ev(look), names).state).not.toBe('matched');
   });
 
   test('most of a name is unsure, not a match', () => {
@@ -167,7 +175,7 @@ describe('matching one extra', () => {
       ocr: [{ t: 2, lines: ['NOT-SO-SCARY WORLD'] }],
       speech: [],
     };
-    const answer = matchExtra(look, names);
+    const answer = matchExtra(ev(look), names);
     expect(answer.state).toBe('unsure');
     expect(answer.note).toContain('only part');
     expect(answer.name).toBe('The Not-So-Scary World of Bats');
@@ -179,7 +187,7 @@ describe('matching one extra', () => {
       ocr: [{ t: 2, lines: ['WORLD OF BATS'] }],
       speech: [],
     };
-    expect(matchExtra(look, names).state).toBe('none');
+    expect(matchExtra(ev(look), names).state).toBe('none');
   });
 
   test('two names that fit about equally are unsure and both are named', () => {
@@ -189,7 +197,7 @@ describe('matching one extra', () => {
       ocr: [{ t: 1, lines: ['OPENING CONCEPT'] }],
       speech: [],
     };
-    const answer = matchExtra(look, lion);
+    const answer = matchExtra(ev(look), lion);
     expect(answer.state).toBe('unsure');
     expect(answer.note).toContain('Opening Concept 1');
     expect(answer.note).toContain('Opening Concept 2');
@@ -201,7 +209,7 @@ describe('matching one extra', () => {
       ocr: [{ t: 1, lines: ['OPENING CONCEPT 1', 'OPENING CONCEPT 2'] }],
       speech: [],
     };
-    const answer = matchExtra(look, candidates(LION_KING));
+    const answer = matchExtra(ev(look), candidates(LION_KING));
     expect(answer.state).toBe('unsure');
     expect(answer.note).toContain('not clear which');
   });
@@ -212,7 +220,7 @@ describe('matching one extra', () => {
       ocr: [{ t: 1, lines: ['OPENING CONCEPT 1'] }],
       speech: [],
     };
-    const answer = matchExtra(look, candidates(LION_KING));
+    const answer = matchExtra(ev(look), candidates(LION_KING));
     expect(answer.state).toBe('matched');
     expect(answer.name).toBe('Opening Concept 1');
     expect(answer.kind).toBe('Deleted Scenes');
@@ -224,15 +232,15 @@ describe('matching one extra', () => {
       ocr: [{ t: 1, lines: ['DISNEY ENTERPRISES 2004'] }],
       speech: [{ start: 0, end: 2, text: 'Hello there.' }],
     };
-    const answer = matchExtra(look, names);
+    const answer = matchExtra(ev(look), names);
     expect(answer.state).toBe('none');
     expect(answer.saw).toBe('DISNEY ENTERPRISES 2004');
     expect(answer.heard).toBe('Hello there.');
   });
 
   test('nothing to read or hear, and no list, are said plainly', () => {
-    expect(matchExtra(nothing(), names).note).toContain('watching it');
-    expect(matchExtra(BATS_CARD, []).note).toContain('nothing to compare');
+    expect(matchExtra(ev(nothing()), names).note).toContain('watching it');
+    expect(matchExtra(ev(BATS_CARD), []).note).toContain('nothing to compare');
   });
 });
 
@@ -240,16 +248,245 @@ describe('matching a whole movie', () => {
   const names = candidates(STELLALUNA);
 
   test('each extra is matched on its own', () => {
-    const out = matchMovie({ a: BATS_CARD, b: nothing() }, names);
+    const out = matchMovie(
+      [
+        { path: 'a', ...ev(BATS_CARD) },
+        { path: 'b', ...ev(nothing()) },
+      ],
+      names,
+    );
     expect(out.a!.state).toBe('matched');
     expect(out.b!.state).toBe('none');
   });
 
   test('a name two extras both match is taken back from both', () => {
-    const out = matchMovie({ a: BATS_CARD, b: BATS_CARD }, names);
+    const out = matchMovie(
+      [
+        { path: 'a', ...ev(BATS_CARD) },
+        { path: 'b', ...ev(BATS_CARD) },
+      ],
+      names,
+    );
     for (const key of ['a', 'b']) {
       expect(out[key]!.state).toBe('unsure');
       expect(out[key]!.note).toContain('Two extras look like');
     }
+  });
+});
+
+// What DVD Compare really lists for Duma (2005) R1, and the lengths of Duma's four real extras.
+const DUMA: NameSource = {
+  source: 'DVD Compare',
+  page: 'Duma',
+  url: 'https://www.dvdcompare.net/comparisons/film.php?fid=13117',
+  features: [
+    { text: 'Extended Scenes', depth: 1, seconds: null },
+    { text: 'Play All', depth: 1, seconds: 108, playAll: true },
+    { text: 'Xan and Ripkuna at the Airplane', depth: 1, seconds: 59 },
+    {
+      text: 'Ripkuna Teaching Xan How to Use the Spear',
+      depth: 1,
+      seconds: 49,
+    },
+    { text: 'Theatrical Trailer', depth: 1, seconds: 95, kind: null },
+  ],
+};
+const DUMA_FILES = [
+  { path: 'Extra 01', seconds: 99.4 },
+  { path: 'Extra 02', seconds: 106.4 },
+  { path: 'Extra 03', seconds: 58.0 },
+  { path: 'Extra 04', seconds: 48.3 },
+];
+const lengthOnly = (seconds: number | null, path = 'x') => ({
+  path,
+  ...ev(null, seconds),
+});
+
+describe('matching by length', () => {
+  const names = candidatesFrom([DUMA]);
+
+  test("Duma's real extras are named by their lengths, the play-all is not given a name", () => {
+    const out = matchMovie(
+      DUMA_FILES.map((f) => ({ path: f.path, ...ev(null, f.seconds) })),
+      names,
+    );
+    expect(out['Extra 03']).toMatchObject({
+      state: 'matched',
+      name: 'Xan and Ripkuna at the Airplane',
+    });
+    expect(out['Extra 03']!.note).toContain('0:58 long');
+    expect(out['Extra 03']!.note).toContain('DVD Compare');
+    expect(out['Extra 04']).toMatchObject({
+      state: 'matched',
+      name: 'Ripkuna Teaching Xan How to Use the Spear',
+    });
+    expect(out['Extra 01']).toMatchObject({
+      state: 'matched',
+      name: 'Theatrical Trailer',
+    });
+    expect(out['Extra 02']!.state).toBe('none');
+    expect(out['Extra 02']!.name).toBeUndefined();
+    expect(out['Extra 02']!.note).toContain('Play All');
+  });
+
+  test('two extras of one length cannot be told apart by length, and both say so', () => {
+    const list = candidatesFrom([
+      {
+        ...DUMA,
+        features: [{ text: 'Meet the Animals', depth: 1, seconds: 336 }],
+      },
+    ]);
+    const out = matchMovie(
+      [
+        { path: 'a', ...ev(null, 335.7) },
+        { path: 'b', ...ev(null, 335.7) },
+      ],
+      list,
+    );
+    for (const key of ['a', 'b']) {
+      expect(out[key]!.state).toBe('unsure');
+      expect(out[key]!.name).toBe('Meet the Animals');
+      expect(out[key]!.note).toContain('length alone cannot tell');
+    }
+  });
+
+  test('two names of one length are unsure, naming both, unless the writing picks one', () => {
+    const list = candidatesFrom([
+      {
+        ...DUMA,
+        features: [
+          { text: 'Outtakes', depth: 1, seconds: 60 },
+          { text: 'Gag Reel', depth: 1, seconds: 61 },
+        ],
+      },
+    ]);
+    const unsure = matchExtra(ev(null, 60), list);
+    expect(unsure.state).toBe('unsure');
+    expect(unsure.note).toContain('“Outtakes”');
+    expect(unsure.note).toContain('“Gag Reel”');
+    const card: Look = {
+      seconds: 60,
+      ocr: [{ t: 1, lines: ['GAG REEL'] }],
+      speech: [{ start: 0, end: 2, text: 'And now the gag reel.' }],
+    };
+    const picked = matchExtra(ev(card, 60), list);
+    expect(picked.state).toBe('matched');
+    expect(picked.name).toBe('Gag Reel');
+    expect(picked.note).toContain('writing at 0:01 reads it');
+  });
+
+  test('what is written contradicting the length makes it unsure', () => {
+    const list = candidatesFrom([
+      {
+        ...DUMA,
+        features: [
+          { text: 'Theatrical Trailer', depth: 1, seconds: 95 },
+          { text: 'Making of Duma', depth: 1, seconds: 600 },
+        ],
+      },
+    ]);
+    const card: Look = {
+      seconds: 95,
+      ocr: [{ t: 1, lines: ['MAKING OF DUMA'] }],
+      speech: [],
+    };
+    const answer = matchExtra(ev(card, 95), list);
+    expect(answer.state).toBe('unsure');
+    expect(answer.note).toContain('Making of Duma');
+  });
+
+  test('close but not close enough is a maybe, and far is nothing', () => {
+    expect(matchExtra(ev(null, 75), names).state).toBe('none');
+    const close = matchExtra(ev(null, 66), names);
+    expect(close.state).toBe('unsure');
+    expect(close.name).toBe('Xan and Ripkuna at the Airplane');
+    expect(close.note).toContain('Close in length');
+    expect(matchExtra(ev(null, 5000), names).state).toBe('none');
+  });
+
+  test('the edge: six seconds off is a match, seven is not', () => {
+    expect(matchExtra(ev(null, 65), names).state).toBe('matched');
+    expect(matchExtra(ev(null, 66), names).state).toBe('unsure');
+  });
+
+  test('names with no length are matched by what was read and heard as before', () => {
+    const fandom = candidatesFrom([
+      {
+        source: 'DVD Fandom',
+        page: 'Stellaluna',
+        url: 'x',
+        features: STELLALUNA.features!.map((f) => ({ ...f, seconds: null })),
+      },
+    ]);
+    const answer = matchExtra(ev(BATS_CARD, 5), fandom);
+    expect(answer.state).toBe('matched');
+    expect(answer.name).toBe('The Not-So-Scary World of Bats');
+  });
+
+  test('a length alone does not name an extra when nothing is listed with a length', () => {
+    const fandom = candidates(STELLALUNA);
+    expect(matchExtra(ev(null, 59), fandom).state).toBe('none');
+  });
+
+  test('an extra whose length is not known is matched without it', () => {
+    expect(lengthOnly(null).seconds).toBeNull();
+    expect(matchExtra(ev(BATS_CARD, null), candidates(STELLALUNA)).state).toBe(
+      'matched',
+    );
+  });
+});
+
+describe('the names of several databases together', () => {
+  test('a feature several list is one name with the first length given and every database', () => {
+    const list = candidatesFrom([
+      DUMA,
+      {
+        source: 'TheDiscDB',
+        page: 'Duma (2005)',
+        url: 'x',
+        features: [
+          {
+            text: 'Theatrical Trailer',
+            depth: 1,
+            seconds: 96,
+            kind: 'Trailers',
+          },
+        ],
+      },
+      {
+        source: 'DVD Fandom',
+        page: 'Duma',
+        url: 'x',
+        features: [{ text: 'Theatrical Trailer', depth: 1, seconds: null }],
+      },
+    ]);
+    const trailers = list.filter((c) => c.name === 'Theatrical Trailer');
+    expect(trailers).toHaveLength(1);
+    expect(trailers[0]!.seconds).toBe(95);
+    expect(trailers[0]!.kind).toBe('Trailers');
+    expect(trailers[0]!.sources).toEqual([
+      'DVD Compare',
+      'TheDiscDB',
+      'DVD Fandom',
+    ]);
+  });
+
+  test('a database giving a length fills one that did not', () => {
+    const list: Candidate[] = candidatesFrom([
+      {
+        source: 'DVD Fandom',
+        page: 'x',
+        url: 'x',
+        features: [{ text: 'Outtakes', depth: 1, seconds: null }],
+      },
+      {
+        source: 'TheDiscDB',
+        page: 'x',
+        url: 'x',
+        features: [{ text: 'Outtakes', depth: 1, seconds: 120 }],
+      },
+    ]);
+    expect(list).toHaveLength(1);
+    expect(list[0]!.seconds).toBe(120);
   });
 });

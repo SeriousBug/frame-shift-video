@@ -32,7 +32,7 @@ const MOVIES = [
 type Rename = { path: string; name: string; folder?: string };
 let renames: Rename[];
 let failWith: string | null;
-let hint: unknown;
+let sources: unknown[];
 let hintAsked: string[];
 let previewAsked: string[];
 let previewFails: boolean;
@@ -48,7 +48,7 @@ beforeEach(() => {
   previewFails = false;
   matchState = null;
   matchStarted = [];
-  hint = { found: false };
+  sources = [];
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     if (String(url).includes('/discs/extras/match')) {
       if (init?.method === 'POST') {
@@ -67,11 +67,11 @@ beforeEach(() => {
           })
         : new Response(JSON.stringify({ seconds: 80, times: [5, 15, 25] }));
     }
-    if (String(url).includes('/discs/extras/hint')) {
+    if (String(url).includes('/discs/extras/sources')) {
       hintAsked.push(
         new URL(String(url), 'http://x').searchParams.get('movie')!,
       );
-      return new Response(JSON.stringify({ hint }));
+      return new Response(JSON.stringify({ sources }));
     }
     if (String(url).endsWith('/discs/extras/rename')) {
       renames.push(JSON.parse(String(init?.body)));
@@ -199,36 +199,61 @@ describe('the "Name the extras" section', () => {
     expect(container.textContent).toBe('');
   });
 
-  test('shows what DVD Fandom lists for a movie that has unnamed extras', async () => {
-    hint = {
-      found: true,
-      page: 'Duma',
-      url: 'https://dvd.fandom.com/wiki/Duma',
-      runtime: 'Approx. 100 minutes',
-      features: [
-        { text: 'Disc 2', depth: 0 },
-        { text: 'Deleted Scenes', depth: 1 },
-        { text: 'Zebra Cut', depth: 2 },
-      ],
-    };
+  test('shows what every database lists, with the lengths they give', async () => {
+    sources = [
+      {
+        source: 'DVD Compare',
+        page: 'Duma',
+        url: 'https://www.dvdcompare.net/comparisons/film.php?fid=13117',
+        release: 'R1 America - Warner Home Video',
+        features: [
+          { text: 'Extended Scenes', depth: 1, seconds: null },
+          { text: 'Play All', depth: 1, seconds: 108, playAll: true },
+          { text: 'Xan and Ripkuna at the Airplane', depth: 1, seconds: 59 },
+        ],
+      },
+      {
+        source: 'DVD Fandom',
+        page: 'Duma',
+        url: 'https://dvd.fandom.com/wiki/Duma',
+        runtime: 'Approx. 100 minutes',
+        features: [
+          { text: 'Disc 2', depth: 0, seconds: null },
+          { text: 'Zebra Cut', depth: 2, seconds: null },
+        ],
+      },
+    ];
     page();
     expect(
       await screen.findByText(
-        'What DVD Fandom lists on this disc (the movie: Approx. 100 minutes)',
+        'What the databases list on this disc (DVD Compare, DVD Fandom)',
       ),
     ).toBeTruthy();
     expect(hintAsked).toEqual(['Duma (2005)']);
+    expect(
+      screen.getByText('Xan and Ripkuna at the Airplane (0:59)'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Play All (1:48) (plays the others in a row)'),
+    ).toBeTruthy();
+    expect(screen.getByText('Extended Scenes')).toBeTruthy();
     expect(screen.getByText('Zebra Cut')).toBeTruthy();
+    expect(screen.getByText(/R1 America - Warner Home Video/)).toBeTruthy();
+    expect(screen.getByText(/the movie: Approx. 100 minutes/)).toBeTruthy();
     const link = screen.getByRole('link', {
-      name: 'Duma on DVD Fandom',
+      name: 'DVD Compare',
     }) as HTMLAnchorElement;
-    expect(link.href).toBe('https://dvd.fandom.com/wiki/Duma');
+    expect(link.href).toBe(
+      'https://www.dvdcompare.net/comparisons/film.php?fid=13117',
+    );
   });
 
-  test('says so when DVD Fandom has no list, and still lets the extras be named', async () => {
+  test('says so when no database has a list, and still lets the extras be named', async () => {
     page();
     expect(
-      await screen.findByText('DVD Fandom has no list for this movie.'),
+      await screen.findByText(
+        'DVD Compare, TheDiscDB and DVD Fandom have no list for this movie.',
+      ),
     ).toBeTruthy();
     expect(
       await nameBox('Name of the extra Trailer 01 (2 min) in Duma (2005)'),
@@ -237,7 +262,8 @@ describe('the "Name the extras" section', () => {
 
   test('a movie whose extras are all named is not looked up', async () => {
     globalThis.fetch = (async (url: string) => {
-      if (String(url).includes('/discs/extras/hint')) hintAsked.push('asked');
+      if (String(url).includes('/discs/extras/sources'))
+        hintAsked.push('asked');
       return new Response(
         JSON.stringify({
           movies: [
@@ -260,7 +286,7 @@ describe('the "Name the extras" section', () => {
     expect(await screen.findByText('Done (2001)')).toBeTruthy();
     await new Promise((r) => setTimeout(r, 100));
     expect(hintAsked).toEqual([]);
-    expect(screen.queryByText(/DVD Fandom/)).toBeNull();
+    expect(screen.queryByText(/DVD Compare/)).toBeNull();
   });
 
   const openPreview = async (name: string) => {
@@ -444,6 +470,19 @@ describe('the "Name the extras" section', () => {
     expect((await screen.findByRole('alert')).textContent).toContain(
       'could not be reached',
     );
+  });
+
+  test('a warning that did not stop the matching is shown beside the answers', async () => {
+    matchState = {
+      status: 'done',
+      total: 1,
+      done: 0,
+      suggestions: {},
+      warning:
+        'The listener could not be reached, so these suggestions are by length only.',
+    };
+    page();
+    expect(await screen.findByText(/by length only/)).toBeTruthy();
   });
 
   test('a movie whose extras are all named has no match button', async () => {
