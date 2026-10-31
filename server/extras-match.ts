@@ -280,6 +280,25 @@ function because(look: Look, s: Scored): string {
 
 const where = (c: Candidate) => c.sources.join(' and ');
 
+/** The card shown before a movie preview ("The following preview has been approved for all audiences..."). */
+const PREVIEW_CARD =
+  /following\s+(?:preview|trailer)s?\s+(?:has|have)\s+been\s+(?:approved|rated)|approved\s+for\s+(?:all|appropriate)\s+audiences/i;
+
+/** What a reel of previews looks like to someone naming it: probably "Previews", a trailer. */
+function previewReel(base: {
+  seconds: number | null;
+  saw: string;
+  heard: string;
+}): Suggestion {
+  return {
+    ...base,
+    state: 'unsure',
+    name: 'Previews',
+    kind: 'Trailers',
+    note: 'It starts with the ratings card shown before movie previews, so it is probably a reel of previews for other movies.',
+  };
+}
+
 /** What one extra is: how long it is, and what was read and heard in it (either may be missing). */
 export interface Evidence {
   seconds: number | null;
@@ -305,7 +324,9 @@ export function matchExtra(
   const { look, seconds } = evidence;
   const { saw, heard } = sayings(look);
   const base = { seconds, saw, heard };
+  const previewCard = PREVIEW_CARD.test(saw);
   if (names.length === 0) {
+    if (previewCard) return previewReel(base);
     return {
       ...base,
       state: 'none',
@@ -437,6 +458,7 @@ export function matchExtra(
       note: `Close in length to “${closest.name}” (${clock(closest.seconds!)} listed, ${clock(seconds!)} here), but not close enough to be sure.`,
     };
   }
+  if (previewCard) return previewReel(base);
   const nothing = !look || (look.ocr.length === 0 && look.speech.length === 0);
   return {
     ...base,
